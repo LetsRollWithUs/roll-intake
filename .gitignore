@@ -1,0 +1,20 @@
+node_modules
+dist
+dist-ssr
+*.local
+*.log
+
+# Secrets
+.env
+.env.*
+
+# Editor / lokale tooling
+.vscode/*
+.idea
+.DS_Store
+.vercel
+.claude
+.agents
+.mcp.json
+scratchpad
+build_output.txt
