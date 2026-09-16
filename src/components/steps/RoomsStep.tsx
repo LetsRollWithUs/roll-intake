@@ -23,6 +23,12 @@ export function RoomsStep({ rooms, setRooms }: Props) {
     ]);
   };
   const removeRoom = (id: string) => setRooms((prev) => prev.filter((r) => r.id !== id));
+  const removeLastOfType = (typeKey: string) =>
+    setRooms((prev) => {
+      const lastIdx = prev.map((r) => r.typeKey).lastIndexOf(typeKey);
+      if (lastIdx === -1) return prev;
+      return prev.filter((_, i) => i !== lastIdx);
+    });
   const patchRoom = (id: string, patch: Partial<Room>) =>
     setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const countFor = (typeKey: string) => rooms.filter((r) => r.typeKey === typeKey).length;
@@ -36,16 +42,48 @@ export function RoomsStep({ rooms, setRooms }: Props) {
         {ROOM_TYPES.map((t) => {
           const n = countFor(t.key);
           return (
-            <button key={t.key} className="rd-row" onClick={() => addRoom(t.key)}>
-              <span className="rd-row-label">{t.label}</span>
-              <span
-                className="rd-ring"
-                aria-hidden
-                style={n > 0 ? { borderColor: "var(--rd-pink)", background: "var(--rd-pink)" } : undefined}
-              >
-                {n > 0 ? n : "+"}
+            <div
+              key={t.key}
+              className="rd-row"
+              style={{ cursor: "default" }}
+              onClick={(e) => {
+                // Tik op de rij (buiten de knoppen) voegt ook toe.
+                if (e.target === e.currentTarget) addRoom(t.key);
+              }}
+            >
+              <span className="rd-row-label" onClick={() => addRoom(t.key)} style={{ cursor: "pointer" }}>
+                {t.label}
               </span>
-            </button>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {n > 0 && (
+                  <>
+                    <button
+                      onClick={() => removeLastOfType(t.key)}
+                      aria-label={`Eén ${t.label} minder`}
+                      className="rd-ring"
+                      style={{ cursor: "pointer" }}
+                    >
+                      −
+                    </button>
+                    <span style={{ minWidth: 16, textAlign: "center", fontWeight: 800, fontSize: 16 }}>
+                      {n}
+                    </span>
+                  </>
+                )}
+                <button
+                  onClick={() => addRoom(t.key)}
+                  aria-label={`Eén ${t.label} erbij`}
+                  className="rd-ring"
+                  style={{
+                    cursor: "pointer",
+                    borderColor: "var(--rd-pink)",
+                    background: "var(--rd-pink)",
+                  }}
+                >
+                  +
+                </button>
+              </span>
+            </div>
           );
         })}
       </div>
