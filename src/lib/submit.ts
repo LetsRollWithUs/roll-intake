@@ -1,15 +1,28 @@
 import { supabase, INTAKE_PHOTOS_BUCKET } from "./supabase";
 import { assessComplexity } from "./complexity";
-import type { IntakeState } from "./types";
+import type { IntakeState, UploadedImage } from "./types";
 
 function extFromName(name: string): string {
   const m = name.toLowerCase().match(/\.([a-z0-9]+)$/);
   return m ? m[1] : "jpg";
 }
 
+async function uploadImage(
+  img: UploadedImage,
+  path: string,
+): Promise<{ id: string; name: string; url: string | null }> {
+  if (!img.file) return { id: img.id, name: img.name, url: img.url };
+  const { error } = await supabase.storage
+    .from(INTAKE_PHOTOS_BUCKET)
+    .upload(path, img.file, { upsert: false, contentType: img.file.type });
+  if (error) return { id: img.id, name: img.name, url: null };
+  const { data } = supabase.storage.from(INTAKE_PHOTOS_BUCKET).getPublicUrl(path);
+  return { id: img.id, name: img.name, url: data.publicUrl };
+}
+
 /**
- * Verstuurt de intake: uploadt de foto's naar de bucket en schrijft één rij in
- * de intake-tabel. De anon-key mag alleen insturen, niet teruglezen, dus we
+ * Verstuurt de intake: uploadt alle foto's (ruimtes, samples, inspiratie) en
+ * schrijft één rij. De anon-key mag alleen insturen, niet teruglezen, dus we
  * genereren het id zelf en gebruiken geen returning-select.
  */
 export async function submitIntake(state: IntakeState): Promise<{ id: string }> {
@@ -18,22 +31,12 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  // Foto's uploaden en de rooms verrijken met publieke URL's.
   const rooms = await Promise.all(
     state.rooms.map(async (room) => {
       const photos = await Promise.all(
-        room.photos.map(async (p) => {
-          if (!p.file) return { id: p.id, name: p.name, url: p.url };
-          const path = `${intakeId}/${room.id}/${p.id}.${extFromName(p.name)}`;
-          const { error } = await supabase.storage
-            .from(INTAKE_PHOTOS_BUCKET)
-            .upload(path, p.file, { upsert: false, contentType: p.file.type });
-          if (error) {
-            return { id: p.id, name: p.name, url: null, error: error.message };
-          }
-          const { data } = supabase.storage.from(INTAKE_PHOTOS_BUCKET).getPublicUrl(path);
-          return { id: p.id, name: p.name, url: data.publicUrl };
-        }),
+        room.photos.map((p) =>
+          uploadImage(p, `${intakeId}/rooms/${room.id}/${p.id}.${extFromName(p.name)}`),
+        ),
       );
       return {
         id: room.id,
@@ -42,9 +45,33 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
         surfaces: room.surfaces,
         daylight: room.daylight ?? null,
         daylightDir: room.daylightDir ?? null,
+        usage: room.usage ?? null,
+        priority: !!room.priority,
         photos,
       };
     }),
+  );
+
+  const samples = await Promise.all(
+    state.samples.map(async (s) => {
+      const photo = s.photo
+        ? await uploadImage(s.photo, `${intakeId}/samples/${s.id}.${extFromName(s.photo.name)}`)
+        : null;
+      return {
+        id: s.id,
+        brand: s.brand,
+        name: s.name,
+        verdict: s.verdict,
+        note: s.note ?? null,
+        photo,
+      };
+    }),
+  );
+
+  const inspirationImages = await Promise.all(
+    state.inspirationImages.map((img) =>
+      uploadImage(img, `${intakeId}/inspiration/${img.id}.${extFromName(img.name)}`),
+    ),
   );
 
   const cx = assessComplexity(state);
@@ -61,9 +88,15 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
     boldness: state.boldness ?? null,
     rooms,
     colors: state.colors,
+    has_samples: state.hasSamples ?? null,
+    samples,
+    pinterest_url: state.pinterestUrl || null,
+    other_inspiration_url: state.otherInspirationUrl || null,
+    inspiration_images: inspirationImages,
+    planning: state.planning ?? null,
     complexity_level: cx.level,
     complexity_score: cx.score,
-    payload: { rooms, colors: state.colors, moods: state.moods },
+    payload: { rooms, samples, colors: state.colors, inspirationImages },
   };
 
   const { error } = await supabase.from("intake").insert(row);
