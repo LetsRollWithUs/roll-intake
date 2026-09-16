@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Link } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { Login } from "./Login";
 import { IntakeList } from "./IntakeList";
 import { IntakeDetail } from "./IntakeDetail";
+import { AdvisorsAdmin } from "./AdvisorsAdmin";
 
 export function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
@@ -28,6 +29,8 @@ export function Dashboard() {
     supabase.rpc("is_advisor").then(({ data }) => setIsAdvisor(data === true));
   }, [session]);
 
+  const isAdmin = !!session && (session.user.email ?? "").toLowerCase().endsWith("@roll.nl");
+
   const shell = (children: React.ReactNode, showLogout = true) => (
     <div
       style={{
@@ -50,7 +53,12 @@ export function Dashboard() {
       >
         <div className="rd-kicker rd-kicker-pink">Roll · Beheer</div>
         {showLogout && session && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {isAdmin && (
+              <Link to="/beheer/adviseurs" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
+                Adviseurs
+              </Link>
+            )}
             <span style={{ fontSize: 12, opacity: 0.6 }}>{session.user.email}</span>
             <button className="rd-textlink" style={{ minHeight: 32 }} onClick={() => supabase.auth.signOut()}>
               Uitloggen
@@ -82,6 +90,7 @@ export function Dashboard() {
   return shell(
     <Routes>
       <Route index element={<IntakeList />} />
+      <Route path="adviseurs" element={<AdvisorsAdmin />} />
       <Route path=":id" element={<IntakeDetail />} />
     </Routes>,
   );

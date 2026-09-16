@@ -7,8 +7,10 @@ const key =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
   "sb_publishable_r8uXvtFb4hYz2qexL6X60g_KRwuMnsG";
 
+// Sessie bewaren zodat adviseurs ingelogd blijven op /beheer. De klant-intake
+// gebruikt geen login, dus dit heeft daar geen effect.
 export const supabase = createClient(url, key, {
-  auth: { persistSession: false },
+  auth: { persistSession: true, autoRefreshToken: true },
 });
 
 export const INTAKE_PHOTOS_BUCKET = "intake-photos";
