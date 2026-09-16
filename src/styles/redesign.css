@@ -1,0 +1,184 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Roll Kleuradvies redesign: tokens, keyframes en bouwstenen.
+   Bron: design handoff (Roll Kleuradvies Prototype). Waarden 1:1 uit de spec.
+   Alle klassen dragen het voorvoegsel rd- zodat ze niet botsen met de
+   bestaande roll-* utilities.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --rd-aubergine: #2F2141;
+  --rd-aubergine-hover: #474864;
+  --rd-pink: #F6A9C6;
+  --rd-pink-dark: #B24A78;
+  --rd-lavender: #DAD4E3;
+  --rd-lavender-mid: #BBB1CB;
+  --rd-lime: #EBF1C8;
+  --rd-offwhite: #FEFAF2;
+  --rd-grey-light: #F3F0F6;
+  --rd-beige-result: #F6F2EA;
+  --rd-white: #FFFFFF;
+  --rd-line: rgba(47, 33, 65, .12);
+  --rd-ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+@keyframes rd-screenIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes rd-grow     { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes rd-pop      { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes rd-drift1   { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, -60px) scale(1.15); } }
+@keyframes rd-drift2   { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-50px, 40px) scale(1.1); } }
+@keyframes rd-fill     { from { width: 0; } to { width: 100%; } }
+@keyframes rd-rise     { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes rd-bloom    { from { clip-path: circle(0% at 50% 45%); } to { clip-path: circle(150% at 50% 45%); } }
+
+.rd-screen-in { animation: rd-screenIn .3s ease both; }
+.rd-rise      { animation: rd-rise .5s var(--rd-ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-root *, .rd-root *::before, .rd-root *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Body-klasse zolang het redesign-resultaat open is: ook geportaleerde
+   onderdelen (mand, popups) erven de merkkleuren. */
+body.rd-theme { --primary: 266 33% 19%; --primary-foreground: 0 0% 100%; --accent: 334 41% 49%; --accent-foreground: 0 0% 100%; --ring: 266 33% 19%; }
+
+/* ── Schil ─────────────────────────────────────────────────────────────── */
+.rd-root {
+  font-family: Figtree, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: clip;
+  overscroll-behavior: none;
+  display: flex;
+  flex-direction: column;
+  transition: background-color .45s ease, color .45s ease;
+  /* Oude componenten (samplepaneel, mand) erven de nieuwe merkkleuren */
+  --primary: 266 33% 19%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 334 41% 49%;
+  --accent-foreground: 0 0% 100%;
+  --ring: 266 33% 19%;
+}
+.rd-root button, .rd-root input, .rd-root select { font-family: inherit; }
+.rd-root button:focus-visible, .rd-root input:focus-visible, .rd-root select:focus-visible {
+  outline: 2px solid var(--rd-pink);
+  outline-offset: 2px;
+}
+.rd-col { width: 100%; max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.rd-hide-scroll::-webkit-scrollbar { display: none; }
+.rd-hide-scroll { scrollbar-width: none; }
+
+/* ── Typografie ────────────────────────────────────────────────────────── */
+.rd-h1 { font-weight: 800; font-size: 50px; line-height: .98; letter-spacing: -.035em; margin: 0; text-wrap: balance; }
+.rd-h2 { font-weight: 800; font-size: 30px; line-height: 1.04; letter-spacing: -.03em; margin: 0; text-wrap: balance; }
+.rd-h2-sm { font-weight: 800; font-size: 26px; line-height: 1.05; letter-spacing: -.02em; margin: 0; }
+.rd-card-title { font-weight: 800; font-size: 22px; line-height: 1.1; letter-spacing: -.02em; margin: 0; }
+.rd-sub { font-size: 14px; line-height: 1.4; opacity: .75; margin: 8px 0 0; }
+.rd-kicker { font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.rd-kicker-lg { font-weight: 600; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+.rd-kicker-pink { color: var(--rd-pink-dark); }
+.rd-chapter-label { font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; opacity: .85; }
+
+/* ── Knoppen ───────────────────────────────────────────────────────────── */
+.rd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 99px; cursor: pointer; font-weight: 700; font-size: 16px; min-height: 52px; padding: 0 22px; width: 100%; transition: background-color .2s ease, opacity .2s ease, transform .15s ease; }
+.rd-btn:active { transform: scale(.985); }
+.rd-btn:disabled { cursor: not-allowed; }
+.rd-btn-primary { background: var(--rd-aubergine); color: #fff; }
+.rd-btn-primary:hover:not(:disabled) { background: var(--rd-aubergine-hover); }
+.rd-btn-lg { min-height: 60px; font-size: 17px; }
+.rd-btn-pink { background: var(--rd-pink); color: var(--rd-aubergine); }
+.rd-btn-pink:disabled { opacity: .4; }
+.rd-btn-outline { background: transparent; color: var(--rd-aubergine); border: 1.5px solid var(--rd-aubergine); font-size: 15px; }
+.rd-btn-white { background: #fff; color: var(--rd-aubergine); }
+.rd-textlink { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; font-weight: 500; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; opacity: .6; min-height: 52px; }
+.rd-textlink:hover { opacity: .9; }
+
+/* ── Rijen (lijstvragen) ───────────────────────────────────────────────── */
+.rd-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: none; border: 0; border-bottom: 1px solid var(--rd-line); padding: 11px 0; color: inherit; cursor: pointer; text-align: left; min-height: 48px; width: 100%; transition: padding .18s ease, opacity .18s ease; }
+@media (hover: hover) { .rd-row:hover { padding-left: 6px; } }
+.rd-row.is-active { padding-left: 6px; }
+.rd-row.is-dim { opacity: .45; }
+.rd-row-label { display: block; font-weight: 700; font-size: 18px; line-height: 1.15; letter-spacing: -.01em; }
+.rd-row-sub { display: block; font-size: 13px; opacity: .65; margin-top: 3px; }
+.rd-ring { width: 26px; height: 26px; border-radius: 99px; border: 2px solid var(--rd-line); background: transparent; color: var(--rd-aubergine); font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; transition: all .18s ease; }
+.rd-ring.is-on { border-color: var(--rd-pink); background: var(--rd-pink); }
+
+/* ── Chips, segmenten, inputs ──────────────────────────────────────────── */
+.rd-chip { font-weight: 600; font-size: 12px; padding: 6px 10px; border-radius: 99px; background: var(--rd-lavender); color: var(--rd-aubergine); }
+.rd-plan-chip { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1.5px solid var(--rd-aubergine); background: transparent; color: var(--rd-aubergine); font-weight: 600; font-size: 14px; cursor: pointer; transition: all .18s ease; }
+.rd-plan-chip.is-on { background: var(--rd-aubergine); color: #fff; }
+.rd-seg { flex: 1; min-height: 44px; border-radius: 99px; border: 0; background: var(--rd-grey-light); color: var(--rd-aubergine); font-weight: 600; font-size: 13px; cursor: pointer; transition: all .2s ease; padding: 6px 4px; }
+.rd-seg.is-on { background: var(--rd-aubergine); color: #fff; }
+.rd-input { width: 100%; height: 50px; border-radius: 14px; border: 1.5px solid var(--rd-lavender); padding: 0 14px; font-size: 16px; background: var(--rd-offwhite); color: var(--rd-aubergine); }
+.rd-input::placeholder { color: rgba(47, 33, 65, .45); }
+.rd-input:focus { border-color: var(--rd-aubergine); outline: none; }
+.rd-card-white { background: #fff; border-radius: 22px; padding: 18px; color: var(--rd-aubergine); }
+
+.rd-sheet { outline: none; }
+.rd-sheet button:focus-visible { outline: 2px solid var(--rd-pink); outline-offset: 2px; }
+
+/* ── Voortgang ─────────────────────────────────────────────────────────── */
+.rd-track { margin: 10px 24px 0; height: 3px; border-radius: 99px; overflow: hidden; flex: none; }
+.rd-track-fill { height: 100%; background: var(--rd-pink); border-radius: 99px; transition: width .4s var(--rd-ease); }
+
+/* Quiz-schermen: de pagina scrolt nooit onder de tool uit; alleen de schermbody scrolt als het echt niet past. */
+.rd-root.rd-lock { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.rd-lock .rd-screen-in { overscroll-behavior: contain; }
+.rd-sheet .rd-hide-scroll { overscroll-behavior: contain; }
+body.rd-theme { background: var(--rd-offwhite); position: fixed; inset: 0; width: 100%; overflow: hidden; }
+body.rd-theme #root { height: 100%; }
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Responsive laag. Mobiel staand (< 768px) blijft exact zoals het is; alles
+   hieronder geldt alleen voor tablet/desktop en voor een liggende telefoon.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Tablet en desktop: bredere kolom, ruimere maten, paren en tegels naast elkaar */
+@media (min-width: 768px) and (min-height: 560px) {
+  .rd-col { max-width: 560px; }
+  .rd-cta-inner { max-width: 560px !important; }
+  .rd-h2 { font-size: 36px; }
+  .rd-taste-pair { flex-direction: row !important; gap: 12px !important; padding: 0 24px !important; }
+  .rd-floor-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .rd-colors-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .rd-sheet-wrap { align-items: center !important; padding: 24px; }
+  .rd-sheet { max-width: 520px !important; border-radius: 28px !important; max-height: 80dvh !important; }
+  .rd-intro { justify-content: center; }
+  .rd-intro-spacer { flex: none !important; height: 40px; }
+}
+
+/* Desktop: resultaat in twee kolommen, hero blijft staan terwijl rechts scrolt */
+@media (min-width: 1024px) and (min-height: 560px) {
+  .rs-root .rd-col { max-width: 1160px; }
+  .rs-shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 40px; padding: 0 40px 40px; align-items: start; }
+  .rs-hero { position: sticky; top: 0; padding-bottom: 24px; }
+  .rs-body { margin-top: 0 !important; border-radius: 30px !important; padding-bottom: 0 !important; }
+  /* De bestelknop staat op desktop ín de beige kaart en plakt daar onderaan; hij komt nooit onder de kaart uit */
+  .rs-cta { position: sticky !important; bottom: 0 !important; left: auto !important; right: auto !important; margin: -120px -16px 0; }
+  .rs-cta .rd-cta-inner { max-width: none !important; padding: 14px 16px 24px !important; border-radius: 0 0 30px 30px; }
+  .rs-root .rd-col > div:first-child { padding-left: 64px !important; padding-right: 64px !important; }
+  /* Smaakparen: twee liggende foto's naast elkaar, breder dan de kolom */
+  .rd-taste-pair { flex: none !important; width: min(880px, 100vw - 64px) !important; margin-left: calc((100% - min(880px, 100vw - 64px)) / 2) !important; padding: 0 !important; gap: 16px !important; }
+  .rd-taste-pair > button { aspect-ratio: 4 / 3; flex: 1 1 0 !important; }
+  .rd-taste-root { overflow: visible !important; }
+  .rd-colors-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+
+/* Liggende telefoon: niet klemmen op de schermhoogte, maar scrollen; compacte koppen */
+@media (max-height: 500px) and (orientation: landscape) {
+  .rd-root.rd-lock { overflow-y: auto; }
+  .rd-lock .rd-screen-in { flex: none !important; overflow: visible !important; }
+  .rd-h2 { font-size: 26px; }
+  .rd-taste-pair { flex-direction: row !important; min-height: 220px; gap: 10px !important; }
+  .rd-floor-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  .rd-cta-inner { padding-top: 8px !important; padding-bottom: 10px !important; }
+  .rd-cta-inner .rd-btn { min-height: 46px !important; }
+  .rd-sheet { max-height: 92dvh !important; }
+}

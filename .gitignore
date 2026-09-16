@@ -18,3 +18,5 @@ dist-ssr
 .mcp.json
 scratchpad
 build_output.txt
+.env*
+*.tsbuildinfo
