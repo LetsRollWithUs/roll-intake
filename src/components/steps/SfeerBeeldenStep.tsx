@@ -2,13 +2,16 @@ import { INSPIRATIONS } from "@/data/inspiration";
 
 interface Props {
   inspirationLikes: string[];
+  noSfeerImage?: boolean;
   onLikes: (v: string[]) => void;
+  onNone: (v: boolean) => void;
 }
 
 const MAX = 2;
 
-export function SfeerBeeldenStep({ inspirationLikes, onLikes }: Props) {
+export function SfeerBeeldenStep({ inspirationLikes, noSfeerImage, onLikes, onNone }: Props) {
   const toggle = (id: string) => {
+    if (noSfeerImage) onNone(false);
     if (inspirationLikes.includes(id)) {
       onLikes(inspirationLikes.filter((x) => x !== id));
     } else if (inspirationLikes.length < MAX) {
@@ -89,6 +92,19 @@ export function SfeerBeeldenStep({ inspirationLikes, onLikes }: Props) {
           );
         })}
       </div>
+
+      <button
+        className={`rd-plan-chip${noSfeerImage ? " is-on" : ""}`}
+        onClick={() => {
+          const next = !noSfeerImage;
+          onNone(next);
+          if (next) onLikes([]);
+        }}
+        aria-pressed={!!noSfeerImage}
+        style={{ marginTop: 14 }}
+      >
+        Geen van deze past
+      </button>
     </div>
   );
 }

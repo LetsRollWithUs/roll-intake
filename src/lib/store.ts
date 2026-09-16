@@ -60,3 +60,48 @@ export function useIntake() {
 export function uid(): string {
   return Math.random().toString(36).slice(2, 9);
 }
+
+const SCREEN_KEY = "roll-intake-screen-v1";
+const ID_KEY = "roll-intake-id-v1";
+
+export function loadScreen(): string | null {
+  try {
+    return localStorage.getItem(SCREEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveScreen(screen: string) {
+  try {
+    localStorage.setItem(SCREEN_KEY, screen);
+  } catch {
+    /* privémodus */
+  }
+}
+
+/** Blijvend intake-id, zodat een concept-lead later bijgewerkt kan worden. */
+export function getIntakeId(): string {
+  try {
+    let id = localStorage.getItem(ID_KEY);
+    if (!id) {
+      id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+export function clearIntakeSession() {
+  try {
+    localStorage.removeItem(SCREEN_KEY);
+    localStorage.removeItem(ID_KEY);
+  } catch {
+    /* privémodus */
+  }
+}

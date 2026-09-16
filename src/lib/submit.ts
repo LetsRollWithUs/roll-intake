@@ -1,5 +1,6 @@
 import { supabase, INTAKE_PHOTOS_BUCKET } from "./supabase";
 import { assessComplexity } from "./complexity";
+import { getIntakeId } from "./store";
 import type { IntakeState, UploadedImage } from "./types";
 
 function extFromName(name: string): string {
@@ -21,15 +22,28 @@ async function uploadImage(
 }
 
 /**
- * Verstuurt de intake: uploadt alle foto's (ruimtes, samples, inspiratie) en
- * schrijft één rij. De anon-key mag alleen insturen, niet teruglezen, dus we
- * genereren het id zelf en gebruiken geen returning-select.
+ * Slaat een concept-lead op zodra we naam + e-mail hebben, zodat een klant die
+ * afhaakt toch bewaard is. Eerst insert; bestaat de rij al, dan update.
+ * (Geen upsert: INSERT ON CONFLICT botst met de RLS-policies.)
+ */
+export async function saveConceptLead(state: IntakeState): Promise<void> {
+  const id = getIntakeId();
+  if (!state.contactEmail.trim()) return;
+  const fields = {
+    contact_name: state.contactName || null,
+    contact_email: state.contactEmail || null,
+  };
+  const { error } = await supabase.from("intake").insert({ id, status: "concept", ...fields });
+  // 23505 = concept bestaat al; naam/e-mail worden bij verzenden alsnog overschreven.
+  if (error && error.code !== "23505") throw new Error(error.message);
+}
+
+/**
+ * Verstuurt de volledige intake: uploadt alle foto's en werkt de concept-rij bij
+ * naar status 'verzonden'. Valt terug op insert als er nog geen rij is.
  */
 export async function submitIntake(state: IntakeState): Promise<{ id: string }> {
-  const intakeId =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const intakeId = getIntakeId();
 
   const rooms = await Promise.all(
     state.rooms.map(async (room) => {
@@ -60,6 +74,7 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
       return {
         id: s.id,
         brand: s.brand,
+        roomId: s.roomId ?? null,
         name: s.name,
         verdict: s.verdict,
         note: s.note ?? null,
@@ -77,7 +92,6 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
   const cx = assessComplexity(state);
 
   const row = {
-    id: intakeId,
     contact_name: state.contactName || null,
     contact_email: state.contactEmail || null,
     main_question: state.mainQuestion || null,
@@ -96,10 +110,23 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
     planning: state.planning ?? null,
     complexity_level: cx.level,
     complexity_score: cx.score,
-    payload: { rooms, samples, colors: state.colors, inspirationImages },
+    payload: {
+      rooms,
+      samples,
+      colors: state.colors,
+      inspirationImages,
+      noSfeerImage: state.noSfeerImage ?? false,
+      sfeerSameAll: state.sfeerSameAll ?? null,
+      sfeerExceptionNote: state.sfeerExceptionNote || null,
+      hasOtherChanges: state.hasOtherChanges ?? null,
+      otherChangesNote: state.otherChangesNote || null,
+      questionScope: state.questionScope ?? null,
+    },
   };
 
-  const { error } = await supabase.from("intake").insert(row);
+  // Afronden via SECURITY DEFINER-RPC: werkt de concept-rij bij naar 'verzonden'
+  // (of insert als die er niet is). Anon mag de tabel zelf niet lezen/wijzigen.
+  const { error } = await supabase.rpc("submit_intake", { p_id: intakeId, p_row: row });
   if (error) throw new Error(error.message);
 
   return { id: intakeId };

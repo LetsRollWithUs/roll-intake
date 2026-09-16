@@ -1,16 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Shell } from "@/components/Shell";
+import { ContactStep } from "@/components/steps/ContactStep";
 import { RoomsStep } from "@/components/steps/RoomsStep";
 import { SurfacesStep } from "@/components/steps/SurfacesStep";
 import { PhotosStep } from "@/components/steps/PhotosStep";
 import { SfeerBeeldenStep } from "@/components/steps/SfeerBeeldenStep";
 import { GevoelStep } from "@/components/steps/GevoelStep";
 import { ColorsSamplesStep } from "@/components/steps/ColorsSamplesStep";
-import { InspiratieStep } from "@/components/steps/InspiratieStep";
+import { InspiratieStep, isUrlish } from "@/components/steps/InspiratieStep";
 import { VraagStep } from "@/components/steps/VraagStep";
 import { PlanningStep } from "@/components/steps/PlanningStep";
-import { useIntake } from "@/lib/store";
-import { submitIntake } from "@/lib/submit";
+import { useIntake, loadScreen, saveScreen, clearIntakeSession } from "@/lib/store";
+import { submitIntake, saveConceptLead } from "@/lib/submit";
 import { lockDocument } from "@/lib/lock-document";
 import type { Room } from "@/lib/types";
 
@@ -24,7 +25,7 @@ type StepScreen =
   | "inspiratie"
   | "vraag"
   | "planning";
-type Screen = "intro" | StepScreen | "done";
+type Screen = "intro" | "contact" | StepScreen | "done";
 
 const FLOW: StepScreen[] = [
   "rooms",
@@ -63,7 +64,7 @@ const META: Record<StepScreen, { kicker: string; title: string; sub?: string }> 
   gevoel: {
     kicker: "Stap 5 · Gewenst gevoel",
     title: "Hoe wil je dat het straks voelt?",
-    sub: "Kies maximaal 3 woorden. Er is geen goed of fout.",
+    sub: "Kies maximaal 3 omschrijvingen. Er is geen goed of fout.",
   },
   kleuren: {
     kicker: "Stap 6 · Kleuren & samples",
@@ -75,28 +76,45 @@ const META: Record<StepScreen, { kicker: string; title: string; sub?: string }> 
     title: "Laat zien wat je mooi vindt",
     sub: "Optioneel, maar vaak goud waard voor je adviseur.",
   },
-  vraag: {
-    kicker: "Stap 8 · Jouw vraag",
-    title: "Waar mogen we je mee helpen?",
-    sub: undefined,
-  },
+  vraag: { kicker: "Stap 8 · Jouw vraag", title: "Waar mogen we je mee helpen?" },
   planning: {
     kicker: "Stap 9 · Planning & afronden",
     title: "Bijna klaar",
-    sub: "Nog twee dingen, dan gaat je intake naar je kleuradviseur.",
+    sub: "Controleer je intake en verstuur hem naar je kleuradviseur.",
   },
 };
 
 export function App() {
   const { state, update, reset } = useIntake();
   const [screen, setScreen] = useState<Screen>("intro");
+  const [photoIdx, setPhotoIdx] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const resumed = useRef(false);
 
   useEffect(() => lockDocument(), []);
 
+  // Hervatten: spring naar de laatst bezochte stap.
+  useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+    const saved = loadScreen();
+    if (saved && saved !== "intro" && saved !== "done") {
+      setScreen(saved as Screen);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (screen !== "intro" && screen !== "done") saveScreen(screen);
+  }, [screen]);
+
   const setRooms = (updater: (prev: Room[]) => Room[]) =>
     update((prev) => ({ rooms: updater(prev.rooms) }));
+  const patchRoom = (id: string, p: Partial<Room>) =>
+    update((prev) => ({ rooms: prev.rooms.map((r) => (r.id === id ? { ...r, ...p } : r)) }));
+
+  const multiRoom = state.rooms.length > 1;
+  const emailOk = /.+@.+\..+/.test(state.contactEmail.trim());
 
   // ── Intro ──────────────────────────────────────────────────────────────
   if (screen === "intro") {
@@ -107,7 +125,7 @@ export function App() {
         title="Haal alles uit je 30 minuten kleuradvies"
         sub="Beantwoord een paar korte vragen en laat je ruimtes zien. Zo kan je kleuradviseur zich vooraf voorbereiden en gebruiken we het gesprek om echt keuzes te maken."
         footer={
-          <button className="rd-btn rd-btn-primary rd-btn-lg" onClick={() => setScreen("rooms")}>
+          <button className="rd-btn rd-btn-primary rd-btn-lg" onClick={() => setScreen("contact")}>
             Beginnen
           </button>
         }
@@ -130,6 +148,46 @@ export function App() {
     );
   }
 
+  // ── Contact (vooraan, concept-lead) ──────────────────────────────────────
+  if (screen === "contact") {
+    const canGo = state.contactName.trim() !== "" && emailOk;
+    const goFromContact = () => {
+      saveConceptLead(state).catch(() => {});
+      setScreen("rooms");
+    };
+    return (
+      <Shell
+        step={0}
+        total={TOTAL}
+        onBack={() => setScreen("intro")}
+        kicker="Even kennismaken"
+        title="Naar wie mogen we het advies sturen?"
+        footer={
+          <button
+            className="rd-btn rd-btn-primary rd-btn-lg"
+            onClick={goFromContact}
+            disabled={!canGo}
+            style={!canGo ? { opacity: 0.4 } : undefined}
+          >
+            Beginnen
+          </button>
+        }
+      >
+        <ContactStep
+          contactName={state.contactName}
+          contactEmail={state.contactEmail}
+          onName={(contactName) => update({ contactName })}
+          onEmail={(contactEmail) => update({ contactEmail })}
+        />
+        {!canGo && (
+          <p className="rd-sub" style={{ textAlign: "center", marginTop: 16 }}>
+            Vul je naam en een geldig e-mailadres in.
+          </p>
+        )}
+      </Shell>
+    );
+  }
+
   // ── Verzonden ────────────────────────────────────────────────────────────
   if (screen === "done") {
     return (
@@ -143,6 +201,7 @@ export function App() {
             className="rd-btn rd-btn-outline rd-btn-lg"
             onClick={() => {
               reset();
+              clearIntakeSession();
               setScreen("intro");
             }}
           >
@@ -151,11 +210,7 @@ export function App() {
         }
       >
         <div className="rd-card-white" style={{ textAlign: "center", padding: "26px 18px" }}>
-          <div
-            className="rd-ring is-on"
-            aria-hidden
-            style={{ width: 48, height: 48, fontSize: 24, margin: "0 auto 12px" }}
-          >
+          <div className="rd-ring is-on" aria-hidden style={{ width: 48, height: 48, fontSize: 24, margin: "0 auto 12px" }}>
             ✓
           </div>
           <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>Goed gedaan!</p>
@@ -170,47 +225,48 @@ export function App() {
   const idx = FLOW.indexOf(screen as StepScreen);
   const meta = META[screen as StepScreen];
 
-  const emailOk = /.+@.+\..+/.test(state.contactEmail.trim());
-
-  // Validatie per stap
+  // Validatie (soepel: kern verplicht, rest aanrader)
   let canAdvance = true;
   let hint = "";
+  const currentRoom = state.rooms[photoIdx];
   switch (screen) {
     case "rooms":
       canAdvance = state.rooms.length > 0;
       hint = "Voeg minstens één ruimte toe.";
       break;
+    case "surfaces": {
+      const empty = state.rooms.find((r) => r.surfaces.length === 0);
+      canAdvance = !empty;
+      hint = empty ? `Kies wat je in de ${empty.label.toLowerCase()} wilt schilderen.` : "";
+      break;
+    }
     case "photos":
-      canAdvance = state.rooms.every((r) => r.photos.length >= 2 && !!r.daylight);
-      hint = "Voeg per ruimte minimaal 2 foto's toe en kies hoeveel daglicht er is.";
+      canAdvance = !!currentRoom && currentRoom.photos.length >= 2 && !!currentRoom.daylight;
+      hint = "Voeg minimaal 2 foto's toe en kies hoeveel daglicht er is.";
       break;
     case "beelden":
-      canAdvance = state.inspirationLikes.length > 0;
-      hint = "Kies minstens één beeld.";
+      canAdvance = state.inspirationLikes.length > 0 || !!state.noSfeerImage;
+      hint = "Kies een beeld of tik op 'Geen van deze past'.";
       break;
     case "gevoel":
       canAdvance = state.moods.length > 0;
-      hint = "Kies minstens één woord.";
+      hint = "Kies minstens één omschrijving.";
       break;
     case "kleuren":
-      canAdvance =
-        state.hasSamples !== undefined &&
-        (state.hasSamples === "nee" || state.samples.some((s) => s.name.trim() !== ""));
-      hint =
-        state.hasSamples === undefined
-          ? "Geef aan of je al kleuren of samples thuis hebt."
-          : "Vul bij elke toegevoegde kleur minstens de kleurnaam in.";
+      canAdvance = state.samples.every((s) => s.name.trim() !== "");
+      hint = "Vul bij elke toegevoegde kleur minstens de kleurnaam in.";
+      break;
+    case "inspiratie":
+      canAdvance = isUrlish(state.pinterestUrl) && isUrlish(state.otherInspirationUrl);
+      hint = "Controleer de ingevulde links, of laat ze leeg.";
       break;
     case "vraag":
       canAdvance = state.mainQuestion.trim() !== "";
       hint = "Vul in waar je na het gesprek duidelijkheid over wilt hebben.";
       break;
     case "planning":
-      canAdvance = state.contactName.trim() !== "" && emailOk && !submitting;
-      hint = "Vul je naam en een geldig e-mailadres in.";
+      canAdvance = !submitting;
       break;
-    default:
-      canAdvance = true;
   }
 
   const handleSubmit = async () => {
@@ -220,18 +276,25 @@ export function App() {
       await submitIntake(state);
       setScreen("done");
     } catch {
-      setSubmitError(
-        "Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.",
-      );
+      setSubmitError("Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const goBack = () => (idx <= 0 ? setScreen("intro") : setScreen(FLOW[idx - 1]));
+  const goBack = () => {
+    if (screen === "photos" && photoIdx > 0) return setPhotoIdx(photoIdx - 1);
+    if (idx <= 0) return setScreen("contact");
+    const prev = FLOW[idx - 1];
+    if (prev === "photos") setPhotoIdx(Math.max(0, state.rooms.length - 1));
+    setScreen(prev);
+  };
   const goNext = () => {
     if (screen === "planning") return handleSubmit();
-    setScreen(FLOW[idx + 1]);
+    if (screen === "photos" && photoIdx < state.rooms.length - 1) return setPhotoIdx(photoIdx + 1);
+    const next = FLOW[idx + 1];
+    if (next === "photos") setPhotoIdx(0);
+    setScreen(next);
   };
 
   const footer = (
@@ -250,6 +313,8 @@ export function App() {
   );
 
   const goEdit = (t: string) => {
+    if (t === "contact") return setScreen("contact");
+    if (t === "photos") setPhotoIdx(0);
     const map: Record<string, StepScreen> = {
       rooms: "rooms",
       surfaces: "surfaces",
@@ -275,19 +340,28 @@ export function App() {
     >
       {screen === "rooms" && <RoomsStep rooms={state.rooms} setRooms={setRooms} />}
       {screen === "surfaces" && <SurfacesStep rooms={state.rooms} setRooms={setRooms} />}
-      {screen === "photos" && <PhotosStep rooms={state.rooms} setRooms={setRooms} />}
+      {screen === "photos" && currentRoom && (
+        <PhotosStep room={currentRoom} index={photoIdx} total={state.rooms.length} patch={patchRoom} />
+      )}
       {screen === "beelden" && (
         <SfeerBeeldenStep
           inspirationLikes={state.inspirationLikes}
+          noSfeerImage={state.noSfeerImage}
           onLikes={(inspirationLikes) => update({ inspirationLikes })}
+          onNone={(noSfeerImage) => update({ noSfeerImage })}
         />
       )}
       {screen === "gevoel" && (
         <GevoelStep
           moods={state.moods}
           boldness={state.boldness}
+          multiRoom={multiRoom}
+          sfeerSameAll={state.sfeerSameAll}
+          sfeerExceptionNote={state.sfeerExceptionNote}
           onMoods={(moods) => update({ moods })}
-          onBoldness={(boldness) => update({ boldness })}
+          onBoldness={(b) => update({ boldness: b || undefined })}
+          onSameAll={(sfeerSameAll) => update({ sfeerSameAll })}
+          onException={(sfeerExceptionNote) => update({ sfeerExceptionNote })}
         />
       )}
       {screen === "kleuren" && (
@@ -295,6 +369,7 @@ export function App() {
           hasSamples={state.hasSamples}
           samples={state.samples}
           colors={state.colors}
+          rooms={state.rooms}
           onHasSamples={(hasSamples) => update({ hasSamples })}
           onSamples={(samples) => update({ samples })}
           onColors={(colors) => update({ colors })}
@@ -306,28 +381,29 @@ export function App() {
           otherInspirationUrl={state.otherInspirationUrl}
           inspirationImages={state.inspirationImages}
           inspirationNote={state.inspirationNote}
+          hasOtherChanges={state.hasOtherChanges}
+          otherChangesNote={state.otherChangesNote}
           onPinterest={(pinterestUrl) => update({ pinterestUrl })}
           onOther={(otherInspirationUrl) => update({ otherInspirationUrl })}
           onImages={(inspirationImages) => update({ inspirationImages })}
           onNote={(inspirationNote) => update({ inspirationNote })}
+          onHasOtherChanges={(hasOtherChanges) => update({ hasOtherChanges })}
+          onOtherChangesNote={(otherChangesNote) => update({ otherChangesNote })}
         />
       )}
       {screen === "vraag" && (
         <VraagStep
           helpNeeds={state.helpNeeds}
           mainQuestion={state.mainQuestion}
+          multiRoom={multiRoom}
+          questionScope={state.questionScope}
           onHelpNeeds={(helpNeeds) => update({ helpNeeds })}
           onQuestion={(mainQuestion) => update({ mainQuestion })}
+          onScope={(questionScope) => update({ questionScope })}
         />
       )}
       {screen === "planning" && (
-        <PlanningStep
-          state={state}
-          onPlanning={(planning) => update({ planning })}
-          onName={(contactName) => update({ contactName })}
-          onEmail={(contactEmail) => update({ contactEmail })}
-          onEdit={goEdit}
-        />
+        <PlanningStep state={state} onPlanning={(planning) => update({ planning })} onEdit={goEdit} />
       )}
 
       {!canAdvance && hint && (
@@ -336,15 +412,7 @@ export function App() {
         </p>
       )}
       {submitError && (
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: 12,
-            color: "var(--rd-pink-dark)",
-            fontWeight: 600,
-            fontSize: 14,
-          }}
-        >
+        <p style={{ textAlign: "center", marginTop: 12, color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>
           {submitError}
         </p>
       )}

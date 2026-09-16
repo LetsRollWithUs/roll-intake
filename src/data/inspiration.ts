@@ -17,14 +17,16 @@ export interface Inspiration {
   label: string;
 }
 
+// Placeholder-set: 6 zo verschillend mogelijke richtingen. Deze renders tonen
+// nog dezelfde kamer in andere wandkleuren; vervang door echt uiteenlopende
+// interieurbeelden zodra die er zijn (dan meet dit sfeer i.p.v. kleurvoorkeur).
 export const INSPIRATIONS: Inspiration[] = [
   { id: "licht-1", src: licht1, label: "Licht & luchtig" },
-  { id: "warm-1", src: warm1, label: "Rustig blauw" },
+  { id: "warm-1", src: warm1, label: "Rustig & koel" },
   { id: "kleur-1", src: kleur1, label: "Zacht & warm" },
-  { id: "licht-2", src: licht2, label: "Fris & helder" },
   { id: "warm-2", src: warm2, label: "Aards & geborgen" },
-  { id: "kleur-2", src: kleur2, label: "Speels met kleur" },
-  { id: "licht-3", src: licht3, label: "Sereen & kalm" },
   { id: "warm-3", src: warm3, label: "Diep & sfeervol" },
-  { id: "kleur-3", src: kleur3, label: "Fris & kleurig" },
+  { id: "kleur-3", src: kleur3, label: "Speels & kleurig" },
 ];
+// Ongebruikt maar bewaard voor als je meer varianten wilt tonen.
+void [licht2, licht3, kleur2];

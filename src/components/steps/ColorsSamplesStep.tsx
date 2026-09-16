@@ -3,13 +3,14 @@ import { createPortal } from "react-dom";
 import { rollColors } from "@/data/roll-colors";
 import { SAMPLE_SOURCES, VERDICTS, COLOR_FAMILIES } from "@/data/intake-options";
 import { ImageGrid } from "@/components/ImageGrid";
-import type { ColorPick, SampleItem, SampleSource, UploadedImage, Verdict } from "@/lib/types";
+import type { ColorPick, Room, SampleItem, SampleSource, UploadedImage, Verdict } from "@/lib/types";
 import { uid } from "@/lib/store";
 
 interface Props {
   hasSamples?: SampleSource;
   samples: SampleItem[];
   colors: ColorPick[];
+  rooms: Room[];
   onHasSamples: (v: SampleSource) => void;
   onSamples: (v: SampleItem[]) => void;
   onColors: (v: ColorPick[]) => void;
@@ -29,6 +30,7 @@ export function ColorsSamplesStep({
   hasSamples,
   samples,
   colors,
+  rooms,
   onHasSamples,
   onSamples,
   onColors,
@@ -76,6 +78,11 @@ export function ColorsSamplesStep({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <datalist id="roll-color-names">
+        {rollColors.map((c) => (
+          <option key={c.id} value={c.name} />
+        ))}
+      </datalist>
       {/* A. Wat heb je al geprobeerd? */}
       <div>
         <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
@@ -98,7 +105,7 @@ export function ColorsSamplesStep({
           <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
             {samples.map((s) => (
               <div key={s.id} className="rd-card-white">
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     className="rd-input"
                     value={s.brand}
@@ -108,11 +115,13 @@ export function ColorsSamplesStep({
                     style={{ flex: 1 }}
                   />
                   <button
-                    className="rd-textlink"
-                    onClick={() => removeSample(s.id)}
-                    style={{ minHeight: 44, opacity: 0.6 }}
+                    className={`rd-plan-chip${s.brand === "Weet ik niet" ? " is-on" : ""}`}
+                    onClick={() =>
+                      patchSample(s.id, { brand: s.brand === "Weet ik niet" ? "" : "Weet ik niet" })
+                    }
+                    style={{ flex: "none", whiteSpace: "nowrap" }}
                   >
-                    Verwijder
+                    Weet ik niet
                   </button>
                 </div>
                 <input
@@ -121,8 +130,32 @@ export function ColorsSamplesStep({
                   onChange={(e) => patchSample(s.id, { name: e.target.value })}
                   placeholder="Kleurnaam"
                   aria-label="Kleurnaam"
+                  list={s.brand === "Roll" ? "roll-color-names" : undefined}
                   style={{ marginTop: 8 }}
                 />
+                {rooms.length > 0 && (
+                  <select
+                    className="rd-input"
+                    value={s.roomId ?? ""}
+                    onChange={(e) => patchSample(s.id, { roomId: e.target.value || undefined })}
+                    aria-label="Voor welke ruimte?"
+                    style={{ marginTop: 8 }}
+                  >
+                    <option value="">Voor welke ruimte? (optioneel)</option>
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  className="rd-textlink"
+                  onClick={() => removeSample(s.id)}
+                  style={{ minHeight: 40, opacity: 0.6, alignSelf: "flex-start" }}
+                >
+                  Verwijder
+                </button>
                 <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                   {VERDICTS.map((v) => (
                     <button

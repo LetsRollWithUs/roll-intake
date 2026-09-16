@@ -23,11 +23,18 @@ export function RoomsStep({ rooms, setRooms }: Props) {
     ]);
   };
   const removeRoom = (id: string) => setRooms((prev) => prev.filter((r) => r.id !== id));
+  const removeLastOfType = (typeKey: string) =>
+    setRooms((prev) => {
+      const lastIdx = prev.map((r) => r.typeKey).lastIndexOf(typeKey);
+      if (lastIdx === -1) return prev;
+      return prev.filter((_, i) => i !== lastIdx);
+    });
   const patchRoom = (id: string, patch: Partial<Room>) =>
     setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const countFor = (typeKey: string) => rooms.filter((r) => r.typeKey === typeKey).length;
 
   const showPriority = rooms.length >= 3;
+  const priorityCount = rooms.filter((r) => r.priority).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -35,38 +42,66 @@ export function RoomsStep({ rooms, setRooms }: Props) {
         {ROOM_TYPES.map((t) => {
           const n = countFor(t.key);
           return (
-            <button key={t.key} className="rd-row" onClick={() => addRoom(t.key)}>
-              <span className="rd-row-label">{t.label}</span>
-              <span
-                className="rd-ring"
-                aria-hidden
-                style={n > 0 ? { borderColor: "var(--rd-pink)", background: "var(--rd-pink)" } : undefined}
-              >
-                {n > 0 ? n : "+"}
+            <div
+              key={t.key}
+              className="rd-row"
+              style={{ cursor: "default" }}
+              onClick={(e) => {
+                // Tik op de rij (buiten de knoppen) voegt ook toe.
+                if (e.target === e.currentTarget) addRoom(t.key);
+              }}
+            >
+              <span className="rd-row-label" onClick={() => addRoom(t.key)} style={{ cursor: "pointer" }}>
+                {t.label}
               </span>
-            </button>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {n > 0 && (
+                  <>
+                    <button
+                      onClick={() => removeLastOfType(t.key)}
+                      aria-label={`Eén ${t.label} minder`}
+                      className="rd-ring"
+                      style={{ cursor: "pointer" }}
+                    >
+                      −
+                    </button>
+                    <span style={{ minWidth: 16, textAlign: "center", fontWeight: 800, fontSize: 16 }}>
+                      {n}
+                    </span>
+                  </>
+                )}
+                <button
+                  onClick={() => addRoom(t.key)}
+                  aria-label={`Eén ${t.label} erbij`}
+                  className="rd-ring"
+                  style={{
+                    cursor: "pointer",
+                    borderColor: "var(--rd-pink)",
+                    background: "var(--rd-pink)",
+                  }}
+                >
+                  +
+                </button>
+              </span>
+            </div>
           );
         })}
       </div>
 
-      {/* 30-minuten-verwachtingsmanagement */}
-      {rooms.length === 3 && (
-        <div className="rd-card-white" style={{ background: "var(--rd-lavender)" }}>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
-            <strong>Je hebt 3 ruimtes gekozen.</strong> In 30 minuten behandelen we meestal 1 à 2
-            ruimtes uitgebreid. Vink hieronder aan welke ruimtes voorrang hebben.
-          </p>
-        </div>
-      )}
-      {rooms.length >= 4 && (
+      {/* 30-minuten-verwachtingsmanagement: bij meer dan 2 ruimtes */}
+      {rooms.length >= 3 && (
         <div className="rd-card-white" style={{ background: "var(--rd-lime)" }}>
           <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>
-            Tip
+            Even opletten
           </div>
           <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
-            Je wilt meerdere ruimtes aanpakken. Voor een compleet plan adviseren we meestal een{" "}
-            <strong>uitgebreid kleuradvies</strong>. Je kunt ook doorgaan met 30 minuten en straks
-            je belangrijkste ruimtes kiezen.
+            Je hebt <strong>{rooms.length} ruimtes</strong> gekozen. In 30 minuten behandelen we er
+            meestal 1 à 2 echt goed. Vink hieronder je <strong>belangrijkste ruimtes</strong> aan
+            (max 2), dan richten we het gesprek daarop.
+          </p>
+          <p style={{ margin: "10px 0 0", fontSize: 14, lineHeight: 1.45 }}>
+            Wil je alles in één keer aanpakken? Dan past een{" "}
+            <strong>uitgebreid kleuradvies</strong> beter.
           </p>
           <a
             href="https://roll.nl/kleuradvies"
@@ -75,7 +110,7 @@ export function RoomsStep({ rooms, setRooms }: Props) {
             className="rd-btn rd-btn-outline"
             style={{ marginTop: 12, textDecoration: "none" }}
           >
-            Bekijk Totaal Kleuradvies
+            Bekijk uitgebreid kleuradvies
           </a>
         </div>
       )}
@@ -109,7 +144,11 @@ export function RoomsStep({ rooms, setRooms }: Props) {
                   className={`rd-plan-chip${room.priority ? " is-on" : ""}`}
                   onClick={() => patchRoom(room.id, { priority: !room.priority })}
                   aria-pressed={!!room.priority}
-                  style={{ marginTop: 12 }}
+                  disabled={!room.priority && priorityCount >= 2}
+                  style={{
+                    marginTop: 12,
+                    ...(!room.priority && priorityCount >= 2 ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+                  }}
                 >
                   {room.priority ? "★ Voorrang" : "☆ Voorrang geven"}
                 </button>
