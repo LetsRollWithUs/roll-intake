@@ -253,8 +253,8 @@ export function App() {
       hint = "Kies minstens één omschrijving.";
       break;
     case "kleuren":
-      canAdvance = state.samples.every((s) => s.name.trim() !== "");
-      hint = "Vul bij elke toegevoegde kleur minstens de kleurnaam in.";
+      // Nooit blokkeren: lege kleurregels worden bij Volgende genegeerd.
+      canAdvance = true;
       break;
     case "inspiratie":
       canAdvance = isUrlish(state.pinterestUrl) && isUrlish(state.otherInspirationUrl);
@@ -292,6 +292,10 @@ export function App() {
   const goNext = () => {
     if (screen === "planning") return handleSubmit();
     if (screen === "photos" && photoIdx < state.rooms.length - 1) return setPhotoIdx(photoIdx + 1);
+    // Lege kleurregels opruimen zodat ze nergens blijven hangen.
+    if (screen === "kleuren" && state.samples.some((s) => s.name.trim() === "")) {
+      update({ samples: state.samples.filter((s) => s.name.trim() !== "") });
+    }
     const next = FLOW[idx + 1];
     if (next === "photos") setPhotoIdx(0);
     setScreen(next);
@@ -370,7 +374,9 @@ export function App() {
           samples={state.samples}
           colors={state.colors}
           rooms={state.rooms}
-          onHasSamples={(hasSamples) => update({ hasSamples })}
+          onHasSamples={(hasSamples) =>
+            update(hasSamples === "nee" ? { hasSamples, samples: [] } : { hasSamples })
+          }
           onSamples={(samples) => update({ samples })}
           onColors={(colors) => update({ colors })}
         />
