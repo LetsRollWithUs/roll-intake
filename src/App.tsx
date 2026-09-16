@@ -7,6 +7,7 @@ import { ColorsStep } from "@/components/steps/ColorsStep";
 import { VraagStep } from "@/components/steps/VraagStep";
 import { SummaryStep } from "@/components/steps/SummaryStep";
 import { useIntake } from "@/lib/store";
+import { submitIntake } from "@/lib/submit";
 import { lockDocument } from "@/lib/lock-document";
 import type { Room } from "@/lib/types";
 
@@ -54,6 +55,8 @@ const META: Record<Screen, { kicker: string; title: string; sub: string }> = {
 export function App() {
   const { state, update, reset } = useIntake();
   const [screen, setScreen] = useState<Screen>("intro");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => lockDocument(), []);
 
@@ -147,8 +150,23 @@ export function App() {
     if (idx <= 0) return setScreen("intro");
     setScreen(FLOW[idx - 1]);
   };
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await submitIntake(state);
+      setScreen("done");
+    } catch (e) {
+      setSubmitError(
+        "Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const goNext = () => {
-    if (screen === "summary") return setScreen("done");
+    if (screen === "summary") return handleSubmit();
     if (idx < TOTAL - 1) return setScreen(FLOW[idx + 1]);
     setScreen("summary");
   };
@@ -158,7 +176,7 @@ export function App() {
     screen === "rooms"
       ? state.rooms.length > 0
       : screen === "summary"
-        ? emailOk
+        ? emailOk && !submitting
         : true;
 
   const footer = (
@@ -168,7 +186,11 @@ export function App() {
       disabled={!canAdvance}
       style={!canAdvance ? { opacity: 0.4 } : undefined}
     >
-      {screen === "summary" ? "Versturen naar de styliste" : "Volgende"}
+      {screen === "summary"
+        ? submitting
+          ? "Bezig met versturen..."
+          : "Versturen naar de styliste"
+        : "Volgende"}
     </button>
   );
 
@@ -220,6 +242,19 @@ export function App() {
           {!emailOk && (
             <p className="rd-sub" style={{ textAlign: "center", marginTop: 14 }}>
               Vul bij stap 5 je e-mailadres in om te kunnen versturen.
+            </p>
+          )}
+          {submitError && (
+            <p
+              style={{
+                textAlign: "center",
+                marginTop: 14,
+                color: "var(--rd-pink-dark)",
+                fontWeight: 600,
+                fontSize: 14,
+              }}
+            >
+              {submitError}
             </p>
           )}
         </>

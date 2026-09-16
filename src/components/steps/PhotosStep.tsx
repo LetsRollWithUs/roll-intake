@@ -23,6 +23,7 @@ function RoomPhotos({
       id: uid(),
       url: URL.createObjectURL(f),
       name: f.name,
+      file: f,
     }));
     patch(room.id, { photos: [...room.photos, ...added] });
   };

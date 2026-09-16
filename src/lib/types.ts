@@ -8,9 +8,11 @@ export type DaylightDir = "noord" | "oost" | "zuid" | "west" | "onbekend";
 
 export interface RoomPhoto {
   id: string;
-  /** Object-URL of dataURL voor preview in de browser. */
+  /** Object-URL voor preview in de browser (niet persistent). */
   url: string;
   name: string;
+  /** Het echte bestand voor upload; blijft niet bewaard na herladen. */
+  file?: File;
 }
 
 export interface Room {
