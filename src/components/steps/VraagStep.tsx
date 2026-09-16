@@ -3,13 +3,24 @@ import { HELP_NEEDS } from "@/data/intake-options";
 interface Props {
   helpNeeds: string[];
   mainQuestion: string;
+  multiRoom: boolean;
+  questionScope?: "een" | "meerdere";
   onHelpNeeds: (v: string[]) => void;
   onQuestion: (v: string) => void;
+  onScope: (v: "een" | "meerdere") => void;
 }
 
 const MAX = 2;
 
-export function VraagStep({ helpNeeds, mainQuestion, onHelpNeeds, onQuestion }: Props) {
+export function VraagStep({
+  helpNeeds,
+  mainQuestion,
+  multiRoom,
+  questionScope,
+  onHelpNeeds,
+  onQuestion,
+  onScope,
+}: Props) {
   const toggle = (v: string) => {
     if (helpNeeds.includes(v)) onHelpNeeds(helpNeeds.filter((x) => x !== v));
     else if (helpNeeds.length < MAX) onHelpNeeds([...helpNeeds, v]);
@@ -52,6 +63,30 @@ export function VraagStep({ helpNeeds, mainQuestion, onHelpNeeds, onQuestion }: 
           style={{ height: 130, paddingTop: 12, resize: "none", lineHeight: 1.4 }}
         />
       </div>
+
+      {multiRoom && (
+        <div>
+          <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
+            Gaat je vraag over één ruimte of meerdere?
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className={`rd-plan-chip${questionScope === "een" ? " is-on" : ""}`}
+              onClick={() => onScope("een")}
+              aria-pressed={questionScope === "een"}
+            >
+              Eén ruimte
+            </button>
+            <button
+              className={`rd-plan-chip${questionScope === "meerdere" ? " is-on" : ""}`}
+              onClick={() => onScope("meerdere")}
+              aria-pressed={questionScope === "meerdere"}
+            >
+              Meerdere ruimtes
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

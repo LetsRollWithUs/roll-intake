@@ -4,7 +4,7 @@
 export type SurfaceKey = "muren" | "plafond" | "kozijnen" | "deuren" | "houtwerk";
 
 export type DaylightKey = "veel" | "gemiddeld" | "weinig";
-export type DaylightDir = "noord" | "oost" | "zuid" | "west" | "onbekend";
+export type DaylightDir = "noord" | "oost" | "zuid" | "west" | "meerdere" | "onbekend";
 export type UsageTime = "ochtend" | "middag" | "avond" | "hele-dag";
 
 export type SampleSource = "nee" | "roll" | "andere" | "allebei";
@@ -47,6 +47,8 @@ export interface ColorPick {
 export interface SampleItem {
   id: string;
   brand: string;
+  /** Optioneel gekoppeld aan een ruimte (room.id). */
+  roomId?: string;
   name: string;
   verdict: Verdict;
   note?: string;
@@ -58,8 +60,11 @@ export interface IntakeState {
 
   // Sfeer
   inspirationLikes: string[]; // max 2 sfeerbeelden
-  moods: string[]; // max 3 woorden
-  boldness?: number; // 1-5, hoe uitgesproken
+  noSfeerImage?: boolean; // "Geen van deze"
+  moods: string[]; // max 3 omschrijvingen
+  boldness?: number; // 1-5, hoe uitgesproken (optioneel)
+  sfeerSameAll?: boolean; // geldt de sfeer voor alle ruimtes?
+  sfeerExceptionNote: string; // uitzondering bij meerdere ruimtes
 
   // Kleuren & samples
   hasSamples?: SampleSource;
@@ -72,9 +77,14 @@ export interface IntakeState {
   inspirationImages: UploadedImage[]; // max 5
   inspirationNote: string;
 
+  // Context
+  hasOtherChanges?: boolean; // verandert er iets aan vloer/meubels/gordijnen?
+  otherChangesNote: string;
+
   // Jouw vraag
   helpNeeds: string[]; // max 2
   mainQuestion: string; // verplicht
+  questionScope?: "een" | "meerdere"; // voor één of meerdere ruimtes
 
   // Planning & contact
   planning?: PlanningKey;
@@ -88,8 +98,11 @@ export function emptyState(): IntakeState {
   return {
     rooms: [],
     inspirationLikes: [],
+    noSfeerImage: false,
     moods: [],
     boldness: undefined,
+    sfeerSameAll: undefined,
+    sfeerExceptionNote: "",
     hasSamples: undefined,
     samples: [],
     colors: [],
@@ -97,8 +110,11 @@ export function emptyState(): IntakeState {
     otherInspirationUrl: "",
     inspirationImages: [],
     inspirationNote: "",
+    hasOtherChanges: undefined,
+    otherChangesNote: "",
     helpNeeds: [],
     mainQuestion: "",
+    questionScope: undefined,
     planning: undefined,
     contactName: "",
     contactEmail: "",

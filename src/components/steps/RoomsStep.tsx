@@ -28,6 +28,7 @@ export function RoomsStep({ rooms, setRooms }: Props) {
   const countFor = (typeKey: string) => rooms.filter((r) => r.typeKey === typeKey).length;
 
   const showPriority = rooms.length >= 3;
+  const priorityCount = rooms.filter((r) => r.priority).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -109,7 +110,11 @@ export function RoomsStep({ rooms, setRooms }: Props) {
                   className={`rd-plan-chip${room.priority ? " is-on" : ""}`}
                   onClick={() => patchRoom(room.id, { priority: !room.priority })}
                   aria-pressed={!!room.priority}
-                  style={{ marginTop: 12 }}
+                  disabled={!room.priority && priorityCount >= 2}
+                  style={{
+                    marginTop: 12,
+                    ...(!room.priority && priorityCount >= 2 ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+                  }}
                 >
                   {room.priority ? "★ Voorrang" : "☆ Voorrang geven"}
                 </button>

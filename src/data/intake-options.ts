@@ -46,6 +46,7 @@ export const DAYLIGHT_DIRS: { key: DaylightDir; label: string }[] = [
   { key: "oost", label: "Oost" },
   { key: "zuid", label: "Zuid" },
   { key: "west", label: "West" },
+  { key: "meerdere", label: "Meerdere kanten" },
   { key: "onbekend", label: "Weet ik niet" },
 ];
 
