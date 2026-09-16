@@ -20,3 +20,4 @@ scratchpad
 build_output.txt
 .env*
 *.tsbuildinfo
+supabase/.temp/
