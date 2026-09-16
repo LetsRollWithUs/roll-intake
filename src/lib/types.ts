@@ -42,6 +42,8 @@ export interface IntakeState {
   /** Durf: 1 (rustig) tot 5 (gedurfd). */
   boldness?: number;
   colors: ColorPick[];
+  /** Ids van aangevinkte inspiratiebeelden (sfeerboard). */
+  inspirationLikes: string[];
   inspirationNote: string;
   helpNeeds: string[];
   mainQuestion: string;
@@ -56,6 +58,7 @@ export function emptyState(): IntakeState {
     moods: [],
     boldness: undefined,
     colors: [],
+    inspirationLikes: [],
     inspirationNote: "",
     helpNeeds: [],
     mainQuestion: "",
