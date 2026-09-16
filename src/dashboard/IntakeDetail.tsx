@@ -3,9 +3,11 @@ import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { SURFACES, DAYLIGHT, DAYLIGHT_DIRS, USAGE_TIMES, PLANNING } from "@/data/intake-options";
 import { INSPIRATIONS } from "@/data/inspiration";
+import { rollColors } from "@/data/roll-colors";
 import { STATUSES, type AdvisorStatus } from "./status";
+import { OUTCOMES, BUY_MOMENTS, PRODUCTS } from "./outcome";
 import { StatusPill, formatDate } from "./ui";
-import type { IntakeRow, DbPhoto } from "./types";
+import type { IntakeRow, DbPhoto, AdviceRow } from "./types";
 
 function lbl(list: { key: string; label: string }[], key?: string | null): string {
   if (!key) return "";
@@ -53,6 +55,10 @@ export function IntakeDetail() {
   const [status, setStatus] = useState<AdvisorStatus>("nieuw");
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
+  const [outcome, setOutcome] = useState<string>("");
+  const [advice, setAdvice] = useState<AdviceRow[]>([]);
+  const [buyMoment, setBuyMoment] = useState<string>("");
+  const [nextAction, setNextAction] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -67,20 +73,41 @@ export function IntakeDetail() {
         setStatus((r.advisor_status as AdvisorStatus) ?? "nieuw");
         setNotes(r.advisor_notes ?? "");
         setReason(r.advisor_rejected_reason ?? "");
+        setOutcome(r.advisor_outcome ?? "");
+        setBuyMoment(r.advisor_buy_moment ?? "");
+        setNextAction(r.advisor_next_action ?? "");
+        // Advies-regels: bewaard, anders voorgevuld met de ruimtes uit de intake.
+        const saved = r.advisor_advice ?? [];
+        if (saved.length > 0) setAdvice(saved);
+        else
+          setAdvice(
+            (r.rooms ?? []).map((rm) => ({ room: rm.label, color: "", product: "Muurverf", liters: "" })),
+          );
       }
       setLoading(false);
     })();
   }, [id]);
 
+  const setAdviceRow = (i: number, patch: Partial<AdviceRow>) =>
+    setAdvice((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addAdviceRow = () =>
+    setAdvice((prev) => [...prev, { room: "", color: "", product: "Muurverf", liters: "" }]);
+  const removeAdviceRow = (i: number) => setAdvice((prev) => prev.filter((_, idx) => idx !== i));
+
   const save = async () => {
     setSaving(true);
     setSaved(false);
+    const cleanAdvice = advice.filter((a) => a.room.trim() || a.color.trim() || a.liters.trim());
     const { error } = await supabase
       .from("intake")
       .update({
         advisor_status: status,
         advisor_notes: notes || null,
         advisor_rejected_reason: status === "afgewezen" ? reason || null : null,
+        advisor_outcome: outcome || null,
+        advisor_advice: cleanAdvice,
+        advisor_buy_moment: buyMoment || null,
+        advisor_next_action: nextAction || null,
         advisor_updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -160,6 +187,120 @@ export function IntakeDetail() {
             />
           </div>
         )}
+
+        {/* Uitkomst van het gesprek (stuurt straks de opvolging) */}
+        <datalist id="detail-roll-colors">
+          {rollColors.map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+        </datalist>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid var(--rd-line)", paddingTop: 14 }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+            Uitkomst van het gesprek
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {OUTCOMES.map((o) => (
+              <button
+                key={o.key}
+                className={`rd-plan-chip${outcome === o.key ? " is-on" : ""}`}
+                onClick={() => setOutcome(outcome === o.key ? "" : o.key)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Advies per ruimte */}
+        <div style={{ marginTop: 14 }}>
+          <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 8 }}>
+            Geadviseerde kleuren per ruimte
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {advice.map((a, i) => (
+              <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                <input
+                  className="rd-input"
+                  value={a.room}
+                  onChange={(e) => setAdviceRow(i, { room: e.target.value })}
+                  placeholder="Ruimte"
+                  style={{ flex: "1 1 120px", minWidth: 0, height: 44 }}
+                />
+                <input
+                  className="rd-input"
+                  value={a.color}
+                  onChange={(e) => setAdviceRow(i, { color: e.target.value })}
+                  placeholder="Kleur"
+                  list="detail-roll-colors"
+                  style={{ flex: "1 1 130px", minWidth: 0, height: 44 }}
+                />
+                <select
+                  className="rd-input"
+                  value={a.product}
+                  onChange={(e) => setAdviceRow(i, { product: e.target.value })}
+                  style={{ flex: "0 1 120px", minWidth: 0, height: 44 }}
+                >
+                  {PRODUCTS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="rd-input"
+                  value={a.liters}
+                  onChange={(e) => setAdviceRow(i, { liters: e.target.value })}
+                  placeholder="Liters"
+                  inputMode="decimal"
+                  style={{ flex: "0 1 80px", minWidth: 0, height: 44 }}
+                />
+                <button
+                  className="rd-textlink"
+                  onClick={() => removeAdviceRow(i)}
+                  aria-label="Regel verwijderen"
+                  style={{ minHeight: 44, opacity: 0.6 }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <button className="rd-textlink" onClick={addAdviceRow} style={{ minHeight: 40 }}>
+            + Regel toevoegen
+          </button>
+        </div>
+
+        {/* Koopmoment */}
+        <div style={{ marginTop: 12 }}>
+          <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 8 }}>
+            Koopmoment
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {BUY_MOMENTS.map((b) => (
+              <button
+                key={b.key}
+                className={`rd-plan-chip${buyMoment === b.key ? " is-on" : ""}`}
+                onClick={() => setBuyMoment(buyMoment === b.key ? "" : b.key)}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Vervolgactie */}
+        <div style={{ marginTop: 12 }}>
+          <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
+            Vervolgactie
+          </div>
+          <input
+            className="rd-input"
+            value={nextAction}
+            onChange={(e) => setNextAction(e.target.value)}
+            placeholder="Bijv. samples nasturen, over 1 week terugbellen, offerte maken."
+          />
+        </div>
 
         <div style={{ marginTop: 12 }}>
           <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
