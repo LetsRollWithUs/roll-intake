@@ -50,24 +50,20 @@ export function RoomsStep({ rooms, setRooms }: Props) {
         })}
       </div>
 
-      {/* 30-minuten-verwachtingsmanagement */}
-      {rooms.length === 3 && (
-        <div className="rd-card-white" style={{ background: "var(--rd-lavender)" }}>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
-            <strong>Je hebt 3 ruimtes gekozen.</strong> In 30 minuten behandelen we meestal 1 à 2
-            ruimtes uitgebreid. Vink hieronder aan welke ruimtes voorrang hebben.
-          </p>
-        </div>
-      )}
-      {rooms.length >= 4 && (
+      {/* 30-minuten-verwachtingsmanagement: bij meer dan 2 ruimtes */}
+      {rooms.length >= 3 && (
         <div className="rd-card-white" style={{ background: "var(--rd-lime)" }}>
           <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>
-            Tip
+            Even opletten
           </div>
           <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
-            Je wilt meerdere ruimtes aanpakken. Voor een compleet plan adviseren we meestal een{" "}
-            <strong>uitgebreid kleuradvies</strong>. Je kunt ook doorgaan met 30 minuten en straks
-            je belangrijkste ruimtes kiezen.
+            Je hebt <strong>{rooms.length} ruimtes</strong> gekozen. In 30 minuten behandelen we er
+            meestal 1 à 2 echt goed. Vink hieronder je <strong>belangrijkste ruimtes</strong> aan
+            (max 2), dan richten we het gesprek daarop.
+          </p>
+          <p style={{ margin: "10px 0 0", fontSize: 14, lineHeight: 1.45 }}>
+            Wil je alles in één keer aanpakken? Dan past een{" "}
+            <strong>uitgebreid kleuradvies</strong> beter.
           </p>
           <a
             href="https://roll.nl/kleuradvies"
@@ -76,7 +72,7 @@ export function RoomsStep({ rooms, setRooms }: Props) {
             className="rd-btn rd-btn-outline"
             style={{ marginTop: 12, textDecoration: "none" }}
           >
-            Bekijk Totaal Kleuradvies
+            Bekijk uitgebreid kleuradvies
           </a>
         </div>
       )}
