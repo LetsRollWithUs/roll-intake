@@ -174,7 +174,7 @@ export function IntakeDetail() {
           />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
           <button
             className="rd-btn rd-btn-primary"
             onClick={save}
@@ -183,11 +183,24 @@ export function IntakeDetail() {
           >
             {saving ? "Opslaan..." : "Opslaan"}
           </button>
+          <a
+            className="rd-btn rd-btn-outline"
+            href="https://roll.nl/offerte"
+            target="_blank"
+            rel="noreferrer"
+            style={{ width: "auto", padding: "0 22px", textDecoration: "none" }}
+          >
+            Offerte maken ↗
+          </a>
           {saved && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>Opgeslagen ✓</span>}
           {row.advisor_updated_at && !saved && (
             <span style={{ fontSize: 12, opacity: 0.55 }}>Laatst bijgewerkt {formatDate(row.advisor_updated_at)}</span>
           )}
         </div>
+        <p className="rd-sub" style={{ marginTop: 8 }}>
+          Opent de prijsopgave op roll.nl in een nieuw tabblad (log daar in). De kleuren en ruimtes
+          van deze intake staan hieronder ter referentie.
+        </p>
       </div>
 
       {/* Vraag */}
