@@ -1,0 +1,357 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+
+interface Stylist {
+  id: string;
+  email: string;
+  name: string;
+  active: boolean;
+}
+interface Rule {
+  id?: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+interface Exception {
+  id: string;
+  date: string;
+  is_off: boolean;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+const WEEKDAYS = [
+  { n: 1, label: "Maandag" },
+  { n: 2, label: "Dinsdag" },
+  { n: 3, label: "Woensdag" },
+  { n: 4, label: "Donderdag" },
+  { n: 5, label: "Vrijdag" },
+  { n: 6, label: "Zaterdag" },
+  { n: 7, label: "Zondag" },
+];
+
+const hm = (t: string) => t.slice(0, 5); // 'HH:MM:SS' -> 'HH:MM'
+
+export function AgendaPage() {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [myEmail, setMyEmail] = useState("");
+  const [stylists, setStylists] = useState<Stylist[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [byDay, setByDay] = useState<Record<number, { start: string; end: string }[]>>({});
+  const [exceptions, setExceptions] = useState<Exception[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingRules, setSavingRules] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  // admin: nieuwe stylist
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+
+  // uitzondering toevoegen
+  const [excDate, setExcDate] = useState("");
+  const [excOff, setExcOff] = useState(true);
+  const [excStart, setExcStart] = useState("09:00");
+  const [excEnd, setExcEnd] = useState("17:00");
+
+  const flash = (m: string) => {
+    setMsg(m);
+    setErr(null);
+    setTimeout(() => setMsg(null), 2500);
+  };
+
+  const loadStylists = async () => {
+    const { data: adm } = await supabase.rpc("is_admin");
+    const { data: u } = await supabase.auth.getUser();
+    const email = (u?.user?.email ?? "").toLowerCase();
+    setIsAdmin(adm === true);
+    setMyEmail(email);
+    const { data } = await supabase.from("stylists").select("*").order("name");
+    const list = (data as Stylist[]) ?? [];
+    setStylists(list);
+    // Selecteer: eigen stylist indien aanwezig, anders de eerste
+    const mine = list.find((s) => s.email.toLowerCase() === email);
+    setSelectedId((prev) => prev || mine?.id || list[0]?.id || "");
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadStylists();
+  }, []);
+
+  const loadSchedule = async (sid: string) => {
+    if (!sid) return;
+    const [{ data: rules }, { data: exc }] = await Promise.all([
+      supabase.from("availability_rules").select("*").eq("stylist_id", sid),
+      supabase
+        .from("availability_exceptions")
+        .select("*")
+        .eq("stylist_id", sid)
+        .gte("date", new Date().toISOString().slice(0, 10))
+        .order("date"),
+    ]);
+    const grouped: Record<number, { start: string; end: string }[]> = {};
+    for (const w of WEEKDAYS) grouped[w.n] = [];
+    for (const r of (rules as Rule[]) ?? [])
+      grouped[r.weekday].push({ start: hm(r.start_time), end: hm(r.end_time) });
+    for (const n of Object.keys(grouped)) grouped[+n].sort((a, b) => a.start.localeCompare(b.start));
+    setByDay(grouped);
+    setExceptions((exc as Exception[]) ?? []);
+  };
+
+  useEffect(() => {
+    if (selectedId) loadSchedule(selectedId);
+  }, [selectedId]);
+
+  const canEdit = useMemo(() => {
+    const s = stylists.find((x) => x.id === selectedId);
+    return isAdmin || (s && s.email.toLowerCase() === myEmail);
+  }, [stylists, selectedId, isAdmin, myEmail]);
+
+  const addRange = (day: number) =>
+    setByDay((p) => ({ ...p, [day]: [...(p[day] ?? []), { start: "09:00", end: "17:00" }] }));
+  const setRange = (day: number, i: number, patch: Partial<{ start: string; end: string }>) =>
+    setByDay((p) => ({ ...p, [day]: p[day].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
+  const removeRange = (day: number, i: number) =>
+    setByDay((p) => ({ ...p, [day]: p[day].filter((_, idx) => idx !== i) }));
+
+  const saveRules = async () => {
+    setSavingRules(true);
+    setErr(null);
+    const rows = WEEKDAYS.flatMap((w) =>
+      (byDay[w.n] ?? [])
+        .filter((r) => r.start && r.end && r.end > r.start)
+        .map((r) => ({ stylist_id: selectedId, weekday: w.n, start_time: r.start, end_time: r.end })),
+    );
+    const del = await supabase.from("availability_rules").delete().eq("stylist_id", selectedId);
+    if (del.error) {
+      setErr(del.error.message);
+      setSavingRules(false);
+      return;
+    }
+    if (rows.length) {
+      const ins = await supabase.from("availability_rules").insert(rows);
+      if (ins.error) {
+        setErr(ins.error.message);
+        setSavingRules(false);
+        return;
+      }
+    }
+    setSavingRules(false);
+    flash("Rooster opgeslagen.");
+    loadSchedule(selectedId);
+  };
+
+  const addException = async () => {
+    if (!excDate) return;
+    const row = {
+      stylist_id: selectedId,
+      date: excDate,
+      is_off: excOff,
+      start_time: excOff ? null : excStart,
+      end_time: excOff ? null : excEnd,
+    };
+    const { error } = await supabase.from("availability_exceptions").insert(row);
+    if (error) return setErr(error.message);
+    setExcDate("");
+    flash("Uitzondering toegevoegd.");
+    loadSchedule(selectedId);
+  };
+  const removeException = async (id: string) => {
+    await supabase.from("availability_exceptions").delete().eq("id", id);
+    loadSchedule(selectedId);
+  };
+
+  // admin: stylists beheren
+  const addStylist = async () => {
+    if (!newEmail.trim() || !newName.trim()) return;
+    const { error } = await supabase
+      .from("stylists")
+      .insert({ email: newEmail.trim().toLowerCase(), name: newName.trim() });
+    if (error) return setErr(error.message);
+    setNewEmail("");
+    setNewName("");
+    flash("Stylist toegevoegd.");
+    loadStylists();
+  };
+  const toggleActive = async (s: Stylist) => {
+    await supabase.from("stylists").update({ active: !s.active }).eq("id", s.id);
+    loadStylists();
+  };
+  const removeStylist = async (s: Stylist) => {
+    if (!window.confirm(`${s.name} als stylist verwijderen? Rooster gaat mee weg.`)) return;
+    await supabase.from("stylists").delete().eq("id", s.id);
+    if (selectedId === s.id) setSelectedId("");
+    loadStylists();
+  };
+
+  if (loading) return <p className="rd-sub">Laden...</p>;
+
+  return (
+    <div>
+      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>
+        ← Alle intakes
+      </Link>
+      <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>
+        Agenda & beschikbaarheid
+      </h1>
+      <p className="rd-sub" style={{ marginTop: 0 }}>
+        Stel je wekelijkse beschikbaarheid in. Klanten boeken straks op dag en tijd; het systeem
+        kiest dan een vrije stylist.
+      </p>
+      {msg && <p style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>{msg}</p>}
+      {err && <p style={{ color: "#b3261e", fontWeight: 600 }}>{err}</p>}
+
+      {/* Admin: stylisten beheren */}
+      {isAdmin && (
+        <div className="rd-card-white" style={{ marginTop: 12 }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+            Stylisten
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+            {stylists.map((s) => (
+              <div
+                key={s.id}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}
+              >
+                <div>
+                  <span style={{ fontWeight: 700 }}>{s.name}</span>{" "}
+                  <span style={{ fontSize: 13, opacity: 0.6 }}>{s.email}</span>
+                  {!s.active && <span style={{ fontSize: 12, opacity: 0.6 }}> · inactief</span>}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="rd-plan-chip" onClick={() => toggleActive(s)}>
+                    {s.active ? "Op inactief" : "Activeren"}
+                  </button>
+                  <button
+                    className="rd-plan-chip"
+                    style={{ borderColor: "#b3261e", color: "#b3261e" }}
+                    onClick={() => removeStylist(s)}
+                  >
+                    Verwijderen
+                  </button>
+                </div>
+              </div>
+            ))}
+            {stylists.length === 0 && <p className="rd-sub" style={{ margin: 0 }}>Nog geen stylisten.</p>}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input className="rd-input" placeholder="E-mail" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} style={{ flex: "1 1 180px", height: 44 }} />
+            <input className="rd-input" placeholder="Naam" value={newName} onChange={(e) => setNewName(e.target.value)} style={{ flex: "1 1 140px", height: 44 }} />
+            <button className="rd-btn rd-btn-primary" onClick={addStylist} style={{ width: "auto", padding: "0 20px", minHeight: 44 }}>
+              Toevoegen
+            </button>
+          </div>
+          <p className="rd-sub" style={{ marginTop: 8 }}>
+            Let op: geef een stylist ook dashboard-toegang via <Link to="/beheer/adviseurs" className="rd-textlink">Adviseurs</Link> zodat ze kan inloggen.
+          </p>
+        </div>
+      )}
+
+      {stylists.length > 0 && (
+        <>
+          {/* Stylist-keuze (admin) */}
+          {isAdmin && (
+            <div style={{ margin: "16px 0 8px" }}>
+              <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
+                Rooster van
+              </div>
+              <select className="rd-input" value={selectedId} onChange={(e) => setSelectedId(e.target.value)} style={{ maxWidth: 320 }}>
+                {stylists.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!canEdit && (
+            <p className="rd-sub">Je kunt alleen je eigen rooster wijzigen.</p>
+          )}
+
+          {/* Wekelijks rooster */}
+          <div className="rd-card-white" style={{ marginTop: 12 }}>
+            <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+              Wekelijks rooster
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {WEEKDAYS.map((w) => (
+                <div key={w.n} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div style={{ width: 96, fontWeight: 700, paddingTop: 10 }}>{w.label}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                    {(byDay[w.n] ?? []).length === 0 && (
+                      <span style={{ opacity: 0.5, fontSize: 13, paddingTop: 10 }}>Niet beschikbaar</span>
+                    )}
+                    {(byDay[w.n] ?? []).map((r, i) => (
+                      <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input type="time" className="rd-input" value={r.start} disabled={!canEdit} onChange={(e) => setRange(w.n, i, { start: e.target.value })} style={{ width: 120, height: 40 }} />
+                        <span>–</span>
+                        <input type="time" className="rd-input" value={r.end} disabled={!canEdit} onChange={(e) => setRange(w.n, i, { end: e.target.value })} style={{ width: 120, height: 40 }} />
+                        {canEdit && (
+                          <button className="rd-textlink" onClick={() => removeRange(w.n, i)} style={{ minHeight: 40, opacity: 0.6 }}>✕</button>
+                        )}
+                      </div>
+                    ))}
+                    {canEdit && (
+                      <button className="rd-textlink" onClick={() => addRange(w.n)} style={{ minHeight: 36, alignSelf: "flex-start" }}>
+                        + Tijdblok
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {canEdit && (
+              <button className="rd-btn rd-btn-primary" onClick={saveRules} disabled={savingRules} style={{ width: "auto", padding: "0 24px", marginTop: 14, ...(savingRules ? { opacity: 0.5 } : {}) }}>
+                {savingRules ? "Opslaan..." : "Rooster opslaan"}
+              </button>
+            )}
+          </div>
+
+          {/* Uitzonderingen */}
+          <div className="rd-card-white" style={{ marginTop: 12 }}>
+            <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+              Uitzonderingen (vrije dagen / afwijkende tijden)
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+              {exceptions.map((x) => (
+                <div key={x.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 14 }}>
+                    <strong>{x.date}</strong>{" "}
+                    {x.is_off ? "· vrij" : `· ${hm(x.start_time ?? "")}–${hm(x.end_time ?? "")}`}
+                  </span>
+                  {canEdit && (
+                    <button className="rd-textlink" onClick={() => removeException(x.id)} style={{ minHeight: 32, opacity: 0.6 }}>Verwijder</button>
+                  )}
+                </div>
+              ))}
+              {exceptions.length === 0 && <p className="rd-sub" style={{ margin: 0 }}>Nog geen uitzonderingen.</p>}
+            </div>
+            {canEdit && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <input type="date" className="rd-input" value={excDate} onChange={(e) => setExcDate(e.target.value)} style={{ width: 170, height: 44 }} />
+                <select className="rd-input" value={excOff ? "off" : "custom"} onChange={(e) => setExcOff(e.target.value === "off")} style={{ width: 150, height: 44 }}>
+                  <option value="off">Hele dag vrij</option>
+                  <option value="custom">Andere tijden</option>
+                </select>
+                {!excOff && (
+                  <>
+                    <input type="time" className="rd-input" value={excStart} onChange={(e) => setExcStart(e.target.value)} style={{ width: 110, height: 44 }} />
+                    <span>–</span>
+                    <input type="time" className="rd-input" value={excEnd} onChange={(e) => setExcEnd(e.target.value)} style={{ width: 110, height: 44 }} />
+                  </>
+                )}
+                <button className="rd-btn rd-btn-outline" onClick={addException} style={{ width: "auto", padding: "0 18px", minHeight: 44 }}>
+                  Toevoegen
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
