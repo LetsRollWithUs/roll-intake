@@ -59,4 +59,15 @@ export interface IntakeRow {
   advisor_notes: string | null;
   advisor_rejected_reason: string | null;
   advisor_updated_at: string | null;
+  advisor_outcome: string | null;
+  advisor_advice: AdviceRow[] | null;
+  advisor_buy_moment: string | null;
+  advisor_next_action: string | null;
+}
+
+export interface AdviceRow {
+  room: string;
+  color: string;
+  product: string;
+  liters: string;
 }
