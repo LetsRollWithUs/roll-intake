@@ -1,5 +1,5 @@
-import { ROOM_TYPES, SURFACES } from "@/data/intake-options";
-import type { Room, SurfaceKey } from "@/lib/types";
+import { ROOM_TYPES } from "@/data/intake-options";
+import type { Room } from "@/lib/types";
 import { uid } from "@/lib/store";
 
 interface Props {
@@ -19,40 +19,29 @@ export function RoomsStep({ rooms, setRooms }: Props) {
   const addRoom = (typeKey: string) => {
     setRooms((prev) => [
       ...prev,
-      {
-        id: uid(),
-        typeKey,
-        label: defaultLabel(typeKey, prev),
-        surfaces: ["muren"],
-        photos: [],
-      },
+      { id: uid(), typeKey, label: defaultLabel(typeKey, prev), surfaces: ["muren"], photos: [] },
     ]);
   };
-
   const removeRoom = (id: string) => setRooms((prev) => prev.filter((r) => r.id !== id));
-
   const patchRoom = (id: string, patch: Partial<Room>) =>
     setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-
-  const toggleSurface = (room: Room, key: SurfaceKey) => {
-    const on = room.surfaces.includes(key);
-    patchRoom(room.id, {
-      surfaces: on ? room.surfaces.filter((s) => s !== key) : [...room.surfaces, key],
-    });
-  };
-
   const countFor = (typeKey: string) => rooms.filter((r) => r.typeKey === typeKey).length;
+
+  const showPriority = rooms.length >= 3;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Kiezer: tik om een ruimte toe te voegen, meerdere keren mag */}
       <div>
         {ROOM_TYPES.map((t) => {
           const n = countFor(t.key);
           return (
             <button key={t.key} className="rd-row" onClick={() => addRoom(t.key)}>
               <span className="rd-row-label">{t.label}</span>
-              <span className="rd-ring" aria-hidden style={n > 0 ? { borderColor: "var(--rd-pink)", background: "var(--rd-pink)" } : undefined}>
+              <span
+                className="rd-ring"
+                aria-hidden
+                style={n > 0 ? { borderColor: "var(--rd-pink)", background: "var(--rd-pink)" } : undefined}
+              >
                 {n > 0 ? n : "+"}
               </span>
             </button>
@@ -60,7 +49,37 @@ export function RoomsStep({ rooms, setRooms }: Props) {
         })}
       </div>
 
-      {/* Toegevoegde ruimtes met naam en vlakken */}
+      {/* 30-minuten-verwachtingsmanagement */}
+      {rooms.length === 3 && (
+        <div className="rd-card-white" style={{ background: "var(--rd-lavender)" }}>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
+            <strong>Je hebt 3 ruimtes gekozen.</strong> In 30 minuten behandelen we meestal 1 à 2
+            ruimtes uitgebreid. Vink hieronder aan welke ruimtes voorrang hebben.
+          </p>
+        </div>
+      )}
+      {rooms.length >= 4 && (
+        <div className="rd-card-white" style={{ background: "var(--rd-lime)" }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>
+            Tip
+          </div>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
+            Je wilt meerdere ruimtes aanpakken. Voor een compleet plan adviseren we meestal een{" "}
+            <strong>uitgebreid kleuradvies</strong>. Je kunt ook doorgaan met 30 minuten en straks
+            je belangrijkste ruimtes kiezen.
+          </p>
+          <a
+            href="https://roll.nl/kleuradvies"
+            target="_blank"
+            rel="noreferrer"
+            className="rd-btn rd-btn-outline"
+            style={{ marginTop: 12, textDecoration: "none" }}
+          >
+            Bekijk Totaal Kleuradvies
+          </a>
+        </div>
+      )}
+
       {rooms.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div className="rd-kicker" style={{ opacity: 0.55 }}>
@@ -85,26 +104,16 @@ export function RoomsStep({ rooms, setRooms }: Props) {
                   Verwijder
                 </button>
               </div>
-              <div style={{ marginTop: 12 }}>
-                <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 8 }}>
-                  Wat wil je schilderen?
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {SURFACES.map((s) => {
-                    const on = room.surfaces.includes(s.key);
-                    return (
-                      <button
-                        key={s.key}
-                        className={`rd-plan-chip${on ? " is-on" : ""}`}
-                        onClick={() => toggleSurface(room, s.key)}
-                        aria-pressed={on}
-                      >
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {showPriority && (
+                <button
+                  className={`rd-plan-chip${room.priority ? " is-on" : ""}`}
+                  onClick={() => patchRoom(room.id, { priority: !room.priority })}
+                  aria-pressed={!!room.priority}
+                  style={{ marginTop: 12 }}
+                >
+                  {room.priority ? "★ Voorrang" : "☆ Voorrang geven"}
+                </button>
+              )}
             </div>
           ))}
         </div>

@@ -1,11 +1,18 @@
-import type { SurfaceKey, DaylightKey, DaylightDir } from "@/lib/types";
+import type {
+  SurfaceKey,
+  DaylightKey,
+  DaylightDir,
+  UsageTime,
+  SampleSource,
+  Verdict,
+  PlanningKey,
+} from "@/lib/types";
 
 export interface RoomType {
   key: string;
   label: string;
 }
 
-// Volgorde zoals mensen door een huis lopen: leefruimtes eerst.
 export const ROOM_TYPES: RoomType[] = [
   { key: "woonkamer", label: "Woonkamer" },
   { key: "keuken", label: "Keuken" },
@@ -42,13 +49,19 @@ export const DAYLIGHT_DIRS: { key: DaylightDir; label: string }[] = [
   { key: "onbekend", label: "Weet ik niet" },
 ];
 
-// Sfeerwoorden voor stap 3. Geen goed of fout, puur gevoel.
+export const USAGE_TIMES: { key: UsageTime; label: string }[] = [
+  { key: "ochtend", label: "Ochtend" },
+  { key: "middag", label: "Middag" },
+  { key: "avond", label: "Avond" },
+  { key: "hele-dag", label: "Hele dag" },
+];
+
+// Gevoel, geen interieurstijl. "Stoer & industrieel" bewust weggelaten.
 export const MOODS: string[] = [
   "Warm & geborgen",
   "Rustig & sereen",
   "Fris & licht",
   "Natuurlijk & aards",
-  "Stoer & industrieel",
   "Klassiek & tijdloos",
   "Speels & kleurrijk",
   "Modern & strak",
@@ -56,11 +69,54 @@ export const MOODS: string[] = [
   "Donker & sfeervol",
 ];
 
+export const SAMPLE_SOURCES: { key: SampleSource; label: string }[] = [
+  { key: "nee", label: "Nee, nog niet" },
+  { key: "roll", label: "Ja, van Roll" },
+  { key: "andere", label: "Ja, van andere merken" },
+  { key: "allebei", label: "Van allebei" },
+];
+
+export const VERDICTS: { key: Verdict; label: string }[] = [
+  { key: "favoriet", label: "Favoriet" },
+  { key: "twijfel", label: "Twijfel" },
+  { key: "valt-af", label: "Valt af" },
+];
+
+// Concrete adviesvragen (geen gewenste uitkomsten).
 export const HELP_NEEDS: string[] = [
-  "Eén kleur kiezen die past",
-  "Kleuren die samen kloppen",
-  "Durven met kleur",
-  "Rust brengen",
-  "Ruimte groter laten voelen",
-  "Houtwerk en muren op elkaar",
+  "Eén kleur kiezen",
+  "Kleuren combineren",
+  "Aansluiten op mijn interieur",
+  "Kleuren tussen ruimtes laten samenwerken",
+  "Kiezen tussen samples",
+  "Muren, plafond en houtwerk combineren",
+  "Compleet kleurpalet bepalen",
+];
+
+export const PLANNING: { key: PlanningKey; label: string }[] = [
+  { key: "2weken", label: "Binnen 2 weken" },
+  { key: "maand", label: "Binnen een maand" },
+  { key: "3maanden", label: "Binnen 3 maanden" },
+  { key: "later", label: "Later" },
+  { key: "weet-niet", label: "Weet ik nog niet" },
+];
+
+// Kleurfamilies voor het bladeren door alle Roll-kleuren.
+export interface ColorFamily {
+  key: string;
+  label: string;
+  families: string[]; // matcht op familyPrimary
+  dark?: boolean; // matcht op lightnessBand === 'dark'
+}
+
+export const COLOR_FAMILIES: ColorFamily[] = [
+  { key: "wit", label: "Wit & crème", families: ["White"] },
+  { key: "beige", label: "Beige & bruin", families: ["Beige", "Greige", "Brown"] },
+  { key: "grijs", label: "Grijs", families: ["Grey"] },
+  { key: "blauw", label: "Blauw", families: ["Blue", "Teal"] },
+  { key: "groen", label: "Groen", families: ["Green"] },
+  { key: "roze", label: "Roze & rood", families: ["Pink", "Red"] },
+  { key: "geel", label: "Geel & oranje", families: ["Yellow", "Orange"] },
+  { key: "paars", label: "Paars", families: ["Purple"] },
+  { key: "donker", label: "Donker", families: [], dark: true },
 ];
