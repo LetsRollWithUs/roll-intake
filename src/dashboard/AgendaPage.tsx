@@ -8,6 +8,8 @@ interface Stylist {
   name: string;
   active: boolean;
   meet_url: string | null;
+  ical_feed_url: string | null;
+  ical_synced_at: string | null;
 }
 interface Rule {
   id?: string;
@@ -54,6 +56,12 @@ export function AgendaPage() {
   // videogesprek-link
   const [meetUrl, setMeetUrl] = useState("");
   const [savingMeet, setSavingMeet] = useState(false);
+
+  // eigen agenda blokkeren (iCal)
+  const [icalUrl, setIcalUrl] = useState("");
+  const [icalSyncedAt, setIcalSyncedAt] = useState<string | null>(null);
+  const [savingIcal, setSavingIcal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // uitzondering toevoegen
   const [excDate, setExcDate] = useState("");
@@ -110,6 +118,8 @@ export function AgendaPage() {
     if (selectedId) loadSchedule(selectedId);
     const s = stylists.find((x) => x.id === selectedId);
     setMeetUrl(s?.meet_url ?? "");
+    setIcalUrl(s?.ical_feed_url ?? "");
+    setIcalSyncedAt(s?.ical_synced_at ?? null);
   }, [selectedId, stylists]);
 
   const saveMeetUrl = async () => {
@@ -120,6 +130,34 @@ export function AgendaPage() {
     if (error) return setErr(error.message);
     flash("Videolink opgeslagen.");
     setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, meet_url: meetUrl.trim() || null } : s)));
+  };
+
+  const saveIcalUrl = async () => {
+    setSavingIcal(true);
+    setErr(null);
+    const { error } = await supabase.rpc("set_ical_feed_url", { p_stylist_id: selectedId, p_url: icalUrl.trim() });
+    setSavingIcal(false);
+    if (error) return setErr(error.message);
+    setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, ical_feed_url: icalUrl.trim() || null } : s)));
+    if (icalUrl.trim()) {
+      flash("Agenda-link opgeslagen. Ik synchroniseer nu je afspraken.");
+      syncIcal();
+    } else {
+      setIcalSyncedAt(null);
+      flash("Agenda-link verwijderd.");
+    }
+  };
+
+  const syncIcal = async () => {
+    setSyncing(true);
+    setErr(null);
+    const { data, error } = await supabase.functions.invoke("calendar-pull", { body: { stylist_id: selectedId } });
+    setSyncing(false);
+    if (error || !(data as { ok?: boolean } | null)?.ok) return setErr("Synchroniseren lukte niet. Controleer de agenda-link.");
+    const now = new Date().toISOString();
+    setIcalSyncedAt(now);
+    setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, ical_synced_at: now } : s)));
+    flash("Agenda gesynchroniseerd.");
   };
 
   const canEdit = useMemo(() => {
@@ -358,6 +396,61 @@ export function AgendaPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Eigen agenda blokkeren (iCal) */}
+          <div className="rd-card-white" style={{ marginTop: 12 }}>
+            <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+              Blokkeer met je eigen agenda
+            </div>
+            <p className="rd-sub" style={{ marginTop: 0 }}>
+              Plak de geheime iCal-link van je agenda. Afspraken daarin maken die momenten automatisch
+              onbeschikbaar voor klanten. We bewaren alleen bezet-tijden, geen titels, en verversen elke 10 minuten.
+            </p>
+            <details style={{ marginBottom: 10 }}>
+              <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--rd-pink-dark)", fontWeight: 600 }}>
+                Waar vind ik die link?
+              </summary>
+              <ul className="rd-sub" style={{ margin: "8px 0 0", paddingLeft: 18, lineHeight: 1.5 }}>
+                <li><b>Google Agenda:</b> Instellingen → je agenda → "Geheim adres in iCal-indeling".</li>
+                <li><b>Outlook / Microsoft 365:</b> Agenda → Delen → Publiceren → ICS-link.</li>
+                <li><b>Apple iCloud:</b> maak de agenda "openbaar" en kopieer de webcal-link.</li>
+              </ul>
+            </details>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input
+                className="rd-input"
+                type="url"
+                placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                value={icalUrl}
+                disabled={!canEdit}
+                onChange={(e) => setIcalUrl(e.target.value)}
+                style={{ flex: "1 1 260px", height: 44 }}
+              />
+              {canEdit && (
+                <button
+                  className="rd-btn rd-btn-primary"
+                  onClick={saveIcalUrl}
+                  disabled={savingIcal || syncing}
+                  style={{ width: "auto", padding: "0 20px", minHeight: 44, ...(savingIcal || syncing ? { opacity: 0.5 } : {}) }}
+                >
+                  {savingIcal ? "Opslaan..." : "Opslaan"}
+                </button>
+              )}
+            </div>
+            {canEdit && icalUrl.trim() && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+                <button className="rd-btn rd-btn-outline" onClick={syncIcal} disabled={syncing}
+                  style={{ width: "auto", padding: "0 16px", minHeight: 40, ...(syncing ? { opacity: 0.5 } : {}) }}>
+                  {syncing ? "Synchroniseren..." : "Synchroniseer nu"}
+                </button>
+                {icalSyncedAt && (
+                  <span style={{ fontSize: 12, opacity: 0.6 }}>
+                    Laatst gesynchroniseerd {new Date(icalSyncedAt).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Uitzonderingen */}
