@@ -33,6 +33,7 @@ export function BookFlow() {
   const [slot, setSlot] = useState<string>("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -68,12 +69,13 @@ export function BookFlow() {
   const maxKey = dateKey(new Date(Date.now() + 56 * 864e5).toISOString());
 
   const emailOk = /.+@.+\..+/.test(email.trim());
+  const phoneOk = phone.replace(/\D/g, "").length >= 8;
 
   const confirm = async () => {
     setBusy(true);
     setErr(null);
     const { data, error } = await supabase.functions.invoke("booking", {
-      body: { action: "checkout", service_key: service, start: slot, name, email, coupon: coupon || undefined },
+      body: { action: "checkout", service_key: service, start: slot, name, email, phone, coupon: coupon || undefined },
     });
     setBusy(false);
     if (error || !data?.pay_url) {
@@ -105,7 +107,7 @@ export function BookFlow() {
     summary = ctaOk ? `${dayFull(slot)} · ${timeLabel(slot)}` : "";
     onCta = () => ctaOk && setStep(3);
   } else {
-    ctaOk = name.trim() !== "" && emailOk && !busy;
+    ctaOk = name.trim() !== "" && emailOk && phoneOk && !busy;
     ctaLabel = busy ? "Bezig..." : "Naar betalen (€30)";
     summary = `${dayFull(slot)} · ${timeLabel(slot)}`;
     onCta = confirm;
@@ -196,7 +198,12 @@ export function BookFlow() {
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Je naam" autoComplete="name"
                 style={{ width: "100%", padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", marginBottom: 10, outline: "none" }} />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Je e-mailadres" type="email" autoComplete="email"
+                style={{ width: "100%", padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none", marginBottom: 10 }} />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Je telefoonnummer" type="tel" autoComplete="tel"
                 style={{ width: "100%", padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none" }} />
+              <p style={{ fontSize: 12, color: "rgba(47,33,65,.5)", margin: "8px 2px 0" }}>
+                Zo kunnen we je bereiken als er iets is rond je videogesprek.
+              </p>
             </div>
           )}
 

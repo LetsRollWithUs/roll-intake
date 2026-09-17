@@ -12,6 +12,7 @@ interface BookingRow {
   status: string;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
   intake_id: string | null;
   stylist_id: string | null;
   stylists: { name: string; email: string } | null;
@@ -62,7 +63,7 @@ export function BoekingenPage() {
     const { data } = await supabase
       .from("bookings")
       .select(
-        "id,start_at,status,customer_name,customer_email,intake_id,stylist_id, stylists(name,email), services(key)",
+        "id,start_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id, stylists(name,email), services(key)",
       )
       .in("status", ["confirmed"])
       .order("start_at", { ascending: true });
@@ -176,6 +177,11 @@ export function BoekingenPage() {
                   <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
                     {r.customer_name || "Klant"} · {r.customer_email}
                   </div>
+                  {r.customer_phone && (
+                    <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
+                      <a href={`tel:${r.customer_phone}`} style={{ color: "inherit" }}>{r.customer_phone}</a>
+                    </div>
+                  )}
                   <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
                     {serviceLabel(r.services?.key)}
                     {isAdmin && r.stylists?.name ? ` · ${r.stylists.name}` : ""}
