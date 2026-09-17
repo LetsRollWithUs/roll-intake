@@ -8,9 +8,12 @@ interface Stylist {
   name: string;
   active: boolean;
   meet_url: string | null;
+}
+// Geheimen komen niet via de tabel maar via de RPC stylist_secrets (eigen styliste of admin).
+interface Secrets {
+  feed_token: string;
   ical_feed_url: string | null;
   ical_synced_at: string | null;
-  feed_token: string;
 }
 
 const SUPA_URL =
@@ -67,6 +70,7 @@ export function AgendaPage() {
   const [savingIcal, setSavingIcal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [secrets, setSecrets] = useState<Secrets | null>(null);
 
   // uitzondering toevoegen
   const [excDate, setExcDate] = useState("");
@@ -86,7 +90,8 @@ export function AgendaPage() {
     const email = (u?.user?.email ?? "").toLowerCase();
     setIsAdmin(adm === true);
     setMyEmail(email);
-    const { data } = await supabase.from("stylists").select("*").order("name");
+    // Expliciete kolommen: de geheime kolommen zijn bewust niet meer leesbaar via de tabel.
+    const { data } = await supabase.from("stylists").select("id,email,name,active,meet_url").order("name");
     const list = (data as Stylist[]) ?? [];
     setStylists(list);
     // Selecteer: eigen stylist indien aanwezig, anders de eerste
@@ -123,8 +128,23 @@ export function AgendaPage() {
     if (selectedId) loadSchedule(selectedId);
     const s = stylists.find((x) => x.id === selectedId);
     setMeetUrl(s?.meet_url ?? "");
-    setIcalUrl(s?.ical_feed_url ?? "");
-    setIcalSyncedAt(s?.ical_synced_at ?? null);
+    // Geheimen (feed-token, agenda-link) alleen via RPC: eigen styliste of admin krijgt ze, anderen niets.
+    setSecrets(null);
+    setIcalUrl("");
+    setIcalSyncedAt(null);
+    if (!selectedId) return;
+    let stale = false;
+    supabase.rpc("stylist_secrets", { p_stylist_id: selectedId }).then(({ data }) => {
+      if (stale) return;
+      const row = (Array.isArray(data) ? data[0] : data) as Secrets | undefined;
+      if (!row) return;
+      setSecrets(row);
+      setIcalUrl(row.ical_feed_url ?? "");
+      setIcalSyncedAt(row.ical_synced_at ?? null);
+    });
+    return () => {
+      stale = true;
+    };
   }, [selectedId, stylists]);
 
   const saveMeetUrl = async () => {
@@ -143,7 +163,7 @@ export function AgendaPage() {
     const { error } = await supabase.rpc("set_ical_feed_url", { p_stylist_id: selectedId, p_url: icalUrl.trim() });
     setSavingIcal(false);
     if (error) return setErr(error.message);
-    setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, ical_feed_url: icalUrl.trim() || null } : s)));
+    setSecrets((p) => (p ? { ...p, ical_feed_url: icalUrl.trim() || null } : p));
     if (icalUrl.trim()) {
       flash("Agenda-link opgeslagen. Ik synchroniseer nu je afspraken.");
       syncIcal();
@@ -161,7 +181,7 @@ export function AgendaPage() {
     if (error || !(data as { ok?: boolean } | null)?.ok) return setErr("Synchroniseren lukte niet. Controleer de agenda-link.");
     const now = new Date().toISOString();
     setIcalSyncedAt(now);
-    setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, ical_synced_at: now } : s)));
+    setSecrets((p) => (p ? { ...p, ical_synced_at: now } : p));
     flash("Agenda gesynchroniseerd.");
   };
 
@@ -405,7 +425,7 @@ export function AgendaPage() {
 
           {/* Zet Roll in je agenda (abonneer-feed) */}
           {(() => {
-            const feedToken = stylists.find((s) => s.id === selectedId)?.feed_token;
+            const feedToken = secrets?.feed_token;
             const feedHttps = feedToken ? `${SUPA_URL}/functions/v1/calendar-feed?token=${feedToken}` : "";
             const feedWebcal = feedHttps.replace(/^https:\/\//, "webcal://");
             const copy = async () => {
