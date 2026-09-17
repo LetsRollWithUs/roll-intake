@@ -10,7 +10,11 @@ interface Stylist {
   meet_url: string | null;
   ical_feed_url: string | null;
   ical_synced_at: string | null;
+  feed_token: string;
 }
+
+const SUPA_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string) || "https://lsboujprrvhntgbvlvyu.supabase.co";
 interface Rule {
   id?: string;
   weekday: number;
@@ -62,6 +66,7 @@ export function AgendaPage() {
   const [icalSyncedAt, setIcalSyncedAt] = useState<string | null>(null);
   const [savingIcal, setSavingIcal] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // uitzondering toevoegen
   const [excDate, setExcDate] = useState("");
@@ -397,6 +402,56 @@ export function AgendaPage() {
               )}
             </div>
           </div>
+
+          {/* Zet Roll in je agenda (abonneer-feed) */}
+          {(() => {
+            const feedToken = stylists.find((s) => s.id === selectedId)?.feed_token;
+            const feedHttps = feedToken ? `${SUPA_URL}/functions/v1/calendar-feed?token=${feedToken}` : "";
+            const feedWebcal = feedHttps.replace(/^https:\/\//, "webcal://");
+            const copy = async () => {
+              try {
+                await navigator.clipboard.writeText(feedHttps);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              } catch {
+                setErr("Kopiëren lukte niet; selecteer de link handmatig.");
+              }
+            };
+            return (
+              <div className="rd-card-white" style={{ marginTop: 12 }}>
+                <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+                  Zet Roll in je agenda
+                </div>
+                <p className="rd-sub" style={{ marginTop: 0 }}>
+                  Abonneer je op deze persoonlijke link, dan verschijnen al je Roll-afspraken automatisch
+                  in je agenda en updaten ze mee als er iets verandert. Deel de link met niemand.
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input className="rd-input" readOnly value={feedHttps}
+                    onFocus={(e) => e.currentTarget.select()}
+                    style={{ flex: "1 1 260px", height: 44, fontSize: 13 }} />
+                  <button className="rd-btn rd-btn-primary" onClick={copy}
+                    style={{ width: "auto", padding: "0 18px", minHeight: 44 }}>
+                    {copied ? "Gekopieerd ✓" : "Kopieer link"}
+                  </button>
+                  <a className="rd-btn rd-btn-outline" href={feedWebcal}
+                    style={{ width: "auto", padding: "0 18px", minHeight: 44, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                    Abonneren
+                  </a>
+                </div>
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--rd-pink-dark)", fontWeight: 600 }}>
+                    Hoe abonneer ik me?
+                  </summary>
+                  <ul className="rd-sub" style={{ margin: "8px 0 0", paddingLeft: 18, lineHeight: 1.5 }}>
+                    <li><b>Google Agenda:</b> Andere agenda's → Via URL → plak de link.</li>
+                    <li><b>Apple Agenda:</b> Archief → Nieuw agenda-abonnement → plak de link.</li>
+                    <li><b>Outlook:</b> Agenda toevoegen → Abonneren via internet → plak de link.</li>
+                  </ul>
+                </details>
+              </div>
+            );
+          })()}
 
           {/* Eigen agenda blokkeren (iCal) */}
           <div className="rd-card-white" style={{ marginTop: 12 }}>
