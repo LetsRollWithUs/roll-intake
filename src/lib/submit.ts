@@ -8,17 +8,18 @@ function extFromName(name: string): string {
   return m ? m[1] : "jpg";
 }
 
+// Slaat het opslagpad op (geen publieke URL): de bucket is privé, het dashboard
+// maakt er een signed URL van. Bij een mislukte upload blijft path leeg.
 async function uploadImage(
   img: UploadedImage,
   path: string,
-): Promise<{ id: string; name: string; url: string | null }> {
-  if (!img.file) return { id: img.id, name: img.name, url: img.url };
+): Promise<{ id: string; name: string; url: string | null; path: string | null }> {
+  if (!img.file) return { id: img.id, name: img.name, url: null, path: null };
   const { error } = await supabase.storage
     .from(INTAKE_PHOTOS_BUCKET)
     .upload(path, img.file, { upsert: false, contentType: img.file.type });
-  if (error) return { id: img.id, name: img.name, url: null };
-  const { data } = supabase.storage.from(INTAKE_PHOTOS_BUCKET).getPublicUrl(path);
-  return { id: img.id, name: img.name, url: data.publicUrl };
+  if (error) return { id: img.id, name: img.name, url: null, path: null };
+  return { id: img.id, name: img.name, url: null, path };
 }
 
 /**
