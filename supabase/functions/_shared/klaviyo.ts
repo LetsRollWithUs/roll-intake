@@ -98,6 +98,26 @@ export async function buildBookingContext(
   };
 }
 
+// Profieleigenschappen voor de afspraak. De 24u-reminder is een date-flow zonder event,
+// dus die kan alleen profielprops lezen: daarom schrijven we intake_url/manage_url/stylist_name
+// e.d. ook naar het profiel (niet alleen als event-property).
+export function appointmentProfileProps(
+  ctx: BookingContext,
+  opts?: { includeIntakeStatus?: boolean },
+): Record<string, unknown> {
+  const p = ctx.properties;
+  const out: Record<string, unknown> = {
+    next_appointment_at: p.start_at,
+    next_appointment_local: p.start_at_local,
+    stylist_name: p.stylist_name,
+    meet_url: p.meet_url,
+    intake_url: p.intake_url,
+    manage_url: p.manage_url,
+  };
+  if (opts?.includeIntakeStatus) out.intake_ingevuld = p.intake_ingevuld;
+  return out;
+}
+
 // Vuurt een Klaviyo-event. profileProps worden als custom profieleigenschappen meegeschreven
 // (o.a. next_appointment_at + intake_ingevuld voor de date-triggered reminderflow).
 export async function klaviyoTrack(
