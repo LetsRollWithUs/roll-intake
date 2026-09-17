@@ -4,8 +4,36 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const KLAVIYO_KEY = Deno.env.get("KLAVIYO_PRIVATE_KEY") ?? "";
 const INTAKE_BASE = (Deno.env.get("INTAKE_BASE_URL") ?? "https://intake.roll.nl").replace(/\/$/, "");
+const SB_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const KLAVIYO_REVISION = "2024-10-15";
 const TZ = "Europe/Amsterdam";
+const EVENT_TITLE = "Kleuradvies met Roll";
+
+const icsUtc = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+
+// Bouwt "zet in agenda"-links (Google, Outlook, en een .ics voor Apple/overig).
+function calendarLinks(opts: {
+  bookingId: string; token: string; start: string; end: string;
+  stylist?: string | null; meetUrl?: string | null; intakeUrl: string; manageUrl: string;
+}) {
+  const details = [
+    `Online kleuradvies${opts.stylist ? ` met ${opts.stylist}` : ""}.`,
+    opts.meetUrl ? `Videogesprek: ${opts.meetUrl}` : "",
+    `Vul je intake in: ${opts.intakeUrl}`,
+    `Afspraak verzetten: ${opts.manageUrl}`,
+  ].filter(Boolean).join("\n");
+  const loc = opts.meetUrl ?? "";
+  const e = encodeURIComponent;
+  const gcal =
+    `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${e(EVENT_TITLE)}` +
+    `&dates=${icsUtc(opts.start)}/${icsUtc(opts.end)}&details=${e(details)}&location=${e(loc)}`;
+  const outlook =
+    `https://outlook.office.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent` +
+    `&subject=${e(EVENT_TITLE)}&startdt=${e(new Date(opts.start).toISOString())}` +
+    `&enddt=${e(new Date(opts.end).toISOString())}&body=${e(details)}&location=${e(loc)}`;
+  const ics = `${SB_URL}/functions/v1/calendar-event?token=${opts.token}`;
+  return { gcal_url: gcal, outlook_url: outlook, ics_url: ics };
+}
 
 export const serviceMode = (key?: string | null) =>
   key === "post_sample" ? "post" : "pre";
@@ -31,7 +59,7 @@ export async function buildBookingContext(
   const { data: b } = await admin
     .from("bookings")
     .select(
-      "id,start_at,customer_name,customer_email,customer_phone,manage_token,intake_id, services(key), stylists(name,meet_url)",
+      "id,start_at,end_at,customer_name,customer_email,customer_phone,manage_token,intake_id, services(key), stylists(name,meet_url)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -39,6 +67,13 @@ export async function buildBookingContext(
   const row = b as any;
   const key = row.services?.key as string | undefined;
   const mode = serviceMode(key);
+  const intakeUrl = `${INTAKE_BASE}/?booking=${row.id}&mode=${mode}`;
+  const manageUrl = `${INTAKE_BASE}/boek/beheer?token=${row.manage_token}`;
+  const endAt = row.end_at ?? new Date(new Date(row.start_at).getTime() + 30 * 60000).toISOString();
+  const cal = calendarLinks({
+    bookingId: row.id, token: row.manage_token, start: row.start_at, end: endAt,
+    stylist: row.stylists?.name, meetUrl: row.stylists?.meet_url, intakeUrl, manageUrl,
+  });
   const properties: Record<string, unknown> = {
     booking_id: row.id,
     service: key,
@@ -47,9 +82,10 @@ export async function buildBookingContext(
     start_at_local: fmtLocal(row.start_at),
     stylist_name: row.stylists?.name ?? null,
     meet_url: row.stylists?.meet_url ?? null,
-    intake_url: `${INTAKE_BASE}/?booking=${row.id}&mode=${mode}`,
-    manage_url: `${INTAKE_BASE}/boek/beheer?token=${row.manage_token}`,
+    intake_url: intakeUrl,
+    manage_url: manageUrl,
     intake_ingevuld: !!row.intake_id,
+    ...cal,
   };
   return {
     bookingId: row.id,
