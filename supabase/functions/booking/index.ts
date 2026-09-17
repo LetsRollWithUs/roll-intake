@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
         ctx.properties,
         { intake_ingevuld: true, intake_ingevuld_at: new Date().toISOString() },
         `${ctx.bookingId}:intake_done`,
+        admin,
       );
       return j({ ok: r.ok });
     }
@@ -119,6 +120,8 @@ Deno.serve(async (req) => {
         ctx.profile,
         ctx.properties,
         appointmentProfileProps(ctx),
+        undefined,
+        admin,
       );
       return j({ ok: r.ok });
     }
@@ -173,6 +176,7 @@ Deno.serve(async (req) => {
         props,
         {},
         `${body.intake_id}:advies:${Date.now()}`,
+        admin,
       );
       if (r.ok) {
         await admin.from("intake").update({ advisor_followup_sent_at: new Date().toISOString() }).eq("id", body.intake_id);

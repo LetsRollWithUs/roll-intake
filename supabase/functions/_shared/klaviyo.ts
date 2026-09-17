@@ -118,9 +118,10 @@ export function appointmentProfileProps(
   return out;
 }
 
-// Vuurt een Klaviyo-event. profileProps worden als custom profieleigenschappen meegeschreven
+// Directe HTTP-verzending naar Klaviyo (één poging, geen retry). Gebruik klaviyoTrack voor het outbox-pad.
+// profileProps worden als custom profieleigenschappen meegeschreven
 // (o.a. next_appointment_at + intake_ingevuld voor de date-triggered reminderflow).
-export async function klaviyoTrack(
+export async function sendToKlaviyo(
   metricName: string,
   profile: { email: string; first_name?: string; phone_number?: string },
   properties: Record<string, unknown>,
@@ -165,4 +166,38 @@ export async function klaviyoTrack(
   } catch (e) {
     return { ok: false, status: 0, detail: String(e) };
   }
+}
+
+// Outbox-pad: eerst vastleggen in notification_outbox, dan direct proberen te versturen.
+// Mislukt dat, dan pakt de notification-worker (cron) het op met backoff en alert.
+// Zonder admin-client valt het terug op directe verzending (geen retry).
+export async function klaviyoTrack(
+  metricName: string,
+  profile: { email: string; first_name?: string; phone_number?: string },
+  properties: Record<string, unknown>,
+  profileProps: Record<string, unknown> = {},
+  uniqueId?: string,
+  admin?: any,
+): Promise<{ ok: boolean; status: number; detail?: string }> {
+  if (!admin) return sendToKlaviyo(metricName, profile, properties, profileProps, uniqueId);
+
+  const { data: row } = await admin
+    .from("notification_outbox")
+    .insert({ metric: metricName, profile, properties, profile_props: profileProps, unique_id: uniqueId ?? null })
+    .select("id")
+    .maybeSingle();
+
+  const r = await sendToKlaviyo(metricName, profile, properties, profileProps, uniqueId);
+  if (row?.id) {
+    if (r.ok) {
+      await admin.from("notification_outbox").update({ sent_at: new Date().toISOString(), attempts: 1 }).eq("id", row.id);
+    } else {
+      await admin.from("notification_outbox").update({
+        attempts: 1,
+        last_error: `${r.status} ${r.detail ?? ""}`.trim().slice(0, 500),
+        next_attempt_at: new Date(Date.now() + 2 * 60000).toISOString(),
+      }).eq("id", row.id);
+    }
+  }
+  return r;
 }

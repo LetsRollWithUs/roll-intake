@@ -30,6 +30,7 @@ export async function confirmPaid(admin: any, bookingId: string): Promise<Confir
         ctx.properties,
         appointmentProfileProps(ctx, { includeIntakeStatus: true }),
         `${bookingId}:confirmed:${stamp}`,
+        admin,
       );
     }
   } else if (r.outcome === "paid_unplaced" && !r.already) {

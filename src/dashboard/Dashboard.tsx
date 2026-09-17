@@ -8,6 +8,7 @@ import { IntakeDetail } from "./IntakeDetail";
 import { AdvisorsAdmin } from "./AdvisorsAdmin";
 import { AgendaPage } from "./AgendaPage";
 import { BoekingenPage } from "./BoekingenPage";
+import { AlertsPage } from "./AlertsPage";
 
 export function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
@@ -63,9 +64,14 @@ export function Dashboard() {
               Agenda
             </Link>
             {isAdmin && (
-              <Link to="/beheer/adviseurs" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
-                Adviseurs
-              </Link>
+              <>
+                <Link to="/beheer/meldingen" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
+                  Meldingen
+                </Link>
+                <Link to="/beheer/adviseurs" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
+                  Adviseurs
+                </Link>
+              </>
             )}
             <span style={{ fontSize: 12, opacity: 0.6 }}>{session.user.email}</span>
             <button className="rd-textlink" style={{ minHeight: 32 }} onClick={() => supabase.auth.signOut()}>
@@ -101,6 +107,7 @@ export function Dashboard() {
       <Route path="boekingen" element={<BoekingenPage />} />
       <Route path="agenda" element={<AgendaPage />} />
       <Route path="adviseurs" element={<AdvisorsAdmin />} />
+      <Route path="meldingen" element={<AlertsPage />} />
       <Route path=":id" element={<IntakeDetail />} />
     </Routes>,
   );
