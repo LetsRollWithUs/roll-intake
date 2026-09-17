@@ -32,12 +32,13 @@ Deno.serve(async (req) => {
     const admin = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
 
     if (action === "checkout") {
-      const { service_key, start, name, email, coupon } = body;
+      const { service_key, start, name, email, phone, coupon } = body;
       const { data: hold, error } = await admin.rpc("hold_slot", {
         p_service_key: service_key,
         p_start: start,
         p_name: name,
         p_email: email,
+        p_phone: phone ?? null,
       });
       if (error) return j({ error: error.message }, 409);
       const bookingId = hold.booking_id as string;
@@ -47,7 +48,7 @@ Deno.serve(async (req) => {
         headers: { Authorization: wooAuth, "content-type": "application/json" },
         body: JSON.stringify({
           status: "pending",
-          billing: { first_name: name, email },
+          billing: { first_name: name, email, phone: phone || undefined },
           line_items: [{ product_id: PRODUCT_ID, quantity: 1 }],
           coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [

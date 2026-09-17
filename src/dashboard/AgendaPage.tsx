@@ -7,6 +7,7 @@ interface Stylist {
   email: string;
   name: string;
   active: boolean;
+  meet_url: string | null;
 }
 interface Rule {
   id?: string;
@@ -49,6 +50,10 @@ export function AgendaPage() {
   // admin: nieuwe stylist
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
+
+  // videogesprek-link
+  const [meetUrl, setMeetUrl] = useState("");
+  const [savingMeet, setSavingMeet] = useState(false);
 
   // uitzondering toevoegen
   const [excDate, setExcDate] = useState("");
@@ -103,7 +108,19 @@ export function AgendaPage() {
 
   useEffect(() => {
     if (selectedId) loadSchedule(selectedId);
-  }, [selectedId]);
+    const s = stylists.find((x) => x.id === selectedId);
+    setMeetUrl(s?.meet_url ?? "");
+  }, [selectedId, stylists]);
+
+  const saveMeetUrl = async () => {
+    setSavingMeet(true);
+    setErr(null);
+    const { error } = await supabase.rpc("set_meet_url", { p_stylist_id: selectedId, p_url: meetUrl.trim() });
+    setSavingMeet(false);
+    if (error) return setErr(error.message);
+    flash("Videolink opgeslagen.");
+    setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, meet_url: meetUrl.trim() || null } : s)));
+  };
 
   const canEdit = useMemo(() => {
     const s = stylists.find((x) => x.id === selectedId);
@@ -309,6 +326,38 @@ export function AgendaPage() {
                 {savingRules ? "Opslaan..." : "Rooster opslaan"}
               </button>
             )}
+          </div>
+
+          {/* Videogesprek-link */}
+          <div className="rd-card-white" style={{ marginTop: 12 }}>
+            <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
+              Videogesprek-link
+            </div>
+            <p className="rd-sub" style={{ marginTop: 0 }}>
+              Je vaste Google Meet-link voor de kleuradviesgesprekken. Deze zetten we in de
+              bevestigingsmail naar de klant. Maak eenmalig een Meet aan (meet.new) en plak de link hier.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input
+                className="rd-input"
+                type="url"
+                placeholder="https://meet.google.com/abc-defg-hij"
+                value={meetUrl}
+                disabled={!canEdit}
+                onChange={(e) => setMeetUrl(e.target.value)}
+                style={{ flex: "1 1 260px", height: 44 }}
+              />
+              {canEdit && (
+                <button
+                  className="rd-btn rd-btn-primary"
+                  onClick={saveMeetUrl}
+                  disabled={savingMeet}
+                  style={{ width: "auto", padding: "0 20px", minHeight: 44, ...(savingMeet ? { opacity: 0.5 } : {}) }}
+                >
+                  {savingMeet ? "Opslaan..." : "Opslaan"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Uitzonderingen */}
