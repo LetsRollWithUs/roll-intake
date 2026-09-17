@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Shell } from "@/components/Shell";
 import { ContactStep } from "@/components/steps/ContactStep";
 import { RoomsStep } from "@/components/steps/RoomsStep";
@@ -86,6 +87,10 @@ const META: Record<StepScreen, { kicker: string; title: string; sub?: string }> 
 
 export function App() {
   const { state, update, reset } = useIntake();
+  const [params] = useSearchParams();
+  const bookingId = params.get("booking");
+  const mode = params.get("mode"); // 'pre_sample' | 'post_sample'
+  const isPost = mode === "post_sample";
   const [screen, setScreen] = useState<Screen>("intro");
   const [photoIdx, setPhotoIdx] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -122,8 +127,16 @@ export function App() {
       <Shell
         step={0}
         total={TOTAL}
-        title="Haal alles uit je 30 minuten kleuradvies"
-        sub="Beantwoord een paar korte vragen en laat je ruimtes zien. Zo kan je kleuradviseur zich vooraf voorbereiden en gebruiken we het gesprek om echt keuzes te maken."
+        title={
+          bookingId
+            ? "Je afspraak staat, bereid hem nu voor"
+            : "Haal alles uit je 30 minuten kleuradvies"
+        }
+        sub={
+          isPost
+            ? "Je hebt al samples getest. Vertel ons wat je thuis ziet, dan helpen we je in het gesprek de definitieve kleur te kiezen."
+            : "Beantwoord een paar korte vragen en laat je ruimtes zien. Zo kan je kleuradviseur zich vooraf voorbereiden en gebruiken we het gesprek om echt keuzes te maken."
+        }
         footer={
           <button className="rd-btn rd-btn-primary rd-btn-lg" onClick={() => setScreen("contact")}>
             Beginnen
@@ -273,7 +286,7 @@ export function App() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitIntake(state);
+      await submitIntake(state, { bookingId, mode });
       setScreen("done");
     } catch {
       setSubmitError("Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.");

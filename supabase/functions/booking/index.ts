@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const admin = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
 
     if (action === "checkout") {
-      const { service_key, start, name, email } = body;
+      const { service_key, start, name, email, coupon } = body;
       const { data: hold, error } = await admin.rpc("hold_slot", {
         p_service_key: service_key,
         p_start: start,
@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
           status: "pending",
           billing: { first_name: name, email },
           line_items: [{ product_id: PRODUCT_ID, quantity: 1 }],
+          coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [
             { key: "_booking_id", value: bookingId },
             { key: "_booking_source", value: "intake" },
@@ -68,11 +69,12 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const { data: b } = await admin
         .from("bookings")
-        .select("id,status,woo_order_id,start_at")
+        .select("id,status,woo_order_id,start_at, services(key)")
         .eq("id", body.booking_id)
         .maybeSingle();
       if (!b) return j({ error: "Niet gevonden" }, 404);
-      if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at });
+      const mode = (b as any).services?.key ?? null;
+      if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at, mode });
       if (b.woo_order_id) {
         const r = await fetch(`${WOO_URL}/wp-json/wc/v3/orders/${b.woo_order_id}`, {
           headers: { Authorization: wooAuth },
@@ -80,10 +82,10 @@ Deno.serve(async (req) => {
         const o = await r.json();
         if (r.ok && ["processing", "completed", "on-hold"].includes(o.status)) {
           await admin.from("bookings").update({ status: "confirmed", hold_expires_at: null }).eq("id", b.id);
-          return j({ status: "confirmed", start_at: b.start_at });
+          return j({ status: "confirmed", start_at: b.start_at, mode });
         }
       }
-      return j({ status: b.status, start_at: b.start_at });
+      return j({ status: b.status, start_at: b.start_at, mode });
     }
 
     // Admin-acties (@roll.nl)
