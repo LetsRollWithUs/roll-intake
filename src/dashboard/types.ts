@@ -63,6 +63,8 @@ export interface IntakeRow {
   advisor_advice: AdviceRow[] | null;
   advisor_buy_moment: string | null;
   advisor_next_action: string | null;
+  advisor_offer_url: string | null;
+  advisor_followup_sent_at: string | null;
 }
 
 export interface AdviceRow {

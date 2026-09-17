@@ -5,6 +5,7 @@
 // - setup_webhook / delete_order (alleen @roll.nl-admin): beheer/opruimen.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { buildBookingContext, klaviyoTrack } from "../_shared/klaviyo.ts";
+import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, colorNameToId, multiAddUrl, SHOP_BASE } from "../_shared/roll-products.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -127,6 +128,63 @@ Deno.serve(async (req) => {
         { next_appointment_at: ctx.properties.start_at },
       );
       return j({ ok: r.ok });
+    }
+
+    // Advies afgerond: opvolgmail met de juiste route (samples of verf). Alleen adviseurs.
+    if (action === "advies_done") {
+      if (!body.intake_id) return j({ ok: false, skipped: "geen intake_id" });
+      const caller = createClient(SB_URL, SB_ANON, {
+        global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+        auth: { persistSession: false },
+      });
+      const { data: isAdv } = await caller.rpc("is_advisor");
+      if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
+      const { data: it } = await admin
+        .from("intake")
+        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,booking_id")
+        .eq("id", body.intake_id)
+        .maybeSingle();
+      if (!it || !(it as any).contact_email) return j({ ok: false, skipped: "geen intake/e-mail" });
+      const row = it as any;
+      const advice = Array.isArray(row.advisor_advice) ? row.advisor_advice : [];
+      const stickerPairs: [number, number][] = [];
+      const pouchPairs: [number, number][] = [];
+      const seenSt = new Set<number>();
+      const seenPo = new Set<number>();
+      const enriched = advice.map((a: any) => {
+        const colorId = colorNameToId(a.color ?? "");
+        if (colorId) {
+          const st = SAMPLE_STICKER_IDS[colorId];
+          if (st && !seenSt.has(st)) { seenSt.add(st); stickerPairs.push([st, 1]); }
+          const po = SAMPLE_POUCH_IDS[colorId];
+          if (po && !seenPo.has(po)) { seenPo.add(po); pouchPairs.push([po, 1]); }
+        }
+        return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, product: a.product ?? "", liters: a.liters ?? "" };
+      });
+      const outcome = row.advisor_outcome ?? null;
+      const route = outcome === "samples_needed" ? "samples" : outcome === "color_chosen" ? "verf" : "followup";
+      const props = {
+        intake_id: body.intake_id,
+        booking_id: row.booking_id ?? null,
+        outcome,
+        route,
+        advice: enriched,
+        samples_stickers_url: multiAddUrl(stickerPairs, "cart"),
+        samples_testers_url: multiAddUrl(pouchPairs, "cart"),
+        offer_url: row.advisor_offer_url || `${SHOP_BASE}/prijsopgave`,
+        has_offer: !!row.advisor_offer_url,
+      };
+      const r = await klaviyoTrack(
+        "Advies afgerond",
+        { email: row.contact_email, first_name: row.contact_name ?? undefined },
+        props,
+        {},
+        `${body.intake_id}:advies:${Date.now()}`,
+      );
+      if (r.ok) {
+        await admin.from("intake").update({ advisor_followup_sent_at: new Date().toISOString() }).eq("id", body.intake_id);
+      }
+      return j({ ok: r.ok, detail: r.detail });
     }
 
     // Admin-acties (@roll.nl)
