@@ -5,6 +5,7 @@
 // - setup_webhook / delete_order (alleen @roll.nl-admin): beheer/opruimen.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { buildBookingContext, klaviyoTrack, appointmentProfileProps } from "../_shared/klaviyo.ts";
+import { confirmPaid } from "../_shared/confirm.ts";
 import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, colorNameToId, multiAddUrl, SHOP_BASE } from "../_shared/roll-products.ts";
 
 const cors = {
@@ -78,24 +79,16 @@ Deno.serve(async (req) => {
       if (!b) return j({ error: "Niet gevonden" }, 404);
       const mode = (b as any).services?.key ?? null;
       if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at, mode });
+      if (b.status === "paid_unplaced") return j({ status: "paid_unplaced", start_at: b.start_at, mode });
       if (b.woo_order_id) {
         const r = await fetch(`${WOO_URL}/wp-json/wc/v3/orders/${b.woo_order_id}`, {
           headers: { Authorization: wooAuth },
         });
         const o = await r.json();
         if (r.ok && ["processing", "completed", "on-hold"].includes(o.status)) {
-          await admin.from("bookings").update({ status: "confirmed", hold_expires_at: null }).eq("id", b.id);
-          const ctx = await buildBookingContext(admin, b.id as string);
-          if (ctx) {
-            await klaviyoTrack(
-              "Afspraak bevestigd",
-              ctx.profile,
-              ctx.properties,
-              appointmentProfileProps(ctx, { includeIntakeStatus: true }),
-              `${b.id}:confirmed`,
-            );
-          }
-          return j({ status: "confirmed", start_at: b.start_at, mode });
+          await confirmPaid(admin, b.id as string);
+          const { data: after } = await admin.from("bookings").select("status,start_at").eq("id", b.id).maybeSingle();
+          return j({ status: (after as any)?.status ?? b.status, start_at: (after as any)?.start_at ?? b.start_at, mode });
         }
       }
       return j({ status: b.status, start_at: b.start_at, mode });

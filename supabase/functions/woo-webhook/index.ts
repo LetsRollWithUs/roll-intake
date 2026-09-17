@@ -2,7 +2,7 @@
 // Betaald (processing/completed/on-hold) -> confirmed. Geannuleerd/mislukt -> cancelled.
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { buildBookingContext, klaviyoTrack, appointmentProfileProps } from "../_shared/klaviyo.ts";
+import { confirmPaid } from "../_shared/confirm.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -48,18 +48,10 @@ Deno.serve(async (req) => {
     const col = bookingId ? "id" : "woo_order_id";
     const val = bookingId ?? String(order.id);
     const { data: existing } = await admin.from("bookings").select("id,status").eq(col, val).maybeSingle();
+    // Ook een verlopen (cancelled) hold wordt hier veilig afgehandeld: slot nog vrij → bevestigen,
+    // anders herplaatsen bij een andere styliste, anders paid_unplaced + alert.
     if (existing && existing.status !== "confirmed") {
-      await admin.from("bookings").update({ status: "confirmed", hold_expires_at: null }).eq("id", existing.id);
-      const ctx = await buildBookingContext(admin, existing.id as string);
-      if (ctx) {
-        await klaviyoTrack(
-          "Afspraak bevestigd",
-          ctx.profile,
-          ctx.properties,
-          appointmentProfileProps(ctx, { includeIntakeStatus: true }),
-          `${existing.id}:confirmed`,
-        );
-      }
+      await confirmPaid(admin, existing.id as string);
     }
   } else if (dead) {
     await admin
