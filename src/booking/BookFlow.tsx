@@ -30,6 +30,102 @@ const timeLabel = (iso: string) =>
 
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 
+const pad = (n: number) => String(n).padStart(2, "0");
+const cellKey = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const MONTHS = [
+  "januari", "februari", "maart", "april", "mei", "juni",
+  "juli", "augustus", "september", "oktober", "november", "december",
+];
+
+function Calendar({
+  availDays,
+  todayKey,
+  maxKey,
+  value,
+  onSelect,
+}: {
+  availDays: Set<string>;
+  todayKey: string;
+  maxKey: string;
+  value: string;
+  onSelect: (key: string) => void;
+}) {
+  const startY = Number(todayKey.slice(0, 4));
+  const startM = Number(todayKey.slice(5, 7)) - 1;
+  const [cur, setCur] = useState({ y: startY, m: startM });
+
+  const maxY = Number(maxKey.slice(0, 4));
+  const maxM = Number(maxKey.slice(5, 7)) - 1;
+  const canPrev = cur.y > startY || (cur.y === startY && cur.m > startM);
+  const canNext = cur.y < maxY || (cur.y === maxY && cur.m < maxM);
+  const shift = (d: number) => {
+    const nm = cur.m + d;
+    setCur({ y: cur.y + Math.floor(nm / 12), m: ((nm % 12) + 12) % 12 });
+  };
+
+  const first = new Date(cur.y, cur.m, 1);
+  const offset = (first.getDay() + 6) % 7; // maandag = 0
+  const daysInMonth = new Date(cur.y, cur.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array(offset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const btn = (dir: number, ok: boolean) => (
+    <button
+      onClick={() => ok && shift(dir)}
+      disabled={!ok}
+      aria-label={dir < 0 ? "Vorige maand" : "Volgende maand"}
+      style={{
+        border: 0, background: "none", cursor: ok ? "pointer" : "default",
+        opacity: ok ? 1 : 0.25, fontSize: 22, padding: "0 8px", color: "var(--rd-aubergine)",
+      }}
+    >
+      {dir < 0 ? "‹" : "›"}
+    </button>
+  );
+
+  return (
+    <div className="rd-card-white">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        {btn(-1, canPrev)}
+        <div style={{ fontWeight: 800, fontSize: 16 }}>
+          {MONTHS[cur.m]} {cur.y}
+        </div>
+        {btn(1, canNext)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, textAlign: "center" }}>
+        {["M", "D", "W", "D", "V", "Z", "Z"].map((d, i) => (
+          <div key={i} className="rd-kicker" style={{ opacity: 0.5, padding: "4px 0" }}>
+            {d}
+          </div>
+        ))}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const key = cellKey(cur.y, cur.m, d);
+          const enabled = availDays.has(key) && key >= todayKey && key <= maxKey;
+          const selected = key === value;
+          return (
+            <button
+              key={i}
+              onClick={() => enabled && onSelect(key)}
+              disabled={!enabled}
+              style={{
+                aspectRatio: "1 / 1", border: 0, borderRadius: 99, fontSize: 14, fontWeight: 700,
+                cursor: enabled ? "pointer" : "default",
+                background: selected ? "var(--rd-aubergine)" : enabled ? "var(--rd-lavender)" : "transparent",
+                color: selected ? "#fff" : enabled ? "var(--rd-aubergine)" : "rgba(47,33,65,.3)",
+              }}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function BookFlow() {
   const [service, setService] = useState<string>("");
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -75,14 +171,9 @@ export function BookFlow() {
     loadSlots(svc);
   };
 
-  const days = useMemo(() => {
-    const map = new Map<string, string>(); // key -> first iso of that day
-    for (const s of slots) {
-      const k = dateKey(s.start_at);
-      if (!map.has(k)) map.set(k, s.start_at);
-    }
-    return Array.from(map.entries()).map(([k, iso]) => ({ key: k, iso }));
-  }, [slots]);
+  const availDays = useMemo(() => new Set(slots.map((s) => dateKey(s.start_at))), [slots]);
+  const todayKey = dateKey(new Date().toISOString());
+  const maxKey = dateKey(new Date(Date.now() + 56 * 864e5).toISOString());
 
   const daySlots = useMemo(() => slots.filter((s) => dateKey(s.start_at) === day), [slots, day]);
 
@@ -156,27 +247,19 @@ export function BookFlow() {
                 </div>
                 {loading ? (
                   <p className="rd-sub">Beschikbaarheid laden...</p>
-                ) : days.length === 0 ? (
+                ) : availDays.size === 0 ? (
                   <p className="rd-sub">Er is nu geen beschikbaarheid. Probeer het later opnieuw.</p>
                 ) : (
-                  <div
-                    className="rd-hide-scroll"
-                    style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6 }}
-                  >
-                    {days.map((d) => (
-                      <button
-                        key={d.key}
-                        className={`rd-plan-chip${day === d.key ? " is-on" : ""}`}
-                        onClick={() => {
-                          setDay(d.key);
-                          setSlot("");
-                        }}
-                        style={{ flex: "none", whiteSpace: "nowrap" }}
-                      >
-                        {dateLabel(d.iso)}
-                      </button>
-                    ))}
-                  </div>
+                  <Calendar
+                    availDays={availDays}
+                    todayKey={todayKey}
+                    maxKey={maxKey}
+                    value={day}
+                    onSelect={(k) => {
+                      setDay(k);
+                      setSlot("");
+                    }}
+                  />
                 )}
 
                 {day && (
