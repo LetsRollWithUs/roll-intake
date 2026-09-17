@@ -59,8 +59,12 @@ export function IntakeDetail() {
   const [advice, setAdvice] = useState<AdviceRow[]>([]);
   const [buyMoment, setBuyMoment] = useState<string>("");
   const [nextAction, setNextAction] = useState("");
+  const [offerUrl, setOfferUrl] = useState("");
+  const [followupSentAt, setFollowupSentAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sendingFollowup, setSendingFollowup] = useState(false);
+  const [followupMsg, setFollowupMsg] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -76,6 +80,8 @@ export function IntakeDetail() {
         setOutcome(r.advisor_outcome ?? "");
         setBuyMoment(r.advisor_buy_moment ?? "");
         setNextAction(r.advisor_next_action ?? "");
+        setOfferUrl(r.advisor_offer_url ?? "");
+        setFollowupSentAt(r.advisor_followup_sent_at ?? null);
         // Advies-regels: bewaard, anders voorgevuld met de ruimtes uit de intake.
         const saved = r.advisor_advice ?? [];
         if (saved.length > 0) setAdvice(saved);
@@ -94,11 +100,9 @@ export function IntakeDetail() {
     setAdvice((prev) => [...prev, { room: "", color: "", product: "Muurverf", liters: "" }]);
   const removeAdviceRow = (i: number) => setAdvice((prev) => prev.filter((_, idx) => idx !== i));
 
-  const save = async () => {
-    setSaving(true);
-    setSaved(false);
+  const persist = async () => {
     const cleanAdvice = advice.filter((a) => a.room.trim() || a.color.trim() || a.liters.trim());
-    const { error } = await supabase
+    return supabase
       .from("intake")
       .update({
         advisor_status: status,
@@ -108,14 +112,44 @@ export function IntakeDetail() {
         advisor_advice: cleanAdvice,
         advisor_buy_moment: buyMoment || null,
         advisor_next_action: nextAction || null,
+        advisor_offer_url: offerUrl.trim() || null,
         advisor_updated_at: new Date().toISOString(),
       })
       .eq("id", id);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setSaved(false);
+    const { error } = await persist();
     setSaving(false);
     if (!error) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
+  };
+
+  // Slaat op en stuurt de opvolgmail (samples of verf) via Klaviyo.
+  const sendFollowup = async () => {
+    setSendingFollowup(true);
+    setFollowupMsg(null);
+    const { error } = await persist();
+    if (error) {
+      setSendingFollowup(false);
+      setFollowupMsg("Opslaan mislukte, mail niet verstuurd.");
+      return;
+    }
+    const { data, error: fnErr } = await supabase.functions.invoke("booking", {
+      body: { action: "advies_done", intake_id: id },
+    });
+    setSendingFollowup(false);
+    if (fnErr || !(data as { ok?: boolean } | null)?.ok) {
+      setFollowupMsg("Versturen lukte niet. Probeer het later opnieuw.");
+      return;
+    }
+    setFollowupSentAt(new Date().toISOString());
+    setFollowupMsg("Opvolgmail verstuurd ✓");
+    setTimeout(() => setFollowupMsg(null), 3000);
   };
 
   if (loading) return <p className="rd-sub">Laden...</p>;
@@ -289,6 +323,20 @@ export function IntakeDetail() {
           </div>
         </div>
 
+        {/* Offerte-link (verf-route) */}
+        <div style={{ marginTop: 12 }}>
+          <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
+            Offerte-link (verf-route)
+          </div>
+          <input
+            className="rd-input"
+            type="url"
+            value={offerUrl}
+            onChange={(e) => setOfferUrl(e.target.value)}
+            placeholder="https://roll.nl/offerte/... (laat leeg → klant gaat naar /prijsopgave)"
+          />
+        </div>
+
         {/* Vervolgactie */}
         <div style={{ marginTop: 12 }}>
           <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
@@ -342,6 +390,36 @@ export function IntakeDetail() {
           Opent de prijsopgave op roll.nl in een nieuw tabblad (log daar in). De kleuren en ruimtes
           van deze intake staan hieronder ter referentie.
         </p>
+
+        {/* Opvolgmail sturen */}
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--rd-line)", paddingTop: 14 }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>
+            Opvolgmail naar de klant
+          </div>
+          <p className="rd-sub" style={{ marginTop: 0 }}>
+            {outcome === "samples_needed"
+              ? "Stuurt de klant een mail om de geadviseerde kleuren als samples te bestellen (stickers of verftesters)."
+              : outcome === "color_chosen"
+              ? "Stuurt de klant een mail om de verf te bestellen, via je offerte-link hierboven of anders /prijsopgave."
+              : outcome === "followup_needed"
+              ? "Stuurt de klant een korte opvolgmail. Vul eventueel een offerte-link in voor de verf-route."
+              : "Kies eerst een uitkomst van het gesprek om de juiste opvolgmail te sturen."}
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <button
+              className="rd-btn rd-btn-primary"
+              onClick={sendFollowup}
+              disabled={sendingFollowup || !outcome}
+              style={{ width: "auto", padding: "0 22px", ...(sendingFollowup || !outcome ? { opacity: 0.5 } : {}) }}
+            >
+              {sendingFollowup ? "Versturen..." : "Opslaan + opvolgmail sturen"}
+            </button>
+            {followupMsg && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>{followupMsg}</span>}
+            {followupSentAt && !followupMsg && (
+              <span style={{ fontSize: 12, opacity: 0.55 }}>Laatst verstuurd {formatDate(followupSentAt)}</span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Vraag */}
