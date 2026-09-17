@@ -79,6 +79,19 @@ export function BookFlow() {
     });
     setBusy(false);
     if (error || !data?.pay_url) {
+      // Vriendelijke servermelding (rate limit, ongeldig e-mailadres, te dichtbij) tonen als die er is;
+      // alleen onze eigen meldingen, geen ruwe foutteksten.
+      let serverMsg: string | null = null;
+      try {
+        const ctx = (error as { context?: Response } | null)?.context;
+        if (ctx && typeof ctx.clone === "function") serverMsg = (await ctx.clone().json())?.error ?? null;
+      } catch {
+        /* geen json-body */
+      }
+      if (serverMsg && /geduld|e-mailadres|boekbaar/i.test(serverMsg)) {
+        setErr(serverMsg);
+        return;
+      }
       setErr("Dit tijdstip is net vergeven of er ging iets mis. Kies een ander moment.");
       setSlot("");
       setStep(2);
