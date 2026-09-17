@@ -30,7 +30,6 @@ export function BookFlow() {
   const [slot, setSlot] = useState<string>("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [booking, setBooking] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,20 +71,18 @@ export function BookFlow() {
   const confirm = async () => {
     setBusy(true);
     setErr(null);
-    const { data, error } = await supabase.rpc("book_slot", {
-      p_service_key: service,
-      p_start: slot,
-      p_name: name,
-      p_email: email,
+    const { data, error } = await supabase.functions.invoke("booking", {
+      body: { action: "checkout", service_key: service, start: slot, name, email },
     });
     setBusy(false);
-    if (error) {
-      setErr("Dit tijdstip is net vergeven. Kies een ander moment.");
+    if (error || !data?.pay_url) {
+      setErr("Dit tijdstip is net vergeven of er ging iets mis. Kies een ander moment.");
       setSlot("");
       loadSlots(service);
       return;
     }
-    if (data) setBooking(slot);
+    // Door naar de WooCommerce-betaalpagina. Het slot is 10 minuten gereserveerd.
+    window.location.href = data.pay_url as string;
   };
 
   const emailOk = /.+@.+\..+/.test(email.trim());
@@ -100,25 +97,7 @@ export function BookFlow() {
           Roll · Kleuradvies
         </div>
 
-        {booking ? (
-          <div className="rd-rise">
-            <h1 className="rd-h2" style={{ marginBottom: 8 }}>
-              Je afspraak staat
-            </h1>
-            <div className="rd-card-white" style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 800, fontSize: 18 }}>
-                {dateLabel(booking)} · {timeLabel(booking)}
-              </div>
-              <p className="rd-sub" style={{ marginTop: 8 }}>
-                30 minuten met een van onze kleuradviseurs. Je ontvangt de bevestiging per e-mail op{" "}
-                {email}.
-              </p>
-            </div>
-            <p className="rd-sub" style={{ marginTop: 14 }}>
-              (Test-flow: betaling en de intake koppelen we in de volgende fase.)
-            </p>
-          </div>
-        ) : (
+        {(
           <>
             <h1 className="rd-h2" style={{ marginBottom: 6 }}>
               Boek je persoonlijk kleuradvies
@@ -219,8 +198,11 @@ export function BookFlow() {
                   disabled={busy || !name.trim() || !emailOk}
                   style={{ marginTop: 14, ...(busy || !name.trim() || !emailOk ? { opacity: 0.4 } : {}) }}
                 >
-                  {busy ? "Bezig..." : "Bevestig afspraak"}
+                  {busy ? "Bezig..." : "Naar betalen (€30)"}
                 </button>
+                <p className="rd-sub" style={{ marginTop: 8, textAlign: "center" }}>
+                  Je tijdstip wordt 10 minuten voor je gereserveerd terwijl je betaalt.
+                </p>
               </div>
             )}
 
