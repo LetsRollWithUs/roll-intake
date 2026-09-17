@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { lockDocument } from "@/lib/lock-document";
+
+function normalizeType(t: string | null): string {
+  if (!t) return "";
+  if (t === "pre" || t === "pre_sample") return "pre_sample";
+  if (t === "post" || t === "post_sample") return "post_sample";
+  return "";
+}
 
 const SERVICES = [
   { key: "pre_sample", label: "Ik heb nog geen samples getest", sub: "We bepalen samen de richting en welke kleuren je test." },
@@ -33,7 +41,17 @@ export function BookFlow() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [params] = useSearchParams();
+  const coupon = params.get("coupon") ?? "";
+
   useEffect(() => lockDocument(), []);
+
+  // Instroom: dienst vooraf gekozen via ?type=pre|post
+  useEffect(() => {
+    const t = normalizeType(params.get("type"));
+    if (t) chooseService(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadSlots = async (svc: string) => {
     setLoading(true);
@@ -72,7 +90,7 @@ export function BookFlow() {
     setBusy(true);
     setErr(null);
     const { data, error } = await supabase.functions.invoke("booking", {
-      body: { action: "checkout", service_key: service, start: slot, name, email },
+      body: { action: "checkout", service_key: service, start: slot, name, email, coupon: coupon || undefined },
     });
     setBusy(false);
     if (error || !data?.pay_url) {

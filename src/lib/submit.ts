@@ -42,7 +42,10 @@ export async function saveConceptLead(state: IntakeState): Promise<void> {
  * Verstuurt de volledige intake: uploadt alle foto's en werkt de concept-rij bij
  * naar status 'verzonden'. Valt terug op insert als er nog geen rij is.
  */
-export async function submitIntake(state: IntakeState): Promise<{ id: string }> {
+export async function submitIntake(
+  state: IntakeState,
+  opts?: { bookingId?: string | null; mode?: string | null },
+): Promise<{ id: string }> {
   const intakeId = getIntakeId();
 
   const rooms = await Promise.all(
@@ -108,6 +111,8 @@ export async function submitIntake(state: IntakeState): Promise<{ id: string }> 
     other_inspiration_url: state.otherInspirationUrl || null,
     inspiration_images: inspirationImages,
     planning: state.planning ?? null,
+    booking_id: opts?.bookingId ?? null,
+    mode: opts?.mode ?? null,
     complexity_level: cx.level,
     complexity_score: cx.score,
     payload: {
