@@ -12,10 +12,11 @@ const timeLabel = (iso: string) =>
 export function BookDone() {
   const [params] = useSearchParams();
   const bookingId = params.get("booking") ?? "";
-  const [state, setState] = useState<"loading" | "confirmed" | "pending" | "error">("loading");
+  const [state, setState] = useState<"loading" | "confirmed" | "paid_unplaced" | "pending" | "error">("loading");
   const [startAt, setStartAt] = useState<string | null>(null);
   const [mode, setMode] = useState<string | null>(null);
   const tries = useRef(0);
+  const startedAt = useRef(Date.now());
 
   useEffect(() => lockDocument(), []);
 
@@ -25,6 +26,9 @@ export function BookDone() {
       return;
     }
     let stop = false;
+    // Polling met backoff: snel in het begin, daarna rustiger, tot ~3 minuten.
+    const DELAYS = [2000, 3000, 5000, 8000, 10000];
+    const MAX_MS = 3 * 60 * 1000;
     const poll = async () => {
       const { data, error } = await supabase.functions.invoke("booking", {
         body: { action: "status", booking_id: bookingId },
@@ -40,12 +44,17 @@ export function BookDone() {
         setState("confirmed");
         return;
       }
-      tries.current += 1;
-      if (tries.current > 20) {
+      if (data.status === "paid_unplaced") {
+        setState("paid_unplaced");
+        return;
+      }
+      if (Date.now() - startedAt.current > MAX_MS) {
         setState("pending");
         return;
       }
-      setTimeout(poll, 3000);
+      const delay = DELAYS[Math.min(tries.current, DELAYS.length - 1)];
+      tries.current += 1;
+      setTimeout(poll, delay);
     };
     poll();
     return () => {
@@ -98,6 +107,19 @@ export function BookDone() {
                 Naar mijn intake
               </a>
             </div>
+          </div>
+        )}
+
+        {state === "paid_unplaced" && (
+          <div className="rd-rise">
+            <h1 className="rd-h2" style={{ marginBottom: 8 }}>
+              Je betaling is gelukt
+            </h1>
+            <p className="rd-sub">
+              Het gekozen moment bleek net niet meer beschikbaar. We nemen snel contact met je op om
+              samen een nieuw moment te kiezen. Je hoeft nu niets te doen; je aanbetaling blijft
+              gewoon staan.
+            </p>
           </div>
         )}
 

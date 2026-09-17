@@ -65,7 +65,7 @@ export function BoekingenPage() {
       .select(
         "id,start_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id, stylists(name,email), services(key)",
       )
-      .in("status", ["confirmed"])
+      .in("status", ["confirmed", "paid_unplaced"])
       .order("start_at", { ascending: true });
     setRows((data as unknown as BookingRow[]) ?? []);
   };
@@ -87,6 +87,8 @@ export function BoekingenPage() {
     const now = Date.now();
     return rows.filter((r) => {
       if (!isAdmin && r.stylists?.email?.toLowerCase() !== myEmail) return false;
+      // Betaald-maar-niet-geplaatst altijd tonen: die vragen om actie.
+      if (r.status === "paid_unplaced") return true;
       if (scope === "komend" && new Date(r.start_at).getTime() < now) return false;
       return true;
     });
@@ -184,6 +186,11 @@ export function BoekingenPage() {
             <div key={r.id} className="rd-card-white">
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0 }}>
+                  {r.status === "paid_unplaced" && (
+                    <span className="rd-chip" style={{ background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700, marginBottom: 6, display: "inline-block" }}>
+                      Betaald, nog te plaatsen: kies hieronder een moment of styliste
+                    </span>
+                  )}
                   <div style={{ fontWeight: 800, fontSize: 15 }}>{fmt(r.start_at)}</div>
                   <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>
                     {r.customer_name || "Klant"} · {r.customer_email}
