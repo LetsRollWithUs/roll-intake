@@ -2,6 +2,7 @@
 // Betaald (processing/completed/on-hold) -> confirmed. Geannuleerd/mislukt -> cancelled.
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { buildBookingContext, klaviyoTrack } from "../_shared/klaviyo.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -44,10 +45,22 @@ Deno.serve(async (req) => {
   const dead = ["cancelled", "failed", "refunded"].includes(order.status);
 
   if (paid) {
-    await admin.from("bookings").update({ status: "confirmed", hold_expires_at: null }).eq(
-      bookingId ? "id" : "woo_order_id",
-      bookingId ?? String(order.id),
-    );
+    const col = bookingId ? "id" : "woo_order_id";
+    const val = bookingId ?? String(order.id);
+    const { data: existing } = await admin.from("bookings").select("id,status").eq(col, val).maybeSingle();
+    if (existing && existing.status !== "confirmed") {
+      await admin.from("bookings").update({ status: "confirmed", hold_expires_at: null }).eq("id", existing.id);
+      const ctx = await buildBookingContext(admin, existing.id as string);
+      if (ctx) {
+        await klaviyoTrack(
+          "Afspraak bevestigd",
+          ctx.profile,
+          ctx.properties,
+          { next_appointment_at: ctx.properties.start_at, intake_ingevuld: ctx.properties.intake_ingevuld },
+          `${existing.id}:confirmed`,
+        );
+      }
+    }
   } else if (dead) {
     await admin
       .from("bookings")

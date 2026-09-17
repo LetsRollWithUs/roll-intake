@@ -68,12 +68,20 @@ export function ManageBooking() {
     if (!slot) return;
     setBusy(true);
     setErr(null);
-    const { error } = await supabase.rpc("reschedule_by_token", { p_token: token, p_new_start: slot });
+    const { data, error } = await supabase.rpc("reschedule_by_token", { p_token: token, p_new_start: slot });
     setBusy(false);
     if (error) {
       setErr(error.message || "Verzetten lukte niet. Probeer een ander moment.");
       startPicking();
       return;
+    }
+    const changedId = (data as { booking_id?: string } | null)?.booking_id;
+    if (changedId) {
+      try {
+        await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: changedId } });
+      } catch {
+        /* stil: mail-melding is niet kritiek voor de klant */
+      }
     }
     setDone(true);
     setPicking(false);
