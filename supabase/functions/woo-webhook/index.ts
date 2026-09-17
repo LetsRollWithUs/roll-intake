@@ -2,7 +2,7 @@
 // Betaald (processing/completed/on-hold) -> confirmed. Geannuleerd/mislukt -> cancelled.
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { buildBookingContext, klaviyoTrack } from "../_shared/klaviyo.ts";
+import { buildBookingContext, klaviyoTrack, appointmentProfileProps } from "../_shared/klaviyo.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
           "Afspraak bevestigd",
           ctx.profile,
           ctx.properties,
-          { next_appointment_at: ctx.properties.start_at, intake_ingevuld: ctx.properties.intake_ingevuld },
+          appointmentProfileProps(ctx, { includeIntakeStatus: true }),
           `${existing.id}:confirmed`,
         );
       }
