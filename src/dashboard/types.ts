@@ -3,7 +3,8 @@
 export interface DbPhoto {
   id?: string;
   name?: string;
-  url?: string | null;
+  url?: string | null; // oude rijen: publieke URL (bucket is nu privé; dashboard leidt hier het pad uit af)
+  path?: string | null; // nieuwe rijen: opslagpad in de bucket, weergave via signed URL
 }
 export interface DbRoom {
   id: string;
