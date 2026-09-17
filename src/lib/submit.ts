@@ -134,5 +134,17 @@ export async function submitIntake(
   const { error } = await supabase.rpc("submit_intake", { p_id: intakeId, p_row: row });
   if (error) throw new Error(error.message);
 
+  // Koppelt de intake aan de boeking in Klaviyo (zet intake_ingevuld=true → reminderflow stopt).
+  // Best-effort: een mislukte melding mag het afronden niet blokkeren.
+  if (opts?.bookingId) {
+    try {
+      await supabase.functions.invoke("booking", {
+        body: { action: "intake_done", booking_id: opts.bookingId },
+      });
+    } catch {
+      /* stil: melding is niet kritiek voor de klant */
+    }
+  }
+
   return { id: intakeId };
 }

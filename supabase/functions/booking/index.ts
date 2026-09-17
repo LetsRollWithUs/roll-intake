@@ -4,6 +4,7 @@
 // - status (anon): controleert de order en bevestigt de boeking als betaald.
 // - setup_webhook / delete_order (alleen @roll.nl-admin): beheer/opruimen.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { buildBookingContext, klaviyoTrack } from "../_shared/klaviyo.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -83,10 +84,49 @@ Deno.serve(async (req) => {
         const o = await r.json();
         if (r.ok && ["processing", "completed", "on-hold"].includes(o.status)) {
           await admin.from("bookings").update({ status: "confirmed", hold_expires_at: null }).eq("id", b.id);
+          const ctx = await buildBookingContext(admin, b.id as string);
+          if (ctx) {
+            await klaviyoTrack(
+              "Afspraak bevestigd",
+              ctx.profile,
+              ctx.properties,
+              { next_appointment_at: ctx.properties.start_at, intake_ingevuld: ctx.properties.intake_ingevuld },
+              `${b.id}:confirmed`,
+            );
+          }
           return j({ status: "confirmed", start_at: b.start_at, mode });
         }
       }
       return j({ status: b.status, start_at: b.start_at, mode });
+    }
+
+    // Intake ingevuld: profielprop zetten zodat de reminderflow stopt + event voor opvolging.
+    if (action === "intake_done") {
+      if (!body.booking_id) return j({ ok: false, skipped: "geen booking_id" });
+      const ctx = await buildBookingContext(admin, body.booking_id);
+      if (!ctx) return j({ ok: false, skipped: "boeking niet gevonden" });
+      const r = await klaviyoTrack(
+        "Intake ingevuld",
+        ctx.profile,
+        ctx.properties,
+        { intake_ingevuld: true, intake_ingevuld_at: new Date().toISOString() },
+        `${ctx.bookingId}:intake_done`,
+      );
+      return j({ ok: r.ok });
+    }
+
+    // Afspraak gewijzigd (verzet of overgedragen): nieuwe tijd/videolink mailen.
+    if (action === "booking_changed") {
+      if (!body.booking_id) return j({ ok: false, skipped: "geen booking_id" });
+      const ctx = await buildBookingContext(admin, body.booking_id);
+      if (!ctx) return j({ ok: false, skipped: "boeking niet gevonden" });
+      const r = await klaviyoTrack(
+        "Afspraak gewijzigd",
+        ctx.profile,
+        ctx.properties,
+        { next_appointment_at: ctx.properties.start_at },
+      );
+      return j({ ok: r.ok });
     }
 
     // Admin-acties (@roll.nl)

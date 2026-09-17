@@ -115,12 +115,22 @@ export function BoekingenPage() {
     setTarget("");
   };
 
+  // Vuurt de "Afspraak gewijzigd"-mail; best-effort, mag de actie niet blokkeren.
+  const notifyChanged = async (bookingId: string) => {
+    try {
+      await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: bookingId } });
+    } catch {
+      /* stil */
+    }
+  };
+
   const doReschedule = async () => {
     if (!actId || !slot) return;
     setBusy(true); setErr(null);
     const { error } = await supabase.rpc("reschedule_booking", { p_booking_id: actId, p_new_start: slot });
+    if (error) { setBusy(false); return setErr(error.message); }
+    await notifyChanged(actId);
     setBusy(false);
-    if (error) return setErr(error.message);
     closeAct();
     flash("Afspraak verzet. De klant krijgt een mail met de nieuwe tijd.");
     loadRows();
@@ -130,8 +140,9 @@ export function BoekingenPage() {
     if (!actId || !target) return;
     setBusy(true); setErr(null);
     const { error } = await supabase.rpc("reassign_booking", { p_booking_id: actId, p_new_stylist_id: target });
+    if (error) { setBusy(false); return setErr(error.message); }
+    await notifyChanged(actId);
     setBusy(false);
-    if (error) return setErr(error.message);
     closeAct();
     flash("Afspraak overgedragen. De klant krijgt een mail met de nieuwe videolink.");
     loadRows();
