@@ -117,11 +117,11 @@ Deno.serve(async (req) => {
       const ctx = await buildBookingContext(admin, body.booking_id);
       if (!ctx) return j({ ok: false, skipped: "boeking niet gevonden" });
       const r = await klaviyoTrack(
-        "Afspraak gewijzigd",
+        "Advies flow",
         ctx.profile,
-        ctx.properties,
+        { ...ctx.properties, stap: "gewijzigd" },
         appointmentProfileProps(ctx),
-        undefined,
+        `${body.booking_id}:gewijzigd:${Date.now()}`,
         admin,
       );
       await notifyStylist(admin, body.booking_id, "gewijzigd");
@@ -161,7 +161,9 @@ Deno.serve(async (req) => {
       });
       const outcome = row.advisor_outcome ?? null;
       const route = outcome === "samples_needed" ? "samples" : outcome === "color_chosen" ? "verf" : "followup";
+      const stap = route === "samples" ? "advies_samples" : route === "verf" ? "advies_verf" : "advies_followup";
       const props = {
+        stap,
         intake_id: body.intake_id,
         booking_id: row.booking_id ?? null,
         outcome,
@@ -173,11 +175,11 @@ Deno.serve(async (req) => {
         has_offer: !!row.advisor_offer_url,
       };
       const r = await klaviyoTrack(
-        "Advies afgerond",
+        "Advies flow",
         { email: row.contact_email, first_name: row.contact_name ?? undefined },
         props,
         {},
-        `${body.intake_id}:advies:${Date.now()}`,
+        `${body.intake_id}:${stap}:${Date.now()}`,
         admin,
       );
       if (r.ok) {
