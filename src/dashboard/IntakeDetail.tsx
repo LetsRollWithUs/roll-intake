@@ -16,6 +16,10 @@ function lbl(list: { key: string; label: string }[], key?: string | null): strin
 function surfaceLabels(keys?: string[]): string {
   return (keys ?? []).map((k) => lbl(SURFACES, k)).join(", ");
 }
+// Alleen echte http(s)-links tonen; alles anders (javascript:, data:, rommel) als platte tekst.
+function safeUrl(v?: string | null): string | null {
+  return v && /^https?:\/\//i.test(v.trim()) ? v.trim() : null;
+}
 
 const PHOTO_BUCKET = "intake-photos";
 
@@ -562,13 +566,13 @@ export function IntakeDetail() {
       {/* Inspiratie */}
       <Section title="Inspiratie">
         <div style={{ fontSize: 14, display: "flex", flexDirection: "column", gap: 4 }}>
-          {row.pinterest_url && (
-            <a href={row.pinterest_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)" }}>
+          {safeUrl(row.pinterest_url) && (
+            <a href={safeUrl(row.pinterest_url)!} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)" }}>
               Pinterest-board
             </a>
           )}
-          {row.other_inspiration_url && (
-            <a href={row.other_inspiration_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)" }}>
+          {safeUrl(row.other_inspiration_url) && (
+            <a href={safeUrl(row.other_inspiration_url)!} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)" }}>
               Andere link
             </a>
           )}
