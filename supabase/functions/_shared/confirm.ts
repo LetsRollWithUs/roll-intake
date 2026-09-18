@@ -42,3 +42,41 @@ export async function confirmPaid(admin: any, bookingId: string): Promise<Confir
   }
   return r;
 }
+
+// Annuleert een boeking (bijv. na een refund/annulering in WooCommerce). Het slot komt vrij
+// doordat 'cancelled' buiten de overlapbescherming valt. Alleen bij een eerder BEVESTIGDE
+// afspraak informeren we de klant (event) en het team (melding); een niet-betaalde hold die
+// sneuvelt is de normale gang van zaken en veroorzaakt geen ruis.
+export async function cancelBooking(admin: any, bookingId: string, reason: string) {
+  const { data: b } = await admin
+    .from("bookings")
+    .select("id,status,stylist_id,customer_email,customer_name,start_at,woo_order_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!b) return { outcome: "not_found" };
+  if (b.status === "cancelled") return { outcome: "already_cancelled" };
+
+  const prev = b.status as string;
+  await admin.from("bookings").update({ status: "cancelled", hold_expires_at: null }).eq("id", bookingId);
+
+  const wasReal = prev === "confirmed" || prev === "paid_unplaced";
+  if (wasReal) {
+    const ctx = await buildBookingContext(admin, bookingId);
+    if (ctx) {
+      await klaviyoTrack("Afspraak geannuleerd", ctx.profile, ctx.properties, {}, `${bookingId}:cancelled:${Date.now()}`, admin);
+    }
+    await admin.from("system_alerts").insert({
+      kind: "booking_cancelled",
+      message: `Een bevestigde afspraak is geannuleerd of terugbetaald (${reason}). Het moment is weer vrij.`,
+      payload: {
+        booking_id: bookingId, customer_email: b.customer_email, customer_name: b.customer_name,
+        start_at: b.start_at, stylist_id: b.stylist_id, reason,
+      },
+    });
+    // Openstaande "betaald, niet geplaatst"-melding voor deze boeking sluiten: die is nu opgelost.
+    await admin.from("system_alerts").update({ acknowledged_at: new Date().toISOString() })
+      .eq("kind", "paid_unplaced").is("acknowledged_at", null).eq("payload->>booking_id", bookingId);
+    await postAlertWebhook("booking_cancelled", `Bevestigde afspraak geannuleerd of terugbetaald (${reason}).`, { booking_id: bookingId });
+  }
+  return { outcome: "cancelled", previous: prev, wasReal };
+}
