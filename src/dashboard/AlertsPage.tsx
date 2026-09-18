@@ -16,6 +16,7 @@ const KIND_LABEL: Record<string, string> = {
   paid_unplaced: "Betaald, niet geplaatst",
   notification_failed: "Mail niet verstuurd",
   confirm_error: "Bevestiging mislukt",
+  booking_cancelled: "Afspraak geannuleerd",
 };
 
 // Meldingen: systeemalerts waar een mens naar moet kijken, plus de staat van de mail-outbox.

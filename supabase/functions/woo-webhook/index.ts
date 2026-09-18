@@ -2,7 +2,7 @@
 // Betaald (processing/completed/on-hold) -> confirmed. Geannuleerd/mislukt -> cancelled.
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { confirmPaid } from "../_shared/confirm.ts";
+import { confirmPaid, cancelBooking } from "../_shared/confirm.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -54,11 +54,12 @@ Deno.serve(async (req) => {
       await confirmPaid(admin, existing.id as string);
     }
   } else if (dead) {
-    await admin
-      .from("bookings")
-      .update({ status: "cancelled" })
-      .eq(bookingId ? "id" : "woo_order_id", bookingId ?? String(order.id))
-      .in("status", ["held", "pending_payment"]);
+    // Refund/annulering: ook een reeds BEVESTIGDE afspraak wordt nu geannuleerd (slot komt vrij).
+    // cancelBooking informeert klant + team alleen als het een echte afspraak was.
+    const col = bookingId ? "id" : "woo_order_id";
+    const val = bookingId ?? String(order.id);
+    const { data: existing } = await admin.from("bookings").select("id").eq(col, val).maybeSingle();
+    if (existing) await cancelBooking(admin, existing.id as string, order.status);
   }
 
   return new Response("ok");
