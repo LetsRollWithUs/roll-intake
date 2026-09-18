@@ -1,6 +1,6 @@
 // Bevestigt een betaalde boeking via confirm_paid_booking en vuurt het event.
 // Gedeeld door woo-webhook en de statuspoll, zodat beide paden identiek gedragen.
-import { buildBookingContext, klaviyoTrack, appointmentProfileProps } from "./klaviyo.ts";
+import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "./klaviyo.ts";
 import { postAlertWebhook } from "./alerts.ts";
 
 export interface ConfirmResult {
@@ -33,6 +33,7 @@ export async function confirmPaid(admin: any, bookingId: string): Promise<Confir
         admin,
       );
     }
+    await notifyStylist(admin, bookingId, "nieuwe_boeking");
   } else if (r.outcome === "paid_unplaced" && !r.already) {
     await postAlertWebhook(
       "paid_unplaced",
@@ -77,6 +78,7 @@ export async function cancelBooking(admin: any, bookingId: string, reason: strin
     await admin.from("system_alerts").update({ acknowledged_at: new Date().toISOString() })
       .eq("kind", "paid_unplaced").is("acknowledged_at", null).eq("payload->>booking_id", bookingId);
     await postAlertWebhook("booking_cancelled", `Bevestigde afspraak geannuleerd of terugbetaald (${reason}).`, { booking_id: bookingId });
+    await notifyStylist(admin, bookingId, "geannuleerd");
   }
   return { outcome: "cancelled", previous: prev, wasReal };
 }
