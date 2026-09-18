@@ -25,11 +25,11 @@ export async function confirmPaid(admin: any, bookingId: string): Promise<Confir
       // unique_id met bevestigingsmoment: een herbevestiging na een verlopen hold krijgt zo wél een nieuwe mail.
       const stamp = r.confirmed_at ? new Date(r.confirmed_at).getTime() : Date.now();
       await klaviyoTrack(
-        "Afspraak bevestigd",
+        "Advies flow",
         ctx.profile,
-        ctx.properties,
+        { ...ctx.properties, stap: "bevestigd" },
         appointmentProfileProps(ctx, { includeIntakeStatus: true }),
-        `${bookingId}:confirmed:${stamp}`,
+        `${bookingId}:bevestigd:${stamp}`,
         admin,
       );
     }
