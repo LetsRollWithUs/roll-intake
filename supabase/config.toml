@@ -1,0 +1,3 @@
+# Supabase CLI-config voor het roll-intake project.
+# Dit project deelt de Supabase-instantie met de Quiz-app (match.roll.nl).
+project_id = "lsboujprrvhntgbvlvyu"
