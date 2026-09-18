@@ -4,7 +4,7 @@
 // - status (anon): controleert de order en bevestigt de boeking als betaald.
 // - setup_webhook / delete_order (alleen @roll.nl-admin): beheer/opruimen.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { buildBookingContext, klaviyoTrack, appointmentProfileProps } from "../_shared/klaviyo.ts";
+import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "../_shared/klaviyo.ts";
 import { confirmPaid } from "../_shared/confirm.ts";
 import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, colorNameToId, multiAddUrl, SHOP_BASE } from "../_shared/roll-products.ts";
 
@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
         `${ctx.bookingId}:intake_done`,
         admin,
       );
+      await notifyStylist(admin, body.booking_id, "intake_binnen");
       return j({ ok: r.ok });
     }
 
@@ -123,6 +124,7 @@ Deno.serve(async (req) => {
         undefined,
         admin,
       );
+      await notifyStylist(admin, body.booking_id, "gewijzigd");
       return j({ ok: r.ok });
     }
 

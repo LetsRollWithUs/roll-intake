@@ -40,7 +40,7 @@ export const serviceMode = (key?: string | null) =>
 export const serviceLabel = (key?: string | null) =>
   key === "post_sample" ? "Al samples getest" : "Nog geen samples getest";
 
-const fmtLocal = (iso: string) =>
+export const fmtLocal = (iso: string) =>
   new Intl.DateTimeFormat("nl-NL", {
     timeZone: TZ, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
   }).format(new Date(iso));
@@ -96,6 +96,41 @@ export async function buildBookingContext(
     },
     properties,
   };
+}
+
+// Interne notificatie naar de styliste (via Klaviyo, aan haar eigen e-mailadres).
+// Eén metric "Styliste melding" met een `soort`, zodat Furkan er één interne flow op bouwt.
+// soort: nieuwe_boeking | gewijzigd | geannuleerd | intake_binnen
+export async function notifyStylist(admin: any, bookingId: string, soort: string): Promise<void> {
+  const { data: b } = await admin
+    .from("bookings")
+    .select("id,start_at,customer_name,customer_email,customer_phone,intake_id, services(key), stylists(name,email)")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!b) return;
+  const row = b as any;
+  const email = row.stylists?.email as string | undefined;
+  if (!email) return;
+  const props = {
+    soort,
+    klant_naam: row.customer_name ?? null,
+    klant_email: row.customer_email ?? null,
+    klant_telefoon: row.customer_phone ?? null,
+    start_at: row.start_at,
+    start_at_local: fmtLocal(row.start_at),
+    service_label: serviceLabel(row.services?.key),
+    intake_ingevuld: !!row.intake_id,
+    boekingen_url: `${INTAKE_BASE}/beheer/boekingen`,
+    intake_dashboard_url: row.intake_id ? `${INTAKE_BASE}/beheer/${row.intake_id}` : null,
+  };
+  await klaviyoTrack(
+    "Styliste melding",
+    { email, first_name: row.stylists?.name ?? undefined },
+    props,
+    {},
+    `${bookingId}:styliste:${soort}:${Date.now()}`,
+    admin,
+  );
 }
 
 // Profieleigenschappen voor de afspraak. De 24u-reminder is een date-flow zonder event,
