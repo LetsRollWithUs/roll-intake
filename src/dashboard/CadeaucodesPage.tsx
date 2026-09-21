@@ -11,6 +11,7 @@ interface Credit {
   buyer_email: string | null;
   occasion: string | null;
   gift_message: string | null;
+  is_gift: boolean | null;
   manage_token: string;
   created_at: string;
   scheduled_at: string | null;
@@ -34,7 +35,7 @@ export function CadeaucodesPage() {
     (async () => {
       const { data } = await supabase
         .from("advice_credits")
-        .select("id,redeem_code,status,buyer_name,buyer_email,occasion,gift_message,manage_token,created_at,scheduled_at")
+        .select("id,redeem_code,status,buyer_name,buyer_email,occasion,gift_message,is_gift,manage_token,created_at,scheduled_at")
         .order("created_at", { ascending: false });
       setRows((data as Credit[]) ?? []);
       setLoading(false);
@@ -94,9 +95,10 @@ export function CadeaucodesPage() {
                     <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>
                       {r.buyer_name || "Koper"}{r.buyer_email ? ` · ${r.buyer_email}` : ""}
                     </div>
-                    {r.occasion && (
-                      <div style={{ fontSize: 13, marginTop: 4 }}>
-                        <span className="rd-chip">🎁 {r.occasion}</span>
+                    {(r.is_gift || r.occasion) && (
+                      <div style={{ fontSize: 13, marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {r.is_gift && <span className="rd-chip">🎁 Cadeau</span>}
+                        {r.occasion && <span className="rd-chip">{r.occasion}</span>}
                       </div>
                     )}
                     {r.gift_message && (
