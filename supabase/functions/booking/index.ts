@@ -95,6 +95,42 @@ Deno.serve(async (req) => {
       return j({ status: b.status, start_at: b.start_at, mode });
     }
 
+    // E-mailcheck (anon): heeft dit adres al een afspraak of een gekocht advies-tegoed?
+    // Geeft alleen wat de intake nodig heeft om te koppelen of zacht door te verwijzen;
+    // geen namen, telefoon of geheime tokens (voorkomt enumeratie/hijack).
+    if (action === "email_status") {
+      const email = String(body.email ?? "").trim().toLowerCase();
+      if (!/.+@.+\..+/.test(email)) return j({ has_booking: false, has_credit: false });
+      const nowIso = new Date().toISOString();
+
+      const { data: bk } = await admin
+        .from("bookings")
+        .select("id,start_at,status")
+        .ilike("customer_email", email)
+        .in("status", ["confirmed", "paid_unplaced"])
+        .gte("start_at", nowIso)
+        .order("start_at", { ascending: true })
+        .limit(1);
+      const booking = (bk ?? [])[0] as { id: string; start_at: string; status: string } | undefined;
+
+      const { data: cr } = await admin
+        .from("advice_credits")
+        .select("status,scheduled_at")
+        .ilike("buyer_email", email)
+        .in("status", ["paid", "scheduled"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const credit = (cr ?? [])[0] as { status: string; scheduled_at: string | null } | undefined;
+
+      return j({
+        has_booking: !!booking,
+        booking_id: booking?.id ?? null,
+        next_start_at: booking?.start_at ?? null,
+        has_credit: !!credit,
+        credit_scheduled: credit?.status === "scheduled" || !!credit?.scheduled_at,
+      });
+    }
+
     // Intake ingevuld: profielprop zetten zodat de reminderflow stopt + event voor opvolging.
     if (action === "intake_done") {
       if (!body.booking_id) return j({ ok: false, skipped: "geen booking_id" });
