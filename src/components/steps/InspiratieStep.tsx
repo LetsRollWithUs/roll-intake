@@ -6,14 +6,10 @@ interface Props {
   otherInspirationUrl: string;
   inspirationImages: UploadedImage[];
   inspirationNote: string;
-  hasOtherChanges?: boolean;
-  otherChangesNote: string;
   onPinterest: (v: string) => void;
   onOther: (v: string) => void;
   onImages: (v: UploadedImage[]) => void;
   onNote: (v: string) => void;
-  onHasOtherChanges: (v: boolean) => void;
-  onOtherChangesNote: (v: string) => void;
 }
 
 export function isUrlish(v: string): boolean {
@@ -21,26 +17,21 @@ export function isUrlish(v: string): boolean {
   if (!t) return true; // leeg mag
   return /^(https?:\/\/)?[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(t);
 }
+const isPinterest = (v: string) => /pinterest\.[a-z.]+|pin\.it/i.test(v.trim());
 
 export function InspiratieStep({
   pinterestUrl,
   otherInspirationUrl,
   inspirationImages,
   inspirationNote,
-  hasOtherChanges,
-  otherChangesNote,
   onPinterest,
   onOther,
   onImages,
   onNote,
-  onHasOtherChanges,
-  onOtherChangesNote,
 }: Props) {
   const badPin = !isUrlish(pinterestUrl);
   const badOther = !isUrlish(otherInspirationUrl);
-
-  const linkStyle = (bad: boolean) =>
-    bad ? { borderColor: "var(--rd-pink-dark)" } : undefined;
+  const linkStyle = (bad: boolean) => (bad ? { borderColor: "var(--rd-pink-dark)" } : undefined);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -62,10 +53,16 @@ export function InspiratieStep({
           aria-label="Pinterest-link"
           style={linkStyle(badPin)}
         />
-        {badPin && (
+        {badPin ? (
           <p className="rd-sub" style={{ marginTop: 6, color: "var(--rd-pink-dark)", opacity: 1 }}>
             Dit lijkt geen geldige link. Laat leeg of plak een volledige URL.
           </p>
+        ) : (
+          isPinterest(pinterestUrl) && (
+            <p className="rd-sub" style={{ marginTop: 6 }}>
+              Let op: zet je board op <strong>openbaar</strong> (of "secret" uit), anders kunnen we het niet zien.
+            </p>
+          )
         )}
       </div>
 
@@ -107,37 +104,6 @@ export function InspiratieStep({
           placeholder="Bijvoorbeeld de warme kleuren, donkere kozijnen of juist de rustige uitstraling."
           style={{ height: 96, paddingTop: 12, resize: "none", lineHeight: 1.4 }}
         />
-      </div>
-
-      <div>
-        <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
-          Verandert er nog iets aan de vloer, meubels of gordijnen?
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className={`rd-plan-chip${hasOtherChanges === true ? " is-on" : ""}`}
-            onClick={() => onHasOtherChanges(true)}
-            aria-pressed={hasOtherChanges === true}
-          >
-            Ja
-          </button>
-          <button
-            className={`rd-plan-chip${hasOtherChanges === false ? " is-on" : ""}`}
-            onClick={() => onHasOtherChanges(false)}
-            aria-pressed={hasOtherChanges === false}
-          >
-            Nee, blijft zoals op de foto's
-          </button>
-        </div>
-        {hasOtherChanges === true && (
-          <textarea
-            className="rd-input"
-            value={otherChangesNote}
-            onChange={(e) => onOtherChangesNote(e.target.value)}
-            placeholder="Wat verandert er? Bijv. nieuwe eiken vloer, ander bankstel."
-            style={{ height: 72, paddingTop: 10, marginTop: 10, resize: "none", lineHeight: 1.4 }}
-          />
-        )}
       </div>
     </div>
   );

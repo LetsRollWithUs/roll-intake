@@ -11,9 +11,14 @@ export interface DbRoom {
   label: string;
   typeKey?: string;
   surfaces?: string[];
+  sun?: string[] | null;
+  skylight?: boolean | null;
+  noWindows?: boolean | null;
+  usage?: string | null;
+  otherChanges?: boolean | null;
+  otherChangesNote?: string | null;
   daylight?: string | null;
   daylightDir?: string | null;
-  usage?: string | null;
   priority?: boolean;
   photos?: DbPhoto[];
 }

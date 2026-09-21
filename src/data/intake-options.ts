@@ -2,6 +2,7 @@ import type {
   SurfaceKey,
   DaylightKey,
   DaylightDir,
+  SunMoment,
   UsageTime,
   SampleSource,
   Verdict,
@@ -35,12 +36,27 @@ export const SURFACES: { key: SurfaceKey; label: string }[] = [
   { key: "houtwerk", label: "Ander houtwerk" },
 ];
 
+// Wanneer valt de zon binnen? (meerdere mogelijk)
+export const SUN_MOMENTS: { key: SunMoment; label: string }[] = [
+  { key: "ochtend", label: "Ochtendzon" },
+  { key: "middag", label: "Middagzon" },
+  { key: "avond", label: "Avondzon" },
+  { key: "noord", label: "Koel daglicht (noorden)" },
+];
+
+// Wanneer gebruik je de ruimte het meest? Kunstlicht vs daglicht bepaalt hoe kleuren overkomen.
+export const USAGE_TIMES: { key: UsageTime; label: string; sub: string }[] = [
+  { key: "overdag", label: "Overdag", sub: "Vooral daglicht" },
+  { key: "avond", label: "Vooral 's avonds", sub: "Kunstlicht bepaalt de sfeer" },
+  { key: "heledag", label: "De hele dag door", sub: "" },
+];
+
+// Legacy (oude concepten); niet meer in de UI.
 export const DAYLIGHT: { key: DaylightKey; label: string }[] = [
   { key: "veel", label: "Veel licht" },
   { key: "gemiddeld", label: "Gemiddeld" },
   { key: "weinig", label: "Weinig licht" },
 ];
-
 export const DAYLIGHT_DIRS: { key: DaylightDir; label: string }[] = [
   { key: "noord", label: "Noord" },
   { key: "oost", label: "Oost" },
@@ -48,13 +64,6 @@ export const DAYLIGHT_DIRS: { key: DaylightDir; label: string }[] = [
   { key: "west", label: "West" },
   { key: "meerdere", label: "Meerdere kanten" },
   { key: "onbekend", label: "Weet ik niet" },
-];
-
-export const USAGE_TIMES: { key: UsageTime; label: string }[] = [
-  { key: "ochtend", label: "Ochtend" },
-  { key: "middag", label: "Middag" },
-  { key: "avond", label: "Avond" },
-  { key: "hele-dag", label: "Hele dag" },
 ];
 
 // Gevoel, geen interieurstijl. "Stoer & industrieel" bewust weggelaten.

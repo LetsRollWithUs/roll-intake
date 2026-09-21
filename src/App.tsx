@@ -253,10 +253,12 @@ export function App() {
       hint = empty ? `Kies wat je in de ${empty.label.toLowerCase()} wilt schilderen.` : "";
       break;
     }
-    case "photos":
-      canAdvance = !!currentRoom && currentRoom.photos.length >= 2 && !!currentRoom.daylight;
-      hint = "Voeg minimaal 2 foto's toe en kies hoeveel daglicht er is.";
+    case "photos": {
+      const sunOk = !!currentRoom && ((currentRoom.sun?.length ?? 0) > 0 || currentRoom.noWindows === true);
+      canAdvance = !!currentRoom && currentRoom.photos.length >= 1 && sunOk;
+      hint = "Voeg minimaal 1 foto toe en geef aan wanneer de zon binnenvalt.";
       break;
+    }
     case "beelden":
       canAdvance = state.inspirationLikes.length > 0 || !!state.noSfeerImage;
       hint = "Kies een beeld of tik op 'Geen van deze past'.";
@@ -417,14 +419,10 @@ export function App() {
           otherInspirationUrl={state.otherInspirationUrl}
           inspirationImages={state.inspirationImages}
           inspirationNote={state.inspirationNote}
-          hasOtherChanges={state.hasOtherChanges}
-          otherChangesNote={state.otherChangesNote}
           onPinterest={(pinterestUrl) => update({ pinterestUrl })}
           onOther={(otherInspirationUrl) => update({ otherInspirationUrl })}
           onImages={(inspirationImages) => update({ inspirationImages })}
           onNote={(inspirationNote) => update({ inspirationNote })}
-          onHasOtherChanges={(hasOtherChanges) => update({ hasOtherChanges })}
-          onOtherChangesNote={(otherChangesNote) => update({ otherChangesNote })}
         />
       )}
       {screen === "vraag" && (

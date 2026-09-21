@@ -83,11 +83,14 @@ export function ColorsSamplesStep({
           <option key={c.id} value={c.name} />
         ))}
       </datalist>
-      {/* A. Wat heb je al geprobeerd? */}
+      {/* A. Heb je al kleursamples getest? */}
       <div>
-        <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
-          Heb je al kleuren of samples thuis?
+        <div className="rd-row-label" style={{ marginBottom: 4 }}>
+          1. Heb je al kleursamples getest?
         </div>
+        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 10 }}>
+          Wat je al hebt geprobeerd helpt enorm bij het advies.
+        </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {SAMPLE_SOURCES.map((s) => (
             <button
@@ -103,6 +106,13 @@ export function ColorsSamplesStep({
 
         {showSampleList && (
           <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+            <p className="rd-sub" style={{ margin: 0 }}>
+              {hasSamples === "roll"
+                ? "Voeg de Roll-kleuren toe die je hebt getest (kies de naam uit de lijst)."
+                : hasSamples === "andere"
+                ? "Voeg de kleuren toe die je hebt getest, met merk en kleurnaam."
+                : "Voeg de kleuren toe die je hebt getest."}
+            </p>
             {samples.map((s) => (
               <div key={s.id} className="rd-card-white">
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -193,9 +203,12 @@ export function ColorsSamplesStep({
 
       {/* B. Welke Roll-kleuren overweeg je? */}
       <div>
-        <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
-          Welke Roll-kleuren overweeg je?
+        <div className="rd-row-label" style={{ marginBottom: 4 }}>
+          2. Welke Roll-kleuren overweeg je?
         </div>
+        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 10 }}>
+          Optioneel: kleuren waar je nu al aan denkt.
+        </p>
         {colors.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             {colors.map((c) => (

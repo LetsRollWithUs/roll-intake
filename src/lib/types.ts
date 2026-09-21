@@ -5,7 +5,8 @@ export type SurfaceKey = "muren" | "plafond" | "kozijnen" | "deuren" | "houtwerk
 
 export type DaylightKey = "veel" | "gemiddeld" | "weinig";
 export type DaylightDir = "noord" | "oost" | "zuid" | "west" | "meerdere" | "onbekend";
-export type UsageTime = "ochtend" | "middag" | "avond" | "hele-dag";
+export type SunMoment = "ochtend" | "middag" | "avond" | "noord";
+export type UsageTime = "overdag" | "avond" | "heledag";
 
 export type SampleSource = "nee" | "roll" | "andere" | "allebei";
 export type Verdict = "favoriet" | "twijfel" | "valt-af";
@@ -27,9 +28,19 @@ export interface Room {
   /** Weergavenaam, standaard afgeleid van het type, aan te passen. */
   label: string;
   surfaces: SurfaceKey[];
+  /** Wanneer valt de zon binnen (meerdere mogelijk). */
+  sun?: SunMoment[];
+  /** Extra: dakraam (licht van boven). */
+  skylight?: boolean;
+  /** Geen ramen in deze ruimte. */
+  noWindows?: boolean;
+  usage?: UsageTime;
+  /** Verandert er nog iets aan vloer/meubels/gordijnen in deze ruimte? */
+  otherChanges?: boolean;
+  otherChangesNote?: string;
+  /** Legacy daglicht-velden (niet meer in de UI, behouden voor oude concepten). */
   daylight?: DaylightKey;
   daylightDir?: DaylightDir;
-  usage?: UsageTime;
   /** Voorrang bij 3+ ruimtes (30-minuten-gesprek). */
   priority?: boolean;
   photos: UploadedImage[];
