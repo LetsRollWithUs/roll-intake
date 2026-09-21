@@ -174,7 +174,7 @@ export function App() {
         total={TOTAL}
         onBack={() => setScreen("intro")}
         kicker="Even kennismaken"
-        title="Naar wie mogen we het advies sturen?"
+        title="Hoe mogen we je bereiken?"
         footer={
           <button
             className="rd-btn rd-btn-primary rd-btn-lg"
@@ -315,18 +315,35 @@ export function App() {
   };
 
   const footer = (
-    <button
-      className="rd-btn rd-btn-primary rd-btn-lg"
-      onClick={goNext}
-      disabled={!canAdvance}
-      style={!canAdvance ? { opacity: 0.4 } : undefined}
-    >
-      {screen === "planning"
-        ? submitting
-          ? "Bezig met versturen..."
-          : "Versturen naar je kleuradviseur"
-        : "Volgende"}
-    </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <button
+        className="rd-btn rd-btn-primary rd-btn-lg"
+        onClick={goNext}
+        disabled={!canAdvance}
+        style={!canAdvance ? { opacity: 0.4 } : undefined}
+      >
+        {screen === "planning"
+          ? submitting
+            ? "Bezig met versturen..."
+            : "Versturen naar je kleuradviseur"
+          : "Volgende"}
+      </button>
+      {screen === "planning" && !submitting && (
+        <button
+          className="rd-textlink"
+          style={{ minHeight: 40, alignSelf: "center", opacity: 0.7 }}
+          onClick={() => {
+            if (window.confirm("Weet je het zeker? Je begint dan met een lege intake.")) {
+              reset();
+              clearIntakeSession();
+              setScreen("intro");
+            }
+          }}
+        >
+          Opnieuw beginnen
+        </button>
+      )}
+    </div>
   );
 
   const goEdit = (t: string) => {
