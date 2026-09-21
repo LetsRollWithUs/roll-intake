@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { SURFACES, DAYLIGHT, DAYLIGHT_DIRS, USAGE_TIMES, PLANNING } from "@/data/intake-options";
+import { SURFACES, DAYLIGHT, DAYLIGHT_DIRS, SUN_MOMENTS, USAGE_TIMES, PLANNING } from "@/data/intake-options";
 import { INSPIRATIONS } from "@/data/inspiration";
 import { rollColors } from "@/data/roll-colors";
 import { STATUSES, type AdvisorStatus } from "./status";
@@ -488,10 +488,20 @@ export function IntakeDetail() {
               </div>
               <div style={{ fontSize: 13, opacity: 0.75, margin: "2px 0 8px" }}>
                 {surfaceLabels(r.surfaces)}
-                {r.daylight && ` · ${lbl(DAYLIGHT, r.daylight)}`}
-                {r.daylightDir && ` · licht uit ${lbl(DAYLIGHT_DIRS, r.daylightDir)}`}
+                {r.noWindows
+                  ? " · geen ramen"
+                  : (r.sun?.length ? ` · zon: ${r.sun.map((k) => lbl(SUN_MOMENTS, k)).join(", ")}` : "")}
+                {r.skylight && " · dakraam"}
                 {r.usage && ` · ${lbl(USAGE_TIMES, r.usage)}`}
+                {/* legacy */}
+                {!r.sun && r.daylight && ` · ${lbl(DAYLIGHT, r.daylight)}`}
+                {!r.sun && r.daylightDir && ` · licht uit ${lbl(DAYLIGHT_DIRS, r.daylightDir)}`}
               </div>
+              {r.otherChanges === true && (
+                <div style={{ fontSize: 13, opacity: 0.75, margin: "0 0 8px" }}>
+                  Verandert nog: vloer/meubels/gordijnen{r.otherChangesNote ? ` — ${r.otherChangesNote}` : ""}
+                </div>
+              )}
               <Photos photos={r.photos} />
             </div>
           ))}
@@ -577,11 +587,6 @@ export function IntakeDetail() {
             </a>
           )}
           {row.inspiration_note && <div style={{ opacity: 0.85 }}>{row.inspiration_note}</div>}
-          {p.hasOtherChanges === true && (
-            <div style={{ opacity: 0.85 }}>
-              Verandert nog aan vloer/meubels/gordijnen{p.otherChangesNote ? `: ${p.otherChangesNote}` : ""}
-            </div>
-          )}
         </div>
         {(row.inspiration_images?.length ?? 0) > 0 && (
           <div style={{ marginTop: 10 }}>
