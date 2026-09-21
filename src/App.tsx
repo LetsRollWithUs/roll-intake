@@ -81,7 +81,7 @@ const META: Record<StepScreen, { kicker: string; title: string; sub?: string }> 
   planning: {
     kicker: "Stap 9 · Planning & afronden",
     title: "Bijna klaar",
-    sub: "Controleer je intake en verstuur hem naar je kleuradviseur.",
+    sub: "Controleer je intake. Zodra je hem instuurt, bereidt je kleuradviseur het gesprek ermee voor.",
   },
 };
 
@@ -324,8 +324,8 @@ export function App() {
       >
         {screen === "planning"
           ? submitting
-            ? "Bezig met versturen..."
-            : "Versturen naar je kleuradviseur"
+            ? "Bezig met insturen..."
+            : "Intake insturen"
           : "Volgende"}
       </button>
       {screen === "planning" && !submitting && (
