@@ -23,6 +23,14 @@ function safeUrl(v?: string | null): string | null {
 
 const PHOTO_BUCKET = "intake-photos";
 
+const SAMPLE_STATUS: Record<string, string> = {
+  nee: "Nog geen samples getest",
+  ja: "Ja, samples getest",
+  roll: "Ja, van Roll",
+  andere: "Ja, van andere merken",
+  allebei: "Ja, van Roll en andere merken",
+};
+
 // Opslagpad van een foto: nieuwe rijen hebben `path`, oude rijen een publieke URL waar we het pad uit halen.
 function photoPath(p: DbPhoto): string | null {
   if (p.path) return p.path;
@@ -536,7 +544,7 @@ export function IntakeDetail() {
       {/* Kleuren & samples */}
       <Section title="Kleuren & samples">
         <div style={{ fontSize: 14, marginBottom: 8 }}>
-          Al thuis: {row.has_samples ?? "onbekend"}
+          Al thuis: {SAMPLE_STATUS[row.has_samples ?? ""] ?? row.has_samples ?? "onbekend"}
         </div>
         {(row.colors?.length ?? 0) > 0 && (
           <div style={{ marginBottom: 10 }}>
@@ -557,7 +565,10 @@ export function IntakeDetail() {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {row.samples!.map((s) => (
               <div key={s.id} style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 8 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                  {s.hex && (
+                    <span aria-hidden style={{ width: 14, height: 14, borderRadius: 4, background: s.hex, border: "1px solid rgba(0,0,0,.12)", flex: "none" }} />
+                  )}
                   {[s.brand, s.name].filter(Boolean).join(" · ")}{" "}
                   {s.verdict && <span style={{ fontWeight: 600, opacity: 0.6 }}>({s.verdict})</span>}
                 </div>

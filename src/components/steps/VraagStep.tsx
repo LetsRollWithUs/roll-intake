@@ -1,13 +1,16 @@
-import { HELP_NEEDS } from "@/data/intake-options";
+import { HELP_NEEDS, PLANNING } from "@/data/intake-options";
+import type { PlanningKey } from "@/lib/types";
 
 interface Props {
   helpNeeds: string[];
   mainQuestion: string;
   multiRoom: boolean;
   questionScope?: "een" | "meerdere";
+  planning?: PlanningKey;
   onHelpNeeds: (v: string[]) => void;
   onQuestion: (v: string) => void;
   onScope: (v: "een" | "meerdere") => void;
+  onPlanning: (v: PlanningKey) => void;
 }
 
 const MAX = 2;
@@ -17,9 +20,11 @@ export function VraagStep({
   mainQuestion,
   multiRoom,
   questionScope,
+  planning,
   onHelpNeeds,
   onQuestion,
   onScope,
+  onPlanning,
 }: Props) {
   const toggle = (v: string) => {
     if (helpNeeds.includes(v)) onHelpNeeds(helpNeeds.filter((x) => x !== v));
@@ -87,6 +92,24 @@ export function VraagStep({
           </div>
         </div>
       )}
+
+      <div>
+        <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
+          Wanneer wil je gaan schilderen?
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {PLANNING.map((p) => (
+            <button
+              key={p.key}
+              className={`rd-plan-chip${planning === p.key ? " is-on" : ""}`}
+              onClick={() => onPlanning(p.key)}
+              aria-pressed={planning === p.key}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

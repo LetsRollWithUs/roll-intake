@@ -30,6 +30,9 @@ export interface DbSample {
   note?: string | null;
   roomId?: string | null;
   photo?: DbPhoto | null;
+  rollId?: string | null;
+  hex?: string | null;
+  packId?: string | null;
 }
 export interface DbColor {
   id?: string;

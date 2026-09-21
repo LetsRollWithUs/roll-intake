@@ -78,10 +78,14 @@ const META: Record<StepScreen, { kicker: string; title: string; sub?: string }> 
     title: "Laat zien wat je mooi vindt",
     sub: "Optioneel, maar vaak goud waard voor je adviseur.",
   },
-  vraag: { kicker: "Stap 8 · Jouw vraag", title: "Waar mogen we je mee helpen?" },
+  vraag: {
+    kicker: "Stap 8 · Jouw vraag",
+    title: "Waar mogen we je mee helpen?",
+    sub: "Vertel wat je uit het gesprek wilt halen en wanneer je aan de slag wilt.",
+  },
   planning: {
-    kicker: "Stap 9 · Planning & afronden",
-    title: "Bijna klaar",
+    kicker: "Stap 9 · Afronden",
+    title: "Klopt alles?",
     sub: "Controleer je intake. Zodra je hem instuurt, bereidt je kleuradviseur het gesprek ermee voor.",
   },
 };
@@ -97,8 +101,16 @@ export function App() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [apptStart, setApptStart] = useState<string | null>(null);
+  // Gekoppelde boeking als het e-mailadres al een afspraak blijkt te hebben (organische route).
+  const [coupledBookingId, setCoupledBookingId] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<
+    | { checking: true }
+    | { checking: false; hasBooking: boolean; hasCredit: boolean; creditScheduled: boolean }
+    | null
+  >(null);
   const resumed = useRef(false);
   const prefilled = useRef(false);
+  const lastChecked = useRef<string>("");
 
   useEffect(() => lockDocument(), []);
 
@@ -128,6 +140,49 @@ export function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
+
+  // E-mailcheck (organische route, geen boekingslink): heeft dit adres al een afspraak of tegoed?
+  // Zo ja: koppel de intake automatisch aan de bestaande afspraak, anders een zachte hint.
+  useEffect(() => {
+    if (bookingId) return; // via de boekingslink weten we het al
+    if (screen !== "contact") return;
+    const email = state.contactEmail.trim().toLowerCase();
+    if (!emailOk) {
+      setEmailStatus(null);
+      return;
+    }
+    if (email === lastChecked.current) return;
+    const t = setTimeout(async () => {
+      lastChecked.current = email;
+      setEmailStatus({ checking: true });
+      try {
+        const { data } = await supabase.functions.invoke("booking", { body: { action: "email_status", email } });
+        const d = (data ?? {}) as {
+          has_booking?: boolean; booking_id?: string | null; next_start_at?: string | null;
+          has_credit?: boolean; credit_scheduled?: boolean;
+        };
+        if (d.has_booking && d.booking_id) {
+          setCoupledBookingId(d.booking_id);
+          if (d.next_start_at) setApptStart(d.next_start_at);
+        } else {
+          setCoupledBookingId(null);
+        }
+        setEmailStatus({
+          checking: false,
+          hasBooking: !!d.has_booking,
+          hasCredit: !!d.has_credit,
+          creditScheduled: !!d.credit_scheduled,
+        });
+      } catch {
+        setEmailStatus(null);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.contactEmail, screen, bookingId]);
+
+  // De boeking waar de intake aan gekoppeld wordt: via de link, of automatisch gevonden op e-mail.
+  const effectiveBookingId = bookingId ?? coupledBookingId;
 
   const apptLabel = apptStart
     ? new Intl.DateTimeFormat("nl-NL", { timeZone: "Europe/Amsterdam", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(apptStart))
@@ -214,6 +269,24 @@ export function App() {
           onName={(contactName) => update({ contactName })}
           onEmail={(contactEmail) => update({ contactEmail })}
         />
+        {emailStatus && !emailStatus.checking && emailStatus.hasBooking && apptLabel && (
+          <div className="rd-card-white" style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <span className="rd-ring is-on" aria-hidden style={{ width: 22, height: 22, fontSize: 12 }}>✓</span>
+            <span style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.35 }}>
+              Je hebt al een afspraak op {apptLabel}. We koppelen deze intake er automatisch aan, zodat je
+              kleuradviseur alles bij elkaar heeft.
+            </span>
+          </div>
+        )}
+        {emailStatus && !emailStatus.checking && !emailStatus.hasBooking && emailStatus.hasCredit && !emailStatus.creditScheduled && (
+          <div className="rd-card-white" style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Je hebt al een online kleuradvies gekocht 🎉</span>
+            <span className="rd-sub" style={{ margin: 0 }}>
+              Plan je afspraak via de link in je bevestigingsmail. Deze intake vul je gerust alvast in, dan
+              staat alles klaar voor het gesprek.
+            </span>
+          </div>
+        )}
         {!canGo && (
           <p className="rd-sub" style={{ textAlign: "center", marginTop: 16 }}>
             Vul je naam en een geldig e-mailadres in.
@@ -310,7 +383,7 @@ export function App() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitIntake(state, { bookingId, mode });
+      await submitIntake(state, { bookingId: effectiveBookingId, mode });
       setScreen("done");
     } catch {
       setSubmitError("Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.");
@@ -453,14 +526,14 @@ export function App() {
           mainQuestion={state.mainQuestion}
           multiRoom={multiRoom}
           questionScope={state.questionScope}
+          planning={state.planning}
           onHelpNeeds={(helpNeeds) => update({ helpNeeds })}
           onQuestion={(mainQuestion) => update({ mainQuestion })}
           onScope={(questionScope) => update({ questionScope })}
+          onPlanning={(planning) => update({ planning })}
         />
       )}
-      {screen === "planning" && (
-        <PlanningStep state={state} onPlanning={(planning) => update({ planning })} onEdit={goEdit} />
-      )}
+      {screen === "planning" && <PlanningStep state={state} onEdit={goEdit} />}
 
       {!canAdvance && hint && (
         <p className="rd-sub" style={{ textAlign: "center", marginTop: 16 }}>

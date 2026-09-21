@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { PLANNING, SURFACES } from "@/data/intake-options";
-import type { IntakeState, PlanningKey, UploadedImage } from "@/lib/types";
+import type { IntakeState, UploadedImage } from "@/lib/types";
 
 type EditTarget =
   | "contact" | "rooms" | "surfaces" | "photos" | "beelden" | "gevoel" | "kleuren" | "inspiratie" | "vraag";
 
 interface Props {
   state: IntakeState;
-  onPlanning: (v: PlanningKey) => void;
   onEdit: (t: EditTarget) => void;
+}
+
+function planningLabel(k?: string): string | null {
+  return PLANNING.find((p) => p.key === k)?.label ?? null;
 }
 
 function surfaceLabel(k: string): string {
@@ -69,30 +72,13 @@ function Thumbs({ photos }: { photos: UploadedImage[] }) {
   );
 }
 
-export function PlanningStep({ state, onPlanning, onEdit }: Props) {
+export function PlanningStep({ state, onEdit }: Props) {
   const allSurfaces = useMemo(() => [...new Set(state.rooms.flatMap((r) => r.surfaces))], [state.rooms]);
   const allPhotos = useMemo(() => state.rooms.flatMap((r) => r.photos), [state.rooms]);
+  const plan = planningLabel(state.planning);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
-          Wanneer wil je gaan schilderen?
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {PLANNING.map((p) => (
-            <button
-              key={p.key}
-              className={`rd-plan-chip${state.planning === p.key ? " is-on" : ""}`}
-              onClick={() => onPlanning(p.key)}
-              aria-pressed={state.planning === p.key}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div>
         <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
           Je intake in het kort
@@ -177,7 +163,7 @@ export function PlanningStep({ state, onPlanning, onEdit }: Props) {
           </Card>
 
           {/* Vraag */}
-          <Card label="Jouw vraag" onEdit={() => onEdit("vraag")}>
+          <Card label="Jouw vraag & planning" onEdit={() => onEdit("vraag")}>
             <div style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
               {state.mainQuestion || empty}
               {state.questionScope && (
@@ -186,6 +172,11 @@ export function PlanningStep({ state, onPlanning, onEdit }: Props) {
                 </span>
               )}
             </div>
+            {plan && (
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <Chip>Schilderen: {plan}</Chip>
+              </div>
+            )}
           </Card>
         </div>
       </div>

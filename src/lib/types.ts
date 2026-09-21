@@ -64,6 +64,11 @@ export interface SampleItem {
   verdict: Verdict;
   note?: string;
   photo?: UploadedImage;
+  /** Gezet als het een Roll-kleur is (gekozen uit het palet of een bundel). */
+  rollId?: string;
+  hex?: string;
+  /** De bundel waaruit deze kleur kwam (voor context bij de adviseur). */
+  packId?: string;
 }
 
 export interface IntakeState {
