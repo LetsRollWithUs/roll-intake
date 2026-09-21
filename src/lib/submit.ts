@@ -88,9 +88,27 @@ export async function submitIntake(
         verdict: s.verdict,
         note: s.note ?? null,
         photo,
+        rollId: s.rollId ?? null,
+        hex: s.hex ?? null,
+        packId: s.packId ?? null,
       };
     }),
   );
+
+  // has_samples afleiden uit de echte samples (het topniveau is alleen een ja/nee-poort).
+  const brandsLc = state.samples.map((s) => (s.brand || "").trim().toLowerCase());
+  const anyRoll = state.samples.some((s) => !!s.rollId) || brandsLc.includes("roll");
+  const anyOther = state.samples.some((s) => !s.rollId && (s.brand || "").trim() !== "" && (s.brand || "").trim().toLowerCase() !== "roll");
+  const hasSamplesResolved =
+    state.hasSamples === "nee" || state.hasSamples == null
+      ? state.hasSamples ?? null
+      : state.samples.length === 0
+      ? "ja"
+      : anyRoll && anyOther
+      ? "allebei"
+      : anyRoll
+      ? "roll"
+      : "andere";
 
   const inspirationImages = await Promise.all(
     state.inspirationImages.map((img) =>
@@ -111,7 +129,7 @@ export async function submitIntake(
     boldness: state.boldness ?? null,
     rooms,
     colors: state.colors,
-    has_samples: state.hasSamples ?? null,
+    has_samples: hasSamplesResolved,
     samples,
     pinterest_url: state.pinterestUrl || null,
     other_inspiration_url: state.otherInspirationUrl || null,
