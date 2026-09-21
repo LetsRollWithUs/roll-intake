@@ -63,6 +63,9 @@ Deno.serve(async (req) => {
     const val = bookingId ?? String(order.id);
     const { data: existing } = await admin.from("bookings").select("id").eq(col, val).maybeSingle();
     if (existing) await cancelBooking(admin, existing.id as string, order.status);
+    // Route 2: een advies-tegoed van deze order is bij refund/annulering niet meer inwisselbaar.
+    await admin.from("advice_credits").update({ status: "refunded" })
+      .eq("woo_order_id", String(order.id)).neq("status", "refunded");
   }
 
   return new Response("ok");
