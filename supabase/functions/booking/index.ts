@@ -5,7 +5,7 @@
 // - setup_webhook / delete_order (alleen @roll.nl-admin): beheer/opruimen.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "../_shared/klaviyo.ts";
-import { confirmPaid } from "../_shared/confirm.ts";
+import { confirmPaid, createCreditFromOrder } from "../_shared/confirm.ts";
 import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, colorNameToId, multiAddUrl, SHOP_BASE } from "../_shared/roll-products.ts";
 
 const cors = {
@@ -186,6 +186,50 @@ Deno.serve(async (req) => {
         await admin.from("intake").update({ advisor_followup_sent_at: new Date().toISOString() }).eq("id", body.intake_id);
       }
       return j({ ok: r.ok, detail: r.detail });
+    }
+
+    // Route 2: tegoed inwisselen voor een afspraak + bevestiging vuren (zoals de webhook bij route 1).
+    if (action === "book_credit") {
+      const { token, service_key, start, name, email, phone } = body;
+      const { data, error } = await admin.rpc("book_with_credit", {
+        p_token: token, p_service_key: service_key, p_start: start, p_name: name, p_email: email, p_phone: phone,
+      });
+      if (error) return j({ error: error.message }, 409);
+      const bookingId = (data as any)?.booking_id as string | undefined;
+      const already = (data as any)?.already === true;
+      if (bookingId && !already) {
+        const ctx = await buildBookingContext(admin, bookingId);
+        if (ctx) {
+          await klaviyoTrack(
+            "Advies flow",
+            ctx.profile,
+            { ...ctx.properties, stap: "bevestigd" },
+            appointmentProfileProps(ctx, { includeIntakeStatus: true }),
+            `${bookingId}:bevestigd:${Date.now()}`,
+            admin,
+          );
+        }
+        await notifyStylist(admin, bookingId, "nieuwe_boeking");
+      }
+      return j({ booking_id: bookingId, already });
+    }
+
+    // Route 2: planpagina bereikt via de Woo-retour (/plan?order=&key=). Verifieer de order bij Woo,
+    // maak zo nodig het tegoed aan, en geef het token terug zodat de planpagina verder kan.
+    if (action === "plan_resolve") {
+      const { order_id, order_key } = body;
+      if (!order_id || !order_key) return j({ error: "order_id en order_key vereist" }, 400);
+      const r = await fetch(`${WOO_URL}/wp-json/wc/v3/orders/${order_id}`, { headers: { Authorization: wooAuth } });
+      const o = await r.json();
+      if (!r.ok) return j({ error: "Order niet gevonden" }, 404);
+      if (o.order_key !== order_key) return j({ error: "Ongeldige sleutel" }, 403);
+      if (!["processing", "completed", "on-hold"].includes(o.status)) return j({ error: "Order nog niet betaald" }, 409);
+      if ((o.meta_data ?? []).some((m: any) => m.key === "_booking_id")) {
+        return j({ error: "Deze order heeft al een boeking" }, 409);
+      }
+      const credit = await createCreditFromOrder(admin, o);
+      if (!credit) return j({ error: "Geen advies-product in deze order" }, 422);
+      return j({ token: credit.manage_token });
     }
 
     // Admin-acties (@roll.nl)
