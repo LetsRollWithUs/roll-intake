@@ -30,7 +30,10 @@ export function PlanFlow() {
 
   const [token, setToken] = useState(params.get("token") ?? "");
   const [credit, setCredit] = useState<Credit | null>(null);
-  const [loadState, setLoadState] = useState<"loading" | "ok" | "notfound">("loading");
+  const [loadState, setLoadState] = useState<"loading" | "ok" | "notfound" | "needcode">("loading");
+  const [codeInput, setCodeInput] = useState("");
+  const [codeErr, setCodeErr] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
 
   const [step, setStep] = useState(1);
   const [service, setService] = useState("");
@@ -47,7 +50,20 @@ export function PlanFlow() {
 
   useEffect(() => lockDocument(), []);
 
-  // Token bepalen: direct uit de URL, of via de Woo-retour (?order=&key=).
+  const loadCredit = async (t: string): Promise<boolean> => {
+    const { data: c, error } = await supabase.rpc("credit_by_token", { p_token: t });
+    if (error || !c) return false;
+    const cr = c as Credit;
+    setToken(t);
+    setCredit(cr);
+    setName(cr.buyer_name ?? "");
+    setEmail(cr.buyer_email ?? "");
+    setPhone(cr.buyer_phone ?? "");
+    setLoadState("ok");
+    return true;
+  };
+
+  // Token bepalen: direct uit de URL, via de Woo-retour (?order=&key=), of anders code invoeren.
   useEffect(() => {
     (async () => {
       let t = params.get("token") ?? "";
@@ -59,19 +75,21 @@ export function PlanFlow() {
         });
         t = (data as { token?: string } | null)?.token ?? "";
       }
-      if (!t) { setLoadState("notfound"); return; }
-      setToken(t);
-      const { data: c, error } = await supabase.rpc("credit_by_token", { p_token: t });
-      if (error || !c) { setLoadState("notfound"); return; }
-      const cr = c as Credit;
-      setCredit(cr);
-      setName(cr.buyer_name ?? "");
-      setEmail(cr.buyer_email ?? "");
-      setPhone(cr.buyer_phone ?? "");
-      setLoadState("ok");
+      if (!t) { setLoadState("needcode"); return; }
+      if (!(await loadCredit(t))) setLoadState("notfound");
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const submitCode = async () => {
+    setCodeBusy(true); setCodeErr(null);
+    const { data } = await supabase.rpc("credit_by_code", { p_code: codeInput });
+    const t = (data as { token?: string } | null)?.token;
+    if (!t) { setCodeBusy(false); setCodeErr("Deze code kennen we niet. Controleer 'm en probeer opnieuw."); return; }
+    const ok = await loadCredit(t);
+    setCodeBusy(false);
+    if (!ok) setCodeErr("Er ging iets mis bij het laden. Probeer het opnieuw.");
+  };
 
   const loadSlots = async (svc: string) => {
     setLoadingSlots(true);
@@ -119,6 +137,29 @@ export function PlanFlow() {
 
   if (loadState === "loading")
     return shell(<div style={pad}><p style={{ fontSize: 14, color: "rgba(47,33,65,.6)" }}>Laden...</p></div>);
+
+  if (loadState === "needcode")
+    return shell(
+      <div style={pad}>
+        <div style={{ fontWeight: 600, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: PINK }}>Roll · Kleuradvies</div>
+        <h1 style={{ font: "800 26px/1.1 Figtree", letterSpacing: "-.02em", margin: "8px 0 6px" }}>Kleuradvies cadeau gekregen?</h1>
+        <p style={{ fontSize: 15, color: "rgba(47,33,65,.7)", margin: "0 0 16px" }}>
+          Vul de code van je cadeaukaart in, dan plan je meteen je gesprek.
+        </p>
+        <input
+          value={codeInput}
+          onChange={(e) => setCodeInput(e.target.value)}
+          placeholder="ROLL-XXXX-XXXX"
+          autoCapitalize="characters"
+          style={{ width: "100%", padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "600 16px Figtree", letterSpacing: ".04em", outline: "none", textTransform: "uppercase" }}
+        />
+        {codeErr && <p style={{ color: PINK, fontWeight: 600, fontSize: 14, marginTop: 10 }}>{codeErr}</p>}
+        <button onClick={submitCode} disabled={codeBusy || codeInput.trim().length < 4}
+          style={{ width: "100%", height: 52, marginTop: 14, border: 0, borderRadius: 99, background: codeBusy || codeInput.trim().length < 4 ? AUB_DIM : AUB, color: "#fff", font: "700 16px Figtree", cursor: "pointer" }}>
+          {codeBusy ? "Bezig..." : "Ga verder"}
+        </button>
+      </div>,
+    );
 
   if (loadState === "notfound" || !credit)
     return shell(

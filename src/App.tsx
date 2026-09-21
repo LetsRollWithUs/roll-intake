@@ -11,6 +11,7 @@ import { ColorsSamplesStep } from "@/components/steps/ColorsSamplesStep";
 import { InspiratieStep, isUrlish } from "@/components/steps/InspiratieStep";
 import { VraagStep } from "@/components/steps/VraagStep";
 import { PlanningStep } from "@/components/steps/PlanningStep";
+import { supabase } from "@/lib/supabase";
 import { useIntake, loadScreen, saveScreen, clearIntakeSession } from "@/lib/store";
 import { submitIntake, saveConceptLead } from "@/lib/submit";
 import { lockDocument } from "@/lib/lock-document";
@@ -95,7 +96,9 @@ export function App() {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [apptStart, setApptStart] = useState<string | null>(null);
   const resumed = useRef(false);
+  const prefilled = useRef(false);
 
   useEffect(() => lockDocument(), []);
 
@@ -112,6 +115,23 @@ export function App() {
   useEffect(() => {
     if (screen !== "intro" && screen !== "done") saveScreen(screen);
   }, [screen]);
+
+  // Boekingslink: haal de afspraak op, vul het e-mailadres voor (als nog leeg) en toon de datum.
+  useEffect(() => {
+    if (!bookingId || prefilled.current) return;
+    prefilled.current = true;
+    supabase.functions.invoke("booking", { body: { action: "status", booking_id: bookingId } }).then(({ data }) => {
+      const d = data as { start_at?: string; customer_email?: string } | null;
+      if (!d) return;
+      if (d.start_at) setApptStart(d.start_at);
+      if (d.customer_email && !state.contactEmail.trim()) update({ contactEmail: d.customer_email });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
+
+  const apptLabel = apptStart
+    ? new Intl.DateTimeFormat("nl-NL", { timeZone: "Europe/Amsterdam", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(apptStart))
+    : null;
 
   const setRooms = (updater: (prev: Room[]) => Room[]) =>
     update((prev) => ({ rooms: updater(prev.rooms) }));
@@ -133,7 +153,9 @@ export function App() {
             : "Haal alles uit je 30 minuten kleuradvies"
         }
         sub={
-          isPost
+          bookingId && apptLabel
+            ? `Je afspraak staat op ${apptLabel}. Vul je intake bij voorkeur daarvóór in, dan kan je kleuradviseur zich goed voorbereiden.`
+            : isPost
             ? "Je hebt al samples getest. Vertel ons wat je thuis ziet, dan helpen we je in het gesprek de definitieve kleur te kiezen."
             : "Beantwoord een paar korte vragen en laat je ruimtes zien. Zo kan je kleuradviseur zich vooraf voorbereiden en gebruiken we het gesprek om echt keuzes te maken."
         }

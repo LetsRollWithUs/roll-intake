@@ -5,6 +5,14 @@ import { postAlertWebhook } from "./alerts.ts";
 
 const ADVICE_PRODUCT_ID = 14753; // online kleuradvies
 
+// Korte, leesbare cadeaucode (geen verwarrende tekens): ROLL-XXXX-XXXX.
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function genRedeemCode(): string {
+  const pick = (n: number) =>
+    Array.from({ length: n }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join("");
+  return `ROLL-${pick(4)}-${pick(4)}`;
+}
+
 // Route 2: bij een directe aankoop (order met het advies-product, zonder _booking_id) maken we
 // een advies-tegoed en sturen we de klant de "plan je afspraak"-link. Idempotent op woo_order_id.
 export async function createCreditFromOrder(admin: any, order: any): Promise<{ manage_token: string } | null> {
@@ -14,14 +22,22 @@ export async function createCreditFromOrder(admin: any, order: any): Promise<{ m
   const billing = order.billing ?? {};
   const name = [billing.first_name, billing.last_name].filter(Boolean).join(" ").trim() || null;
 
-  // Upsert: bestaat het tegoed al, dan niets overschrijven.
+  // Upsert: bestaat het tegoed al, dan niets overschrijven. Nieuwe krijgen een cadeaucode.
   await admin.from("advice_credits").upsert(
-    { woo_order_id: wooId, buyer_name: name, buyer_email: billing.email ?? null, buyer_phone: billing.phone ?? null },
+    { woo_order_id: wooId, buyer_name: name, buyer_email: billing.email ?? null, buyer_phone: billing.phone ?? null, redeem_code: genRedeemCode() },
     { onConflict: "woo_order_id", ignoreDuplicates: true },
   );
-  const { data: credit } = await admin
+  let { data: credit } = await admin
     .from("advice_credits").select("*").eq("woo_order_id", wooId).maybeSingle();
   if (!credit) return null;
+  // Ontbreekt de code nog (oud tegoed)? Alsnog toekennen, met retry bij een botsing.
+  if (!credit.redeem_code) {
+    for (let i = 0; i < 5 && !credit.redeem_code; i++) {
+      const { data: upd } = await admin.from("advice_credits")
+        .update({ redeem_code: genRedeemCode() }).eq("id", credit.id).is("redeem_code", null).select("*").maybeSingle();
+      if (upd?.redeem_code) credit = upd;
+    }
+  }
 
   // Plan-mail één keer sturen (zolang nog niet ingepland).
   if (!credit.plan_mailed_at && credit.status === "paid" && credit.buyer_email) {
@@ -29,7 +45,7 @@ export async function createCreditFromOrder(admin: any, order: any): Promise<{ m
     await klaviyoTrack(
       "Advies flow",
       { email: credit.buyer_email, first_name: credit.buyer_name ?? undefined },
-      { stap: "plan_je_afspraak", plan_url: planUrl, service_label: "Online kleuradvies" },
+      { stap: "plan_je_afspraak", plan_url: planUrl, redeem_code: credit.redeem_code ?? null, service_label: "Online kleuradvies" },
       {},
       `${wooId}:plan_je_afspraak`,
       admin,

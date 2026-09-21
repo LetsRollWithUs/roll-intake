@@ -73,13 +73,14 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const { data: b } = await admin
         .from("bookings")
-        .select("id,status,woo_order_id,start_at, services(key)")
+        .select("id,status,woo_order_id,start_at,customer_email, services(key)")
         .eq("id", body.booking_id)
         .maybeSingle();
       if (!b) return j({ error: "Niet gevonden" }, 404);
       const mode = (b as any).services?.key ?? null;
-      if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at, mode });
-      if (b.status === "paid_unplaced") return j({ status: "paid_unplaced", start_at: b.start_at, mode });
+      const email = (b as any).customer_email ?? null;
+      if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at, mode, customer_email: email });
+      if (b.status === "paid_unplaced") return j({ status: "paid_unplaced", start_at: b.start_at, mode, customer_email: email });
       if (b.woo_order_id) {
         const r = await fetch(`${WOO_URL}/wp-json/wc/v3/orders/${b.woo_order_id}`, {
           headers: { Authorization: wooAuth },
