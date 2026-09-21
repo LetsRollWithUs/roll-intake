@@ -3,7 +3,27 @@
 import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist, INTAKE_BASE } from "./klaviyo.ts";
 import { postAlertWebhook } from "./alerts.ts";
 
-const ADVICE_PRODUCT_ID = 14753; // online kleuradvies
+// Online kleuradvies + het cadeauproduct. Uitbreidbaar via secret ADVICE_PRODUCT_IDS="14753,<gift-id>".
+const ADVICE_PRODUCT_IDS: number[] = (Deno.env.get("ADVICE_PRODUCT_IDS") ?? "14753")
+  .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
+
+// Leest de gelegenheid + een persoonlijk bericht uit de order (cadeauproduct).
+function readGift(order: any): { occasion: string | null; message: string | null } {
+  let occasion: string | null = null;
+  let message: string | null = null;
+  const om = order.meta_data ?? [];
+  occasion = om.find((m: any) => m.key === "_gift_occasion")?.value ?? null;
+  message = om.find((m: any) => m.key === "_gift_message")?.value ?? null;
+  for (const li of order.line_items ?? []) {
+    for (const m of li.meta_data ?? []) {
+      const k = String(m.display_key ?? m.key ?? "").toLowerCase();
+      const v = m.display_value ?? m.value ?? null;
+      if (!occasion && (k.includes("gelegenheid") || k.includes("occasion"))) occasion = v;
+      if (!message && (k.includes("bericht") || k.includes("boodschap") || k.includes("message"))) message = v;
+    }
+  }
+  return { occasion: occasion || null, message: message || null };
+}
 
 // Korte, leesbare cadeaucode (geen verwarrende tekens): ROLL-XXXX-XXXX.
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -16,15 +36,19 @@ function genRedeemCode(): string {
 // Route 2: bij een directe aankoop (order met het advies-product, zonder _booking_id) maken we
 // een advies-tegoed en sturen we de klant de "plan je afspraak"-link. Idempotent op woo_order_id.
 export async function createCreditFromOrder(admin: any, order: any): Promise<{ manage_token: string } | null> {
-  const hasAdvice = (order.line_items ?? []).some((li: any) => Number(li.product_id) === ADVICE_PRODUCT_ID);
+  const hasAdvice = (order.line_items ?? []).some((li: any) => ADVICE_PRODUCT_IDS.includes(Number(li.product_id)));
   if (!hasAdvice) return null;
   const wooId = String(order.id);
   const billing = order.billing ?? {};
   const name = [billing.first_name, billing.last_name].filter(Boolean).join(" ").trim() || null;
+  const gift = readGift(order);
 
   // Upsert: bestaat het tegoed al, dan niets overschrijven. Nieuwe krijgen een cadeaucode.
   await admin.from("advice_credits").upsert(
-    { woo_order_id: wooId, buyer_name: name, buyer_email: billing.email ?? null, buyer_phone: billing.phone ?? null, redeem_code: genRedeemCode() },
+    {
+      woo_order_id: wooId, buyer_name: name, buyer_email: billing.email ?? null, buyer_phone: billing.phone ?? null,
+      redeem_code: genRedeemCode(), occasion: gift.occasion, gift_message: gift.message,
+    },
     { onConflict: "woo_order_id", ignoreDuplicates: true },
   );
   let { data: credit } = await admin
