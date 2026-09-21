@@ -2,7 +2,7 @@
 // Betaald (processing/completed/on-hold) -> confirmed. Geannuleerd/mislukt -> cancelled.
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { confirmPaid, cancelBooking } from "../_shared/confirm.ts";
+import { confirmPaid, cancelBooking, createCreditFromOrder } from "../_shared/confirm.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -52,6 +52,9 @@ Deno.serve(async (req) => {
     // anders herplaatsen bij een andere styliste, anders paid_unplaced + alert.
     if (existing && existing.status !== "confirmed") {
       await confirmPaid(admin, existing.id as string);
+    } else if (!existing && !bookingId) {
+      // Directe aankoop (route 2): geen boeking bij deze order -> maak een advies-tegoed + plan-mail.
+      await createCreditFromOrder(admin, order);
     }
   } else if (dead) {
     // Refund/annulering: ook een reeds BEVESTIGDE afspraak wordt nu geannuleerd (slot komt vrij).

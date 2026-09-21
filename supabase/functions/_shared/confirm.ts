@@ -1,7 +1,43 @@
 // Bevestigt een betaalde boeking via confirm_paid_booking en vuurt het event.
 // Gedeeld door woo-webhook en de statuspoll, zodat beide paden identiek gedragen.
-import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "./klaviyo.ts";
+import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist, INTAKE_BASE } from "./klaviyo.ts";
 import { postAlertWebhook } from "./alerts.ts";
+
+const ADVICE_PRODUCT_ID = 14753; // online kleuradvies
+
+// Route 2: bij een directe aankoop (order met het advies-product, zonder _booking_id) maken we
+// een advies-tegoed en sturen we de klant de "plan je afspraak"-link. Idempotent op woo_order_id.
+export async function createCreditFromOrder(admin: any, order: any): Promise<{ manage_token: string } | null> {
+  const hasAdvice = (order.line_items ?? []).some((li: any) => Number(li.product_id) === ADVICE_PRODUCT_ID);
+  if (!hasAdvice) return null;
+  const wooId = String(order.id);
+  const billing = order.billing ?? {};
+  const name = [billing.first_name, billing.last_name].filter(Boolean).join(" ").trim() || null;
+
+  // Upsert: bestaat het tegoed al, dan niets overschrijven.
+  await admin.from("advice_credits").upsert(
+    { woo_order_id: wooId, buyer_name: name, buyer_email: billing.email ?? null, buyer_phone: billing.phone ?? null },
+    { onConflict: "woo_order_id", ignoreDuplicates: true },
+  );
+  const { data: credit } = await admin
+    .from("advice_credits").select("*").eq("woo_order_id", wooId).maybeSingle();
+  if (!credit) return null;
+
+  // Plan-mail één keer sturen (zolang nog niet ingepland).
+  if (!credit.plan_mailed_at && credit.status === "paid" && credit.buyer_email) {
+    const planUrl = `${INTAKE_BASE}/plan?token=${credit.manage_token}`;
+    await klaviyoTrack(
+      "Advies flow",
+      { email: credit.buyer_email, first_name: credit.buyer_name ?? undefined },
+      { stap: "plan_je_afspraak", plan_url: planUrl, service_label: "Online kleuradvies" },
+      {},
+      `${wooId}:plan_je_afspraak`,
+      admin,
+    );
+    await admin.from("advice_credits").update({ plan_mailed_at: new Date().toISOString() }).eq("id", credit.id);
+  }
+  return { manage_token: credit.manage_token };
+}
 
 export interface ConfirmResult {
   outcome: "confirmed" | "reassigned" | "already_confirmed" | "paid_unplaced" | "not_found" | "error";

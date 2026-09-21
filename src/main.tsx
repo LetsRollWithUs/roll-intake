@@ -8,6 +8,7 @@ import { Dashboard } from "./dashboard/Dashboard";
 import { BookFlow } from "./booking/BookFlow";
 import { BookDone } from "./booking/BookDone";
 import { ManageBooking } from "./booking/ManageBooking";
+import { PlanFlow } from "./booking/PlanFlow";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -17,6 +18,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/boek" element={<BookFlow />} />
         <Route path="/boek/klaar" element={<BookDone />} />
         <Route path="/boek/beheer" element={<ManageBooking />} />
+        <Route path="/plan" element={<PlanFlow />} />
         <Route path="/*" element={<App />} />
       </Routes>
     </BrowserRouter>
