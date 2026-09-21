@@ -9,6 +9,7 @@ import { AdvisorsAdmin } from "./AdvisorsAdmin";
 import { AgendaPage } from "./AgendaPage";
 import { BoekingenPage } from "./BoekingenPage";
 import { AlertsPage } from "./AlertsPage";
+import { CadeaucodesPage } from "./CadeaucodesPage";
 
 export function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
@@ -68,6 +69,9 @@ export function Dashboard() {
                 <Link to="/beheer/meldingen" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
                   Meldingen
                 </Link>
+                <Link to="/beheer/cadeaucodes" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
+                  Cadeaucodes
+                </Link>
                 <Link to="/beheer/adviseurs" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
                   Adviseurs
                 </Link>
@@ -108,6 +112,7 @@ export function Dashboard() {
       <Route path="agenda" element={<AgendaPage />} />
       <Route path="adviseurs" element={<AdvisorsAdmin />} />
       <Route path="meldingen" element={<AlertsPage />} />
+      <Route path="cadeaucodes" element={<CadeaucodesPage />} />
       <Route path=":id" element={<IntakeDetail />} />
     </Routes>,
   );
