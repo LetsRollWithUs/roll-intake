@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
     .from("advice_credits")
     .select("id,manage_token,buyer_name,buyer_email")
     .eq("status", "paid")
+    .eq("is_gift", false)
     .is("plan_reminded_at", null)
     .not("buyer_email", "is", null)
     .lt("created_at", cutoff)

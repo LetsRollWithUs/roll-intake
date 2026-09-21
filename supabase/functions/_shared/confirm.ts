@@ -6,6 +6,9 @@ import { postAlertWebhook } from "./alerts.ts";
 // Online kleuradvies + het cadeauproduct. Uitbreidbaar via secret ADVICE_PRODUCT_IDS="14753,<gift-id>".
 const ADVICE_PRODUCT_IDS: number[] = (Deno.env.get("ADVICE_PRODUCT_IDS") ?? "14753")
   .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
+// Cadeauproduct(en): tegoed + code, maar GEEN digitale plan-mail (Roll stuurt een fysieke kaart met de code).
+const GIFT_PRODUCT_IDS: number[] = (Deno.env.get("GIFT_PRODUCT_IDS") ?? "")
+  .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
 
 // Leest de gelegenheid + een persoonlijk bericht uit de order (cadeauproduct).
 function readGift(order: any): { occasion: string | null; message: string | null } {
@@ -42,12 +45,13 @@ export async function createCreditFromOrder(admin: any, order: any): Promise<{ m
   const billing = order.billing ?? {};
   const name = [billing.first_name, billing.last_name].filter(Boolean).join(" ").trim() || null;
   const gift = readGift(order);
+  const isGift = (order.line_items ?? []).some((li: any) => GIFT_PRODUCT_IDS.includes(Number(li.product_id)));
 
   // Upsert: bestaat het tegoed al, dan niets overschrijven. Nieuwe krijgen een cadeaucode.
   await admin.from("advice_credits").upsert(
     {
       woo_order_id: wooId, buyer_name: name, buyer_email: billing.email ?? null, buyer_phone: billing.phone ?? null,
-      redeem_code: genRedeemCode(), occasion: gift.occasion, gift_message: gift.message,
+      redeem_code: genRedeemCode(), occasion: gift.occasion, gift_message: gift.message, is_gift: isGift,
     },
     { onConflict: "woo_order_id", ignoreDuplicates: true },
   );
@@ -63,8 +67,8 @@ export async function createCreditFromOrder(admin: any, order: any): Promise<{ m
     }
   }
 
-  // Plan-mail één keer sturen (zolang nog niet ingepland).
-  if (!credit.plan_mailed_at && credit.status === "paid" && credit.buyer_email) {
+  // Plan-mail één keer sturen (zolang nog niet ingepland). Bij een cadeau NIET: Roll stuurt de fysieke kaart.
+  if (!credit.plan_mailed_at && credit.status === "paid" && credit.buyer_email && !credit.is_gift) {
     const planUrl = `${INTAKE_BASE}/plan?token=${credit.manage_token}`;
     await klaviyoTrack(
       "Advies flow",
