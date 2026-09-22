@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
       const { data: it } = await admin
         .from("intake")
-        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,booking_id")
+        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,booking_id")
         .eq("id", body.intake_id)
         .maybeSingle();
       if (!it || !(it as any).contact_email) return j({ ok: false, skipped: "geen intake/e-mail" });
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
           const po = SAMPLE_POUCH_IDS[colorId];
           if (po && !seenPo.has(po)) { seenPo.add(po); pouchPairs.push([po, 1]); }
         }
-        return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, product: a.product ?? "", liters: a.liters ?? "" };
+        return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, product: a.product ?? "", liters: a.liters ?? "", m2: a.m2 ?? "" };
       });
       const outcome = row.advisor_outcome ?? null;
       const route = outcome === "samples_needed" ? "samples" : outcome === "color_chosen" ? "verf" : "followup";
@@ -205,6 +205,7 @@ Deno.serve(async (req) => {
         booking_id: row.booking_id ?? null,
         outcome,
         route,
+        gesprekssamenvatting: row.advisor_summary ?? null,
         advice: enriched,
         samples_stickers_url: multiAddUrl(stickerPairs, "cart"),
         samples_testers_url: multiAddUrl(pouchPairs, "cart"),
