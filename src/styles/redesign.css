@@ -86,7 +86,9 @@ body.rd-theme { --primary: 266 33% 19%; --primary-foreground: 0 0% 100%; --accen
 .rd-chapter-label { font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; opacity: .85; }
 
 /* ── Knoppen ───────────────────────────────────────────────────────────── */
-.rd-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 99px; cursor: pointer; font-weight: 700; font-size: 16px; min-height: 52px; padding: 0 22px; width: 100%; transition: background-color .2s ease, opacity .2s ease, transform .15s ease; }
+.rd-btn { display: inline-flex; align-items: center; justify-content: center; text-align: center; gap: 6px; border: 0; border-radius: 99px; cursor: pointer; font-weight: 700; font-size: 16px; min-height: 52px; padding: 0 22px; width: 100%; transition: background-color .2s ease, opacity .2s ease, transform .15s ease; }
+/* Link-buttons die als inline-block gestyled zijn houden hun tekst gecentreerd en hugghen de inhoud. */
+a.rd-btn { display: inline-flex; width: auto; text-decoration: none; }
 .rd-btn:active { transform: scale(.985); }
 .rd-btn:disabled { cursor: not-allowed; }
 .rd-btn-primary { background: var(--rd-aubergine); color: #fff; }
