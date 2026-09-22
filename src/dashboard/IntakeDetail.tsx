@@ -103,6 +103,8 @@ export function IntakeDetail() {
   const [buyMoment, setBuyMoment] = useState<string>("");
   const [nextAction, setNextAction] = useState("");
   const [offerUrl, setOfferUrl] = useState("");
+  const [summary, setSummary] = useState("");
+  const [offerNotes, setOfferNotes] = useState("");
   const [followupSentAt, setFollowupSentAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -124,13 +126,15 @@ export function IntakeDetail() {
         setBuyMoment(r.advisor_buy_moment ?? "");
         setNextAction(r.advisor_next_action ?? "");
         setOfferUrl(r.advisor_offer_url ?? "");
+        setSummary(r.advisor_summary ?? "");
+        setOfferNotes(r.advisor_offer_notes ?? "");
         setFollowupSentAt(r.advisor_followup_sent_at ?? null);
         // Advies-regels: bewaard, anders voorgevuld met de ruimtes uit de intake.
         const saved = r.advisor_advice ?? [];
         if (saved.length > 0) setAdvice(saved);
         else
           setAdvice(
-            (r.rooms ?? []).map((rm) => ({ room: rm.label, color: "", product: "Muurverf", liters: "" })),
+            (r.rooms ?? []).map((rm) => ({ room: rm.label, color: "", product: "Muurverf", liters: "", m2: "" })),
           );
       }
       setLoading(false);
@@ -140,11 +144,11 @@ export function IntakeDetail() {
   const setAdviceRow = (i: number, patch: Partial<AdviceRow>) =>
     setAdvice((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addAdviceRow = () =>
-    setAdvice((prev) => [...prev, { room: "", color: "", product: "Muurverf", liters: "" }]);
+    setAdvice((prev) => [...prev, { room: "", color: "", product: "Muurverf", liters: "", m2: "" }]);
   const removeAdviceRow = (i: number) => setAdvice((prev) => prev.filter((_, idx) => idx !== i));
 
   const persist = async () => {
-    const cleanAdvice = advice.filter((a) => a.room.trim() || a.color.trim() || a.liters.trim());
+    const cleanAdvice = advice.filter((a) => a.room.trim() || a.color.trim() || a.liters.trim() || (a.m2 ?? "").trim());
     return supabase
       .from("intake")
       .update({
@@ -156,6 +160,8 @@ export function IntakeDetail() {
         advisor_buy_moment: buyMoment || null,
         advisor_next_action: nextAction || null,
         advisor_offer_url: offerUrl.trim() || null,
+        advisor_summary: summary.trim() || null,
+        advisor_offer_notes: offerNotes.trim() || null,
         advisor_updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -289,10 +295,27 @@ export function IntakeDetail() {
           </div>
         </div>
 
-        {/* Advies per ruimte */}
+        {/* Gesprekssamenvatting (kan mee in de opvolgmail) */}
+        <div style={{ marginTop: 14 }}>
+          <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
+            Gesprekssamenvatting
+          </div>
+          <textarea
+            className="rd-input"
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            placeholder="Korte samenvatting van het gesprek voor de klant. Bijv. de richting, waarom deze kleuren passen en wat de volgende stap is."
+            style={{ height: 110, paddingTop: 12, resize: "vertical", lineHeight: 1.45 }}
+          />
+          <p className="rd-sub" style={{ marginTop: 4 }}>
+            Deze samenvatting kan mee in de opvolgmail naar de klant.
+          </p>
+        </div>
+
+        {/* Offerte-input voor Roll: advies per ruimte */}
         <div style={{ marginTop: 14 }}>
           <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 8 }}>
-            Geadviseerde kleuren per ruimte
+            Offerte-input: geadviseerde kleuren per ruimte
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {advice.map((a, i) => (
@@ -324,6 +347,15 @@ export function IntakeDetail() {
                     </option>
                   ))}
                 </select>
+                <input
+                  className="rd-input"
+                  value={a.m2 ?? ""}
+                  onChange={(e) => setAdviceRow(i, { m2: e.target.value })}
+                  placeholder="m²"
+                  inputMode="decimal"
+                  aria-label="Oppervlakte in m²"
+                  style={{ flex: "0 1 70px", minWidth: 0, height: 44 }}
+                />
                 <input
                   className="rd-input"
                   value={a.liters}
@@ -377,6 +409,20 @@ export function IntakeDetail() {
             value={offerUrl}
             onChange={(e) => setOfferUrl(e.target.value)}
             placeholder="https://roll.nl/offerte/... (laat leeg → klant gaat naar /prijsopgave)"
+          />
+        </div>
+
+        {/* Offerte-notitie voor het Roll-kantoor (intern) */}
+        <div style={{ marginTop: 12 }}>
+          <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
+            Offerte-notitie voor Roll (intern)
+          </div>
+          <textarea
+            className="rd-input"
+            value={offerNotes}
+            onChange={(e) => setOfferNotes(e.target.value)}
+            placeholder="Alles wat Roll nodig heeft om de offerte op te maken. Bijv. bijzondere wensen, aantal m² totaal, gewenste korting, primer nodig, leverwensen."
+            style={{ height: 90, paddingTop: 12, resize: "vertical", lineHeight: 1.45 }}
           />
         </div>
 

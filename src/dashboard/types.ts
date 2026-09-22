@@ -74,6 +74,8 @@ export interface IntakeRow {
   advisor_next_action: string | null;
   advisor_offer_url: string | null;
   advisor_followup_sent_at: string | null;
+  advisor_summary: string | null;
+  advisor_offer_notes: string | null;
 }
 
 export interface AdviceRow {
@@ -81,4 +83,5 @@ export interface AdviceRow {
   color: string;
   product: string;
   liters: string;
+  m2?: string;
 }
