@@ -226,6 +226,48 @@ Deno.serve(async (req) => {
       return j({ ok: r.ok, detail: r.detail });
     }
 
+    // Aankopen van een klant ophalen uit WooCommerce (op e-mail). Alleen adviseurs.
+    // Geeft een samenvatting: totaal besteed, aantal samples/producten en de orders.
+    if (action === "customer_orders") {
+      const caller = createClient(SB_URL, SB_ANON, {
+        global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+        auth: { persistSession: false },
+      });
+      const { data: isAdv } = await caller.rpc("is_advisor");
+      if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
+      const email = String(body.email ?? "").trim().toLowerCase();
+      if (!/.+@.+\..+/.test(email)) return j({ ok: true, orders: [], total_spent: 0, order_count: 0, sample_items: 0, product_items: 0 });
+
+      const res = await fetch(
+        `${WOO_URL}/wp-json/wc/v3/orders?search=${encodeURIComponent(email)}&per_page=25&orderby=date&order=desc`,
+        { headers: { Authorization: wooAuth } },
+      );
+      if (!res.ok) return j({ error: "Kon aankopen niet ophalen" }, 502);
+      const raw = await res.json();
+      const paidStatuses = ["processing", "completed", "on-hold"];
+      const isSample = (sku: string) => /^SMP[-_]/i.test(sku || "");
+
+      let totalSpent = 0, sampleItems = 0, productItems = 0;
+      const orders = (Array.isArray(raw) ? raw : [])
+        .filter((o: any) => String(o.billing?.email ?? "").toLowerCase() === email)
+        .filter((o: any) => paidStatuses.includes(o.status))
+        .map((o: any) => {
+          const items = (o.line_items ?? []).map((li: any) => {
+            const qty = Number(li.quantity ?? 0);
+            const kind = isSample(li.sku) ? "sample" : "product";
+            if (kind === "sample") sampleItems += qty; else productItems += qty;
+            return { name: li.name ?? "", sku: li.sku ?? "", qty, total: Number(li.total ?? 0), kind };
+          });
+          totalSpent += Number(o.total ?? 0);
+          return {
+            id: o.id, number: o.number ?? String(o.id), date: o.date_created ?? null,
+            status: o.status, total: Number(o.total ?? 0), currency: o.currency ?? "EUR", items,
+          };
+        });
+
+      return j({ ok: true, orders, order_count: orders.length, total_spent: totalSpent, sample_items: sampleItems, product_items: productItems });
+    }
+
     // Route 2: tegoed inwisselen voor een afspraak + bevestiging vuren (zoals de webhook bij route 1).
     if (action === "book_credit") {
       const { token, service_key, start, name, email, phone } = body;
