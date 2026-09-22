@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { deriveExpected, daysSince, leadScore, TEMP_LABEL, TOOLKIT_DAYS, todayKey, planningLabel } from "./lead";
+import { deriveExpected, leadScore, TEMP_LABEL, todayKey, planningLabel } from "./lead";
 
 interface Card {
   id: string;
@@ -124,7 +124,6 @@ export function KanbanPage() {
     const open = c.kanban_stage !== "verf" && c.kanban_stage !== "afgehaakt";
     const expected = c.expected_purchase_at ?? (past ? deriveExpected(c.start_at, c.planning) : null);
     const overdue = open && past && !!expected && expected < todayKey();
-    const toolkitDue = open && past && daysSince(c.start_at) >= TOOLKIT_DAYS && !c.toolkit_offered_at;
     const lead = leadScore({ rooms: c.rooms, planning: c.planning, painter: c.painter });
     const t = TEMP_LABEL[lead.temp];
     return (
@@ -133,7 +132,7 @@ export function KanbanPage() {
         draggable
         onDragStart={(e) => { setDragId(c.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.id); }}
         onDragEnd={() => { setDragId(null); setOver(null); }}
-        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/beheer/klant/${c.id}`); }}
+        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/beheer/gesprek/${c.id}`); }}
         className="rd-card-white"
         style={{ padding: "12px 14px", cursor: "grab", opacity: dragging ? 0.45 : 1, boxShadow: "0 1px 2px rgba(47,33,65,.06), 0 6px 18px rgba(47,33,65,.06)", border: overdue ? "1px solid var(--rd-pink-dark)" : "1px solid transparent" }}
         title="Klik voor het klantdossier, sleep om de fase te wijzigen"
@@ -166,9 +165,7 @@ export function KanbanPage() {
           {c.upsell_offered && <Badge tone="pink">upsell{c.upsell_booked ? " ✓" : ""}</Badge>}
           {c.painter === "schilder" && <Badge tone="warn">schilder</Badge>}
           {c.painter === "deels" && <Badge>deels schilder</Badge>}
-          {c.toolkit_offered_at && <Badge>toolkit aangeboden</Badge>}
           {overdue && <Badge tone="warn">verwachte datum verstreken</Badge>}
-          {toolkitDue && !overdue && <Badge tone="pink">{TOOLKIT_DAYS}+ dgn: toolkit?</Badge>}
           {c.status === "paid_unplaced" && <Badge tone="warn">plan nog in</Badge>}
         </div>
 
