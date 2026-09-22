@@ -19,6 +19,10 @@ interface Row {
 interface StylistRow { id: string; name: string; discount_code: string | null; active: boolean }
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(n || 0);
+const monthLabel = (iso: string) =>
+  new Intl.DateTimeFormat("nl-NL", { timeZone: "Europe/Amsterdam", month: "long", year: "numeric" }).format(new Date(iso));
+const monthKey = (iso: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit" }).format(new Date(iso));
 const STATUS: Record<string, { label: string; color: string }> = {
   te_controleren: { label: "Te controleren", color: "rgba(47,33,65,.55)" },
   uitbetaalbaar: { label: "Uitbetaalbaar", color: "var(--rd-pink-dark)" },
@@ -96,6 +100,22 @@ export function CommissiePage() {
     return [...map.values()].sort((a, b) => b.open - a.open);
   }, [rows]);
 
+  // Per maand × styliste (uitbetaling): som van de commissie, exclusief vervallen.
+  const byMonth = useMemo(() => {
+    const map = new Map<string, { key: string; month: string; name: string; amount: number; count: number }>();
+    for (const r of rows) {
+      if (r.status === "vervallen") continue;
+      const mk = monthKey(r.created_at);
+      const key = mk + "|" + (r.stylist_id ?? "?");
+      const cur = map.get(key) ?? { key, month: monthLabel(r.created_at), name: r.stylists?.name ?? "Onbekend", amount: 0, count: 0 };
+      cur.amount += r.amount;
+      cur.count += 1;
+      map.set(key, cur);
+    }
+    // Nieuwste maand eerst, daarna op bedrag.
+    return [...map.values()].sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : b.amount - a.amount));
+  }, [rows]);
+
   if (loading) return <p className="rd-sub">Laden...</p>;
 
   return (
@@ -121,6 +141,26 @@ export function CommissiePage() {
           </div>
         ))}
       </div>
+
+      {/* Per maand (uitbetaling) */}
+      {byMonth.length > 0 && (
+        <div className="rd-card-white" style={{ marginBottom: 18 }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Per maand (uitbetaling)</div>
+          <p className="rd-sub" style={{ marginTop: 0 }}>Commissie per kalendermaand, over de verfomzet na korting en excl. btw. Uitbetaling per maand.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {byMonth.map((m) => (
+              <div key={m.key} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", borderTop: "1px solid var(--rd-line)", paddingTop: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14 }}>
+                  <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{m.month}</span>
+                  {isAdmin && <span style={{ opacity: 0.7 }}> · {m.name}</span>}
+                  <span style={{ opacity: 0.55, fontSize: 12 }}> · {m.count} order(s)</span>
+                </span>
+                <strong style={{ fontVariantNumeric: "tabular-nums" }}>{euro(m.amount)}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Codes per styliste (alleen beheerder) */}
       {isAdmin && (

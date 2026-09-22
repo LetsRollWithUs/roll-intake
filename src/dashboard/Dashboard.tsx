@@ -77,6 +77,9 @@ export function Dashboard() {
             </Link>
             {isAdmin && (
               <>
+                <Link to="/beheer/start" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
+                  Als styliste
+                </Link>
                 <Link to="/beheer/meldingen" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
                   Meldingen
                 </Link>
@@ -119,6 +122,7 @@ export function Dashboard() {
   return shell(
     <Routes>
       <Route index element={isAdmin ? <IntakeList /> : <StylistHome />} />
+      <Route path="start" element={<StylistHome />} />
       <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="commissie" element={<CommissiePage />} />
       <Route path="intakes" element={<IntakeList />} />
