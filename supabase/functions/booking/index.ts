@@ -7,6 +7,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "../_shared/klaviyo.ts";
 import { confirmPaid, createCreditFromOrder } from "../_shared/confirm.ts";
 import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, PACK_PRODUCT_IDS, PRICE, colorNameToId, multiAddUrl, sampleImage, SHOP_BASE } from "../_shared/roll-products.ts";
+import { ROLL_COLORS } from "../_shared/roll-collection.ts";
+const HEX_BY_ID = new Map(ROLL_COLORS.map((c: any) => [c.id, c.hex]));
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -231,6 +233,15 @@ Deno.serve(async (req) => {
         if (map && map[String(p.ref)]) selPairs.push([map[String(p.ref)], 1]);
       }
       const producten_cart_url = multiAddUrl(selPairs, "cart");
+
+      // Verf-route: per geadviseerde kleur een prijsopgave-link met de kleur voorgevuld.
+      // De styliste kiest alleen de kleuren; liters/varianten/tools doet Roll of de klant via /prijsopgave.
+      const seenColor = new Set<string>();
+      const verf_colors = (enriched as any[]).filter((a) => a.color_id && !seenColor.has(a.color_id) && seenColor.add(a.color_id)).map((a) => ({
+        name: a.color, id: a.color_id, hex: HEX_BY_ID.get(a.color_id) ?? null,
+        quote_url: `${SHOP_BASE}/prijsopgave/?kleur=${encodeURIComponent(a.color_id)}`,
+      }));
+      const quote_url = `${SHOP_BASE}/prijsopgave/${verf_colors[0] ? `?kleur=${encodeURIComponent(verf_colors[0].id)}` : ""}`;
       const props = {
         stap,
         intake_id: body.intake_id,
@@ -243,6 +254,8 @@ Deno.serve(async (req) => {
         advice: enriched,
         producten,
         producten_cart_url,
+        verf_colors,
+        quote_url,
         samples_stickers_url: multiAddUrl(stickerPairs, "cart"),
         samples_testers_url: multiAddUrl(pouchPairs, "cart"),
         offer_url: row.advisor_offer_url || `${SHOP_BASE}/prijsopgave`,
