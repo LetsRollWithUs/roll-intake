@@ -52,9 +52,10 @@ export function OnboardingPage() {
           </p>
           <p style={{ margin: 0 }}>
             Met online kleuradvies brengen we de expertise van Roll naar iedereen thuis, waar ze ook wonen.
-            Persoonlijk, rustig en zonder verkooppraatjes. Jij bent daarin het gezicht van Roll: het moment
-            waarop iemand zich echt geholpen voelt en met vertrouwen kiest. Dat vinden we belangrijk, want
-            een tevreden klant die de juiste kleur koos, komt terug en vertelt het door.
+            Roll is een commercieel bedrijf: we willen verkopen en groeien. Dat doen we door mensen echt
+            goed te helpen, want dat is precies wat ze onthouden en doorvertellen. Jij bent daarin het
+            gezicht van Roll: het moment waarop iemand zich gezien voelt, met vertrouwen kiest en met een
+            gerust gevoel bestelt.
           </p>
         </Block>
 
@@ -68,13 +69,16 @@ export function OnboardingPage() {
               Luister, kijk goed naar de intake en foto's, en geef richting in plaats van tien opties.
             </li>
             <li>
-              <strong>Verkoop:</strong> vertaal dat advies naar een logische vervolgstap. Meestal zijn dat
-              samples om thuis te testen, of direct de verf als de keuze al vaststaat.
+              <strong>Verkoop:</strong> durf te verkopen. Vertaal je advies naar een concrete bestelling,
+              meestal samples om thuis te testen of direct de verf als de keuze vaststaat, en vraag er ook
+              echt om. Adviseer met overtuiging welk product en hoeveel er nodig is.
             </li>
           </ul>
           <p style={{ margin: 0 }}>
-            Deze twee horen bij elkaar. Goed advies leidt vanzelf tot een aankoop, omdat de klant weet wat
-            het beste past. Geen druk of nepdeadlines, wel duidelijke richting en enthousiasme. Sluit elk
+            Deze twee versterken elkaar: goed advies maakt de aankoop een logische, prettige stap. Help de
+            klant ook in beweging te komen, want uitstel is de grootste vijand van een mooi resultaat. Je
+            mag daarbij een korting geven die 72 uur geldig is: een echt, eerlijk zetje om nu te beslissen
+            in plaats van het op de lange baan te schuiven. Smeed het ijzer als het heet is, en sluit elk
             gesprek af met een heldere volgende stap.
           </p>
         </Block>
