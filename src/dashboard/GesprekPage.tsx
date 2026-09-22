@@ -7,6 +7,7 @@ import { formatDate } from "./ui";
 import { nextAction, type Phase } from "./nextAction";
 import { deriveExpected, leadScore, TEMP_LABEL } from "./lead";
 import { AdviceEditor } from "./AdviceEditor";
+import { RollHelpForm, type RollTask } from "./RollHelpForm";
 import type { IntakeRow } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
@@ -77,6 +78,7 @@ export function GesprekPage() {
   const [others, setOthers] = useState<Booking[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [sends, setSends] = useState<Sent[]>([]);
+  const [task, setTask] = useState<RollTask | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,6 +89,8 @@ export function GesprekPage() {
       setB(cur);
       if (!cur) { setLoading(false); return; }
       const email = (cur.customer_email ?? "").trim().toLowerCase();
+      const { data: rt } = await supabase.from("roll_tasks").select("id,type,status,owner,due_date,payload,result,created_at,updated_at").eq("booking_id", cur.id).order("created_at", { ascending: false }).limit(1);
+      setTask(((rt as RollTask[]) ?? [])[0] ?? null);
       const [it, all, cm, sd] = await Promise.all([
         cur.intake_id ? supabase.from("intake").select("*").eq("id", cur.intake_id).maybeSingle() : Promise.resolve({ data: null }),
         email ? supabase.from("bookings").select(SEL).ilike("customer_email", email).neq("status", "cancelled").order("start_at", { ascending: false }) : Promise.resolve({ data: [] }),
@@ -118,7 +122,8 @@ export function GesprekPage() {
     id: b.id, status: b.status, start_at: b.start_at, kanban_stage: b.kanban_stage, samples_besteld: b.samples_besteld,
     opgevolgd_at: b.opgevolgd_at, expected_purchase_at: b.expected_purchase_at, intake_id: b.intake_id,
     intake: intake ? { advisor_outcome: intake.advisor_outcome, advisor_summary: intake.advisor_summary, advisor_followup_sent_at: intake.advisor_followup_sent_at, planning: intake.planning } : null,
-  }) : null), [b, intake]);
+    rollTask: task ? { type: task.type, status: task.status, owner: task.owner } : null,
+  }) : null), [b, intake, task]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
   if (!b || !action) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Gesprek niet gevonden.</p></div>;
@@ -280,7 +285,11 @@ export function GesprekPage() {
             </Kv>
             <Kv k="Vervolgafspraak">{intake.followup_plan?.what ? <span>{intake.followup_plan.what}{intake.followup_plan.who ? ` · ${intake.followup_plan.who}` : ""}{intake.followup_plan.when ? ` · ${intake.followup_plan.when}` : ""}</span> : <span style={{ opacity: 0.6 }}>Geen</span>}</Kv>
             <Kv k="Offerte">{intake.advisor_offer_url ? <a href={intake.advisor_offer_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{intake.advisor_offer_url}</a> : <span style={{ opacity: 0.6 }}>Geen offerte; de klant bestelt zelf via roll.nl (hulp: roll.nl/prijsopgave)</span>}</Kv>
-            <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Fase 3: "Hulp van Roll aanvragen" met afmetingen en kleuren; Roll maakt dan de offerte.</p>
+            <div style={{ marginTop: 14 }}>
+              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Hulp van Roll</div>
+              <p className="rd-sub" style={{ margin: "0 0 10px", fontSize: 13 }}>Roll maakt de offerte en bepaalt liters, verpakkingen en primer. Jij levert de kleuren en afmetingen aan, of laat Roll contact opnemen.</p>
+              <RollHelpForm bookingId={b.id} stylistId={b.stylist_id} intake={intake} task={task} onCreated={(t) => setTask(t)} />
+            </div>
           </div>
         )}
       </Panel>

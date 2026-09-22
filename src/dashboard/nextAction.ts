@@ -17,6 +17,7 @@ export interface NextActionInput {
     advisor_followup_sent_at: string | null;
     planning: string | null;
   } | null;
+  rollTask?: { type: "offerte" | "contact"; status: string; owner: string | null } | null;
 }
 export type Phase = "voorbereiding" | "gesprek" | "versturen" | "opvolging" | "klaar";
 export interface NextAction { title: string; sub?: string; owner: "Styliste" | "Roll" | "Niemand"; to?: string; phase: Phase }
@@ -56,7 +57,15 @@ export function nextAction(b: NextActionInput): NextAction {
     return { title: "Leg het besproken advies vast", sub: "Uitkomst, kleuren per ruimte en de samenvatting voor de klant.", owner: "Styliste", to: intakeEdit, phase: "gesprek" };
   }
   if (!it?.advisor_followup_sent_at) {
-    return { title: "Controleer en verstuur het adviesverslag", sub: "De klant ontvangt de samenvatting en de volgende stap.", owner: "Styliste", to: intakeEdit, phase: "versturen" };
+    return { title: "Controleer en verstuur het adviesverslag", sub: "De klant ontvangt de samenvatting en de volgende stap.", owner: "Styliste", to: gesprek, phase: "versturen" };
+  }
+  const rt = b.rollTask ?? null;
+  if (rt && (rt.status === "aangevraagd" || rt.status === "opgepakt")) {
+    const what = rt.type === "offerte" ? "Offerte aangevraagd bij Roll" : "Contactverzoek bij Roll";
+    return { title: `${what}${rt.owner ? `. ${rt.owner} pakt dit op` : ", nog geen eigenaar"}`, sub: rt.status === "opgepakt" ? "Roll is ermee bezig." : "Roll wijst een eigenaar toe.", owner: "Roll", to: gesprek, phase: "versturen" };
+  }
+  if (rt && rt.status === "verstuurd") {
+    return { title: "Roll heeft de offerte verstuurd", sub: "Volg of de klant bestelt; help bij twijfel.", owner: "Styliste", to: gesprek, phase: "opvolging" };
   }
   const expected = b.expected_purchase_at ?? deriveExpected(b.start_at, it?.planning ?? null);
   if (expected < todayKey()) {

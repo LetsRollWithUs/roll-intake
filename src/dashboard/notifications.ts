@@ -6,7 +6,7 @@ import { deriveExpected, todayKey } from "./lead";
 // (De toolkit-herinnering is geparkeerd; de velden blijven in de database.)
 export interface Notif {
   id: string;
-  kind: "vandaag" | "opvolgen" | "advies" | "versturen" | "check" | "plan" | "melding";
+  kind: "vandaag" | "opvolgen" | "advies" | "versturen" | "check" | "plan" | "roll" | "melding";
   title: string;
   sub?: string;
   to?: string;
@@ -24,6 +24,7 @@ export const KIND_LABEL: Record<Notif["kind"], string> = {
   versturen: "Adviesverslag versturen",
   opvolgen: "Opvolgen",
   check: "Achteraan gaan",
+  roll: "Roll-taken",
   melding: "Systeem",
 };
 
@@ -83,6 +84,18 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
   }
 
   if (opts.isAdmin && !opts.stylistId) {
+    // Open Roll-taken (offertes / contactverzoeken van stylisten).
+    const { data: tasks } = await supabase.from("roll_tasks").select("id,type,status,owner,due_date, bookings(customer_name)")
+      .in("status", ["aangevraagd", "opgepakt"]).order("created_at", { ascending: false }).limit(20);
+    const todayStr = todayKey();
+    for (const t of (tasks as any[]) ?? []) {
+      const late = t.due_date && t.due_date < todayStr;
+      out.push({
+        id: `roll-${t.id}`, kind: "roll",
+        title: `${t.type === "offerte" ? "Offerte" : "Contact"} gevraagd voor ${t.bookings?.customer_name || "klant"}${late ? " (te laat)" : ""}`,
+        sub: t.owner ? `Eigenaar ${t.owner} · ${t.status}` : "Nog geen eigenaar", to: "/beheer/taken",
+      });
+    }
     const { data: al } = await supabase.from("system_alerts").select("id,message").is("acknowledged_at", null).order("created_at", { ascending: false }).limit(20);
     for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/beheer/meldingen" });
   }
