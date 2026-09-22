@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
       const seenColor = new Set<string>();
       const verf_colors = (enriched as any[]).filter((a) => a.color_id && !seenColor.has(a.color_id) && seenColor.add(a.color_id)).map((a) => ({
         name: a.color, id: a.color_id, hex: HEX_BY_ID.get(a.color_id) ?? null,
+        pdp_url: `${SHOP_BASE}/product/${encodeURIComponent(a.color_id)}/`,
         quote_url: `${SHOP_BASE}/prijsopgave/?kleur=${encodeURIComponent(a.color_id)}`,
       }));
       const quote_url = `${SHOP_BASE}/prijsopgave/${verf_colors[0] ? `?kleur=${encodeURIComponent(verf_colors[0].id)}` : ""}`;
