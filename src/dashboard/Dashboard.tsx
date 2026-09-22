@@ -10,6 +10,8 @@ import { AgendaPage } from "./AgendaPage";
 import { BoekingenPage } from "./BoekingenPage";
 import { AlertsPage } from "./AlertsPage";
 import { CadeaucodesPage } from "./CadeaucodesPage";
+import { StylistHome } from "./StylistHome";
+import { OnboardingPage } from "./OnboardingPage";
 
 export function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
@@ -55,7 +57,9 @@ export function Dashboard() {
           margin: "0 auto",
         }}
       >
-        <div className="rd-kicker rd-kicker-pink">Roll · Beheer</div>
+        <Link to="/beheer" className="rd-kicker rd-kicker-pink" style={{ textDecoration: "none" }}>
+          Roll · Beheer
+        </Link>
         {showLogout && session && (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <Link to="/beheer/boekingen" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
@@ -63,6 +67,9 @@ export function Dashboard() {
             </Link>
             <Link to="/beheer/agenda" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
               Agenda
+            </Link>
+            <Link to="/beheer/onboarding" className="rd-textlink" style={{ minHeight: 32, textDecoration: "none" }}>
+              Uitleg
             </Link>
             {isAdmin && (
               <>
@@ -107,7 +114,9 @@ export function Dashboard() {
 
   return shell(
     <Routes>
-      <Route index element={<IntakeList />} />
+      <Route index element={isAdmin ? <IntakeList /> : <StylistHome />} />
+      <Route path="onboarding" element={<OnboardingPage />} />
+      <Route path="intakes" element={<IntakeList />} />
       <Route path="boekingen" element={<BoekingenPage />} />
       <Route path="agenda" element={<AgendaPage />} />
       <Route path="adviseurs" element={<AdvisorsAdmin />} />
