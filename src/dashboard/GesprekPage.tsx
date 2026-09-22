@@ -193,14 +193,21 @@ export function GesprekPage() {
   const sampleSkipped = samplesBefore && !sentRoutes.has("samples");
   const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen";
   type St = "done" | "active" | "attention" | "skip" | "todo";
-  const steps: { n: number; label: string; state: St }[] = [
-    { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active" },
-    { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active" },
-    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo" },
-    { n: 4, label: "Opvolging samples", state: b.opgevolgd_at ? "done" : boughtSamples ? "active" : (sentRoutes.has("samples") || boughtSamples) ? "todo" : "skip" },
-    { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo" },
-    { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo" },
+  const steps: { n: number; label: string; state: St; to?: string }[] = [
+    { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active", to: "top" },
+    { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active", to: "voorbereiding" },
+    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo", to: "gesprek" },
+    { n: 4, label: "Opvolging samples", state: b.opgevolgd_at ? "done" : boughtSamples ? "active" : (sentRoutes.has("samples") || boughtSamples) ? "todo" : "skip", to: "opvolging" },
+    { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo", to: "gesprek" },
+    { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "versturen" },
   ];
+  const goToStep = (to?: string) => {
+    if (to === "top" || !to) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    const el = document.getElementById(to);
+    if (!el) return;
+    if (el.tagName === "DETAILS") (el as HTMLDetailsElement).open = true;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const STEP_C: Record<St, { bg: string; ink: string; ring?: string }> = {
     done: { bg: "var(--rd-aubergine)", ink: "#fff" },
     active: { bg: "var(--rd-pink)", ink: "var(--rd-aubergine)", ring: "var(--rd-pink-dark)" },
@@ -270,7 +277,11 @@ export function GesprekPage() {
             const c = STEP_C[s.state];
             return (
               <div key={s.n} style={{ display: "flex", alignItems: "flex-start", flex: "1 0 auto" }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 92, textAlign: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => goToStep(s.to)}
+                  title={`Naar ${s.label}`}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 92, textAlign: "center", background: "none", border: 0, cursor: "pointer", padding: "2px 0", font: "inherit", color: "inherit", borderRadius: 10 }}>
                   <div style={{ width: 30, height: 30, borderRadius: 99, background: c.bg, color: c.ink, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, boxShadow: c.ring ? `0 0 0 3px ${c.ring}33` : "none", border: c.ring ? `1.5px solid ${c.ring}` : "1.5px solid transparent" }}>
                     {s.state === "done" ? "✓" : s.state === "skip" ? "–" : s.n}
                   </div>
@@ -278,7 +289,7 @@ export function GesprekPage() {
                   {s.state === "active" && <span className="rd-chip" style={{ fontSize: 10, padding: "1px 7px", background: "var(--rd-pink)", color: "var(--rd-aubergine)", fontWeight: 700 }}>nu</span>}
                   {s.state === "attention" && <span className="rd-chip" style={{ fontSize: 10, padding: "1px 7px", background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700 }}>actie</span>}
                   {s.state === "skip" && <span style={{ fontSize: 10, opacity: 0.5 }}>n.v.t.</span>}
-                </div>
+                </button>
                 {i < steps.length - 1 && <div style={{ height: 2, background: "var(--rd-line)", flex: 1, minWidth: 12, marginTop: 15 }} />}
               </div>
             );
