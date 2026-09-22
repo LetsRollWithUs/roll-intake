@@ -59,11 +59,14 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
     adviesStylist = ((bk ?? [])[0] as any)?.stylist_id ?? null;
   }
 
+  // E-mail (advies) is primair en het meest betrouwbaar; de persoonlijke code is de fallback
+  // voor eigen klanten zonder adviesgesprek. Wijzen ze naar verschillende stylisten, dan markeren
+  // we voor controle. De gedeelde samplekorting-code matcht nooit een styliste en wordt genegeerd.
   let stylist: string | null = null, route: string | null = null, conflict = false;
-  if (codeStylist && adviesStylist) {
-    stylist = codeStylist; route = "code"; conflict = codeStylist !== adviesStylist;
-  } else if (codeStylist) { stylist = codeStylist; route = "code"; }
-  else if (adviesStylist) { stylist = adviesStylist; route = "advies"; }
+  if (adviesStylist && codeStylist) {
+    stylist = adviesStylist; route = "advies"; conflict = adviesStylist !== codeStylist;
+  } else if (adviesStylist) { stylist = adviesStylist; route = "advies"; }
+  else if (codeStylist) { stylist = codeStylist; route = "code"; }
   else return { skipped: "geen toeschrijving" };
 
   const amount = Math.round(verf * RATE * 100) / 100;
