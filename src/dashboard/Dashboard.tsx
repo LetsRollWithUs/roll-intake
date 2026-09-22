@@ -26,7 +26,7 @@ const BAR_CSS = `
 .rd-topbar .rd-nl{color:rgba(255,255,255,.82);text-decoration:none;font-weight:600;font-size:15px;padding:8px 12px;border-radius:99px;line-height:1.4;white-space:nowrap;transition:background .12s ease,color .12s ease}
 .rd-topbar .rd-nl:hover{color:#fff;background:rgba(255,255,255,.08)}
 .rd-topbar .rd-nl.active{color:#fff;background:rgba(255,255,255,.14)}
-.rd-topbar .rd-logo{font-weight:900;font-size:28px;letter-spacing:-.04em;color:var(--rd-pink);text-decoration:none;line-height:1;padding:0 6px}
+.rd-topbar .rd-logo{display:flex;align-items:center;text-decoration:none;padding:4px 6px}
 .rd-topbar .rd-right{display:flex;align-items:center;justify-content:flex-end;gap:4px}
 .rd-topbar .rd-ico{position:relative;width:40px;height:40px;border-radius:99px;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none;transition:background .12s ease}
 .rd-topbar .rd-ico:hover,.rd-topbar .rd-ico.active{background:rgba(255,255,255,.12)}
@@ -115,7 +115,9 @@ export function Dashboard() {
               <NavLink to="/beheer/gesprekken" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Adviesgesprekken</NavLink>
               <NavLink to="/beheer/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
             </nav>
-            <Link to="/beheer" className="rd-logo" aria-label="Roll">Roll</Link>
+            <Link to="/beheer" className="rd-logo" aria-label="Roll advies">
+              <img src="/roll-advies-logo.png" alt="Roll advies" style={{ height: 46, width: "auto", display: "block" }} />
+            </Link>
             <div className="rd-right">
               <NavLink to="/beheer/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
               <NavLink to="/beheer/notificaties" title="Notificaties" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}>

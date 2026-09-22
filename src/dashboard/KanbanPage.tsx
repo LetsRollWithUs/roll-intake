@@ -45,7 +45,14 @@ export function KanbanPage() {
   const [filter, setFilter] = useState<string>("all");
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Afgeronde trajecten (verf gekocht / afgehaakt) ouder dan 30 dagen gaan in het archief,
+  // zodat het bord de lopende gesprekken laat zien. Ze blijven meetellen in de cijfers.
+  const ARCHIVE_DAYS = 30;
+  const archiveCutoff = Date.now() - ARCHIVE_DAYS * 864e5;
+  const isFinal = (key: string) => key === "verf" || key === "afgehaakt";
 
   useEffect(() => {
     (async () => {
@@ -158,7 +165,9 @@ export function KanbanPage() {
 
       <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 14, marginTop: 14 }} className="rd-hide-scroll">
         {COLS.map((col) => {
-          const items = visible.filter((c) => c.kanban_stage === col.key);
+          const all = visible.filter((c) => c.kanban_stage === col.key);
+          const items = isFinal(col.key) && !showArchive ? all.filter((c) => new Date(c.start_at).getTime() >= archiveCutoff) : all;
+          const archived = all.length - items.length;
           const isOver = over === col.key;
           return (
             <div
@@ -183,9 +192,19 @@ export function KanbanPage() {
                 <span className="rd-kicker rd-kicker-pink">{col.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 800, background: "#fff", borderRadius: 99, padding: "1px 8px", opacity: 0.8 }}>{items.length}</span>
               </div>
-              {items.length === 0 ? (
+              {items.length === 0 && archived === 0 ? (
                 <div style={{ fontSize: 12, opacity: 0.45, padding: "10px 6px" }}>Sleep hierheen</div>
               ) : items.map(card)}
+              {isFinal(col.key) && archived > 0 && (
+                <button className="rd-textlink" onClick={() => setShowArchive(true)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>
+                  + {archived} in archief (ouder dan {ARCHIVE_DAYS} dagen)
+                </button>
+              )}
+              {isFinal(col.key) && showArchive && all.length > 0 && (
+                <button className="rd-textlink" onClick={() => setShowArchive(false)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>
+                  Archief verbergen
+                </button>
+              )}
             </div>
           );
         })}
