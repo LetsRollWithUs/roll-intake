@@ -8,6 +8,8 @@ import { nextAction, type Phase } from "./nextAction";
 import { deriveExpected, leadScore, TEMP_LABEL } from "./lead";
 import { AdviceEditor } from "./AdviceEditor";
 import { RollHelpForm, type RollTask } from "./RollHelpForm";
+import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
+import type { OrdersResp } from "./CustomerPurchases";
 import type { IntakeRow } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
@@ -79,7 +81,14 @@ export function GesprekPage() {
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [sends, setSends] = useState<Sent[]>([]);
   const [task, setTask] = useState<RollTask | null>(null);
+  const [tasks, setTasks] = useState<FollowupTask[]>([]);
+  const [orders, setOrders] = useState<OrdersResp | null | undefined>(undefined); // undefined = nog aan het laden
   const [loading, setLoading] = useState(true);
+
+  const loadTasks = async (bid: string) => {
+    const { data } = await supabase.from("followup_tasks").select("id,action,owner,due_date,kind,outcome,note,done_at,created_at").eq("booking_id", bid).order("created_at", { ascending: true });
+    setTasks((data as FollowupTask[]) ?? []);
+  };
 
   useEffect(() => {
     (async () => {
@@ -91,6 +100,7 @@ export function GesprekPage() {
       const email = (cur.customer_email ?? "").trim().toLowerCase();
       const { data: rt } = await supabase.from("roll_tasks").select("id,type,status,owner,due_date,payload,result,created_at,updated_at").eq("booking_id", cur.id).order("created_at", { ascending: false }).limit(1);
       setTask(((rt as RollTask[]) ?? [])[0] ?? null);
+      await loadTasks(cur.id);
       const [it, all, cm, sd] = await Promise.all([
         cur.intake_id ? supabase.from("intake").select("*").eq("id", cur.intake_id).maybeSingle() : Promise.resolve({ data: null }),
         email ? supabase.from("bookings").select(SEL).ilike("customer_email", email).neq("status", "cancelled").order("start_at", { ascending: false }) : Promise.resolve({ data: [] }),
@@ -123,7 +133,8 @@ export function GesprekPage() {
     opgevolgd_at: b.opgevolgd_at, expected_purchase_at: b.expected_purchase_at, intake_id: b.intake_id,
     intake: intake ? { advisor_outcome: intake.advisor_outcome, advisor_summary: intake.advisor_summary, advisor_followup_sent_at: intake.advisor_followup_sent_at, planning: intake.planning } : null,
     rollTask: task ? { type: task.type, status: task.status, owner: task.owner } : null,
-  }) : null), [b, intake, task]);
+    openTasks: tasks.filter((t) => !t.done_at).map((t) => ({ action: t.action, owner: t.owner, due_date: t.due_date })),
+  }) : null), [b, intake, task, tasks]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
   if (!b || !action) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Gesprek niet gevonden.</p></div>;
@@ -198,6 +209,31 @@ export function GesprekPage() {
         </div>
       </div>
 
+      {/* Drie losse statussen: afspraak, advies, aankoop */}
+      {(() => {
+        const openTasks = tasks.filter((t) => !t.done_at);
+        const adviceDone = !!(intake?.advisor_outcome && intake?.advisor_summary);
+        const afspraak = b.status === "paid_unplaced" ? "nog inplannen" : past ? "geweest" : "ingepland";
+        const advies = b.kanban_stage === "verf" || b.kanban_stage === "afgehaakt" ? "afgerond"
+          : !intake ? "wacht op intake" : !adviceDone ? "vastleggen" : !intake.advisor_followup_sent_at ? "versturen"
+          : openTasks.length ? "in opvolging" : "verstuurd";
+        const aankoop = orders === undefined ? "laden…" : commissions.some((c) => c.status !== "vervallen") || (orders?.product_items ?? 0) > 0 ? "verf gekocht"
+          : (orders?.sample_items ?? 0) > 0 ? "samples gekocht" : orders === null ? "geen koppeling" : "geen gekoppelde aankoop gevonden";
+        const Pill = ({ k, v, strong }: { k: string; v: string; strong?: boolean }) => (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <span style={{ opacity: 0.55 }}>{k}</span>
+            <span className="rd-chip" style={{ fontWeight: 700, ...(strong ? { background: "var(--rd-aubergine)", color: "#fff" } : {}) }}>{v}</span>
+          </span>
+        );
+        return (
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, padding: "0 4px" }}>
+            <Pill k="Afspraak" v={afspraak} />
+            <Pill k="Advies" v={advies} strong />
+            <Pill k="Aankoop" v={aankoop} />
+          </div>
+        );
+      })()}
+
       {/* 1 VOORBEREIDING */}
       <Panel id="voorbereiding" title="Voorbereiding" hint="door de klant ingevuld" open={openPanel(["voorbereiding", "gesprek"])}>
         {!intake ? (
@@ -243,7 +279,7 @@ export function GesprekPage() {
           </div>
         )}
         <div style={{ marginTop: 12 }}>
-          <CustomerPurchases email={email} title="Eerdere samples & aankopen (WooCommerce)" />
+          <CustomerPurchases email={email} title="Eerdere samples & aankopen (WooCommerce)" onData={setOrders} />
         </div>
       </Panel>
 
@@ -260,6 +296,7 @@ export function GesprekPage() {
             stylistName={b.stylists?.name ?? ""}
             roomLabels={rooms.map((r) => r.label)}
             onChange={(p) => { setIntake({ ...intake, ...p }); if (p.advisor_followup_sent_at) reloadSends(); }}
+            onTasksCreated={() => loadTasks(b.id)}
           />
         )}
       </Panel>
@@ -301,10 +338,15 @@ export function GesprekPage() {
             {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
           <label style={{ fontSize: 14, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={b.samples_besteld} onChange={(e) => patch({ samples_besteld: e.target.checked }, { samples_besteld: e.target.checked })} /> Samples besteld na gesprek</label>
-          <label style={{ fontSize: 14, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={!!b.opgevolgd_at} onChange={(e) => patch({ opgevolgd: e.target.checked }, { opgevolgd_at: e.target.checked ? new Date().toISOString() : null })} /> Opgevolgd</label>
           <label style={{ fontSize: 14, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={b.upsell_offered} onChange={(e) => patch({ upsell_offered: e.target.checked }, { upsell_offered: e.target.checked })} /> Uitgebreid advies aangeboden</label>
           {b.upsell_offered && <label style={{ fontSize: 14, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={b.upsell_booked} onChange={(e) => patch({ upsell_booked: e.target.checked }, { upsell_booked: e.target.checked })} /> Geboekt</label>}
           {b.upsell_booked && <input className="rd-input" inputMode="decimal" placeholder="Opdracht €" defaultValue={b.upsell_value ?? ""} onBlur={(e) => patch({ upsell_value: e.target.value }, { upsell_value: e.target.value ? Number(e.target.value) : null })} style={{ height: 36, width: 120 }} />}
+        </div>
+
+        <div style={{ margin: "12px 0 6px" }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Opvolgtaken</div>
+          <p className="rd-sub" style={{ margin: "0 0 8px", fontSize: 13 }}>Elke taak heeft een actie, eigenaar en datum; bij afronden leg je de uitkomst vast. Een verfaankoop sluit open taken automatisch.</p>
+          <FollowupTasks bookingId={b.id} stylistId={b.stylist_id} tasks={tasks} onChange={(t) => { setTasks(t); if (t.some((x) => x.done_at) && !b.opgevolgd_at) patch({ opgevolgd: true }, { opgevolgd_at: new Date().toISOString() }); }} />
         </div>
         <Kv k="Advies gekocht">{formatDate(b.created_at)}</Kv>
         <Kv k="Gesprek">{formatDate(b.start_at)}</Kv>

@@ -18,6 +18,8 @@ export interface NextActionInput {
     planning: string | null;
   } | null;
   rollTask?: { type: "offerte" | "contact"; status: string; owner: string | null } | null;
+  // Open opvolgtaken (fase 4): de eerstvolgende bepaalt de actie.
+  openTasks?: { action: string; owner: "styliste" | "roll" | "klant"; due_date: string | null }[];
 }
 export type Phase = "voorbereiding" | "gesprek" | "versturen" | "opvolging" | "klaar";
 export interface NextAction { title: string; sub?: string; owner: "Styliste" | "Roll" | "Niemand"; to?: string; phase: Phase }
@@ -66,6 +68,18 @@ export function nextAction(b: NextActionInput): NextAction {
   }
   if (rt && rt.status === "verstuurd") {
     return { title: "Roll heeft de offerte verstuurd", sub: "Volg of de klant bestelt; help bij twijfel.", owner: "Styliste", to: gesprek, phase: "opvolging" };
+  }
+  // Open opvolgtaak: de eerstvolgende (op datum) is de actie.
+  const tasks = (b.openTasks ?? []).slice().sort((a, c) => (a.due_date ?? "9999").localeCompare(c.due_date ?? "9999"));
+  if (tasks.length) {
+    const t = tasks[0];
+    const late = t.due_date && t.due_date < todayKey();
+    const ownerLabel = t.owner === "roll" ? "Roll" : t.owner === "klant" ? "Niemand" : "Styliste";
+    return {
+      title: t.action + (t.due_date ? ` (${late ? "was gepland " : ""}${fmtD(t.due_date + "T12:00:00")})` : ""),
+      sub: t.owner === "klant" ? "Wacht op de klant; leg de uitkomst vast zodra je iets hoort." : late ? "Deze taak is over de datum." : "Leg na afloop de uitkomst vast.",
+      owner: ownerLabel, to: gesprek, phase: "opvolging",
+    };
   }
   const expected = b.expected_purchase_at ?? deriveExpected(b.start_at, it?.planning ?? null);
   if (expected < todayKey()) {

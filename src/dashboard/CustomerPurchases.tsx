@@ -10,20 +10,21 @@ export const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "curr
 const WOO_STATUS: Record<string, string> = { processing: "Betaald", completed: "Afgerond", "on-hold": "In behandeling" };
 
 // Wat deze klant al bij Roll kocht (samples, verf, producten) + besteed bedrag. Uit WooCommerce, op e-mail.
-export function CustomerPurchases({ email, title = "Samples & aankopen" }: { email: string | null; title?: string }) {
+export function CustomerPurchases({ email, title = "Samples & aankopen", onData }: { email: string | null; title?: string; onData?: (d: OrdersResp | null) => void }) {
   const [data, setData] = useState<OrdersResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (!email) { setLoading(false); return; }
+    if (!email) { setLoading(false); onData?.(null); return; }
     (async () => {
       setLoading(true);
       const { data: d, error } = await supabase.functions.invoke("booking", { body: { action: "customer_orders", email } });
-      if (error || !(d as OrdersResp | null)?.ok) setFailed(true);
-      else setData(d as OrdersResp);
+      if (error || !(d as OrdersResp | null)?.ok) { setFailed(true); onData?.(null); }
+      else { setData(d as OrdersResp); onData?.(d as OrdersResp); }
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email]);
 
   return (
