@@ -86,9 +86,23 @@ export interface IntakeRow {
   advice_concept: AdviceConcept | null;
   advice_concept_at: string | null;
   advice_products: AdviceProduct[] | null;
+  advice_sample: AdvicePhase | null;
+  advice_verf: AdvicePhase | null;
 }
 
 export interface AdviceProduct { kind: "pack" | "sticker" | "tester"; ref: string; name: string }
+
+// Eén advies-fase (sample of verf): eigen tekst, kleuren, route en (sample) producten.
+export interface AdvicePhase {
+  answer: string;
+  rooms: AdviceRoom[];
+  sample_instruction: string;
+  next_step: string;
+  internal: string;
+  plan: FollowupPlan;
+  route: "samples" | "zelf" | "roll";
+  products: AdviceProduct[];
+}
 
 export interface AdviceConcept {
   samenvatting: string;
