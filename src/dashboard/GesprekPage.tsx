@@ -11,7 +11,7 @@ import { RollHelpForm, type RollTask } from "./RollHelpForm";
 import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
 import { ConceptPanel } from "./ConceptPanel";
 import type { OrdersResp } from "./CustomerPurchases";
-import type { IntakeRow, AdviceConcept, AdviceClient } from "./types";
+import type { IntakeRow, AdviceConcept, AdvicePhase } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
 const ROUTE_LABEL: Record<string, string> = { samples: "Eerst samples testen", zelf: "Zelf verf bestellen", roll: "Hulp van Roll" };
@@ -93,21 +93,25 @@ export function GesprekPage() {
   const [adoptVersion, setAdoptVersion] = useState(0); // remount van de advies-editor na "Overnemen in advies"
   const [loading, setLoading] = useState(true);
 
-  // Concept overnemen: kleurrichtingen worden VOORGESTELDE regels in het advies; de styliste past aan.
+  // Concept overnemen: kleurrichtingen worden VOORGESTELDE regels in het SAMPLE-advies; de styliste past aan.
   const adoptConcept = async (c: AdviceConcept) => {
     if (!intake) return;
-    const existing = intake.advice_client;
+    const existing = intake.advice_sample;
     const rooms = c.richtingen.flatMap((r) => r.kleuren.map((k) => ({
       room: r.titel, surface: k.toepassing, color: k.naam, status: "voorgesteld" as const, product: "Muurverf", m2: "", liters: "", motivation: r.waarom,
     })));
-    const next: AdviceClient = {
+    const next: AdvicePhase = {
       answer: existing?.answer?.trim() ? existing.answer : c.samenvatting,
       rooms: (existing?.rooms?.filter((r) => r.room.trim() || r.color.trim()) ?? []).concat(rooms),
       sample_instruction: existing?.sample_instruction ?? "",
       next_step: existing?.next_step ?? "",
+      internal: existing?.internal ?? "",
+      plan: existing?.plan ?? { what: "", who: "", when: "" },
+      route: "samples",
+      products: existing?.products ?? [],
     };
-    const { error } = await supabase.from("intake").update({ advice_client: next }).eq("id", intake.id);
-    if (!error) { setIntake({ ...intake, advice_client: next }); setAdoptVersion((v) => v + 1); document.getElementById("gesprek")?.setAttribute("open", ""); }
+    const { error } = await supabase.from("intake").update({ advice_sample: next }).eq("id", intake.id);
+    if (!error) { setIntake({ ...intake, advice_sample: next }); setAdoptVersion((v) => v + 1); const el = document.getElementById("sample") as HTMLDetailsElement | null; if (el) el.open = true; el?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   };
 
   const loadTasks = async (bid: string) => {
@@ -188,6 +192,8 @@ export function GesprekPage() {
 
   // Traject in 6 stappen. States: done | active | attention | skip | todo.
   const sentRoutes = new Set(sends.map((s) => s.route));
+  const sampleSentAt = sends.find((s) => s.route === "samples")?.sent_at ?? null;
+  const verfSentAt = sends.find((s) => s.route === "zelf" || s.route === "roll")?.sent_at ?? null;
   const boughtVerf = (orders?.product_items ?? 0) > 0 || commissions.some((c) => c.status !== "vervallen") || b.kanban_stage === "verf";
   const boughtSamples = (orders?.sample_items ?? 0) > 0 || b.samples_besteld;
   const sampleSkipped = samplesBefore && !sentRoutes.has("samples");
@@ -196,9 +202,9 @@ export function GesprekPage() {
   const steps: { n: number; label: string; state: St; to?: string }[] = [
     { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active", to: "top" },
     { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active", to: "voorbereiding" },
-    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo", to: "gesprek" },
+    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo", to: "sample" },
     { n: 4, label: "Opvolging samples", state: b.opgevolgd_at ? "done" : boughtSamples ? "active" : (sentRoutes.has("samples") || boughtSamples) ? "todo" : "skip", to: "opvolging" },
-    { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo", to: "gesprek" },
+    { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo", to: "verf" },
     { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "versturen" },
   ];
   const goToStep = (to?: string) => {
@@ -353,20 +359,44 @@ export function GesprekPage() {
         </div>
       </Panel>
 
-      {/* 2 GESPREK & ADVIES */}
-      <Panel id="gesprek" title="Gesprek & advies" hint="door de styliste vastgelegd" open={openPanel(["gesprek", "versturen"])}>
+      {/* 2 SAMPLE-ADVIES (stap 3) */}
+      <Panel id="sample" title="Sample-advies" hint="kleuren om thuis te testen" open={openPanel(["gesprek"]) && steps[4].state !== "active"}>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen. Vraag de klant de intake in te vullen.</p>
         ) : (
           <AdviceEditor
-            key={`${intake.id}:${adoptVersion}`}
-            intake={intake}
+            key={`sample:${intake.id}:${adoptVersion}`}
+            intakeId={intake.id}
+            phase="sample"
+            value={intake.advice_sample}
             bookingId={b.id}
             customerName={name}
             stylistName={b.stylists?.name ?? ""}
             roomLabels={rooms.map((r) => r.label)}
-            onChange={(p) => { setIntake({ ...intake, ...p }); if (p.advisor_followup_sent_at) reloadSends(); }}
-            onTasksCreated={() => loadTasks(b.id)}
+            sentAt={sampleSentAt}
+            onSaved={(bundle) => setIntake({ ...intake, advice_sample: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
+            onSent={() => { reloadSends(); loadTasks(b.id); }}
+          />
+        )}
+      </Panel>
+
+      {/* 3 VERF-ADVIES (stap 5) */}
+      <Panel id="verf" title="Verf-advies" hint="de definitieve kleur en zo bestelt de klant" open={openPanel(["gesprek", "versturen"]) && steps[4].state === "active"}>
+        {!intake ? (
+          <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen.</p>
+        ) : (
+          <AdviceEditor
+            key={`verf:${intake.id}:${adoptVersion}`}
+            intakeId={intake.id}
+            phase="verf"
+            value={intake.advice_verf}
+            bookingId={b.id}
+            customerName={name}
+            stylistName={b.stylists?.name ?? ""}
+            roomLabels={rooms.map((r) => r.label)}
+            sentAt={verfSentAt}
+            onSaved={(bundle) => setIntake({ ...intake, advice_verf: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
+            onSent={() => { reloadSends(); loadTasks(b.id); }}
           />
         )}
       </Panel>
@@ -375,10 +405,10 @@ export function GesprekPage() {
       <Panel id="versturen" title="Versturen & overdragen" hint="klantmail en hulp van Roll" open={openPanel(["versturen"])}>
         {!intake ? <p className="rd-sub" style={{ margin: 0 }}>Beschikbaar zodra er een intake en advies is.</p> : (
           <div>
-            <Kv k="Vervolgrichting">{intake.followup_route ? <strong>{ROUTE_LABEL[intake.followup_route]}</strong> : <span style={{ opacity: 0.6 }}>Nog niet gekozen (bij Gesprek &amp; advies)</span>}</Kv>
+            <Kv k="Vervolgrichting">{intake.followup_route ? <strong>{ROUTE_LABEL[intake.followup_route]}</strong> : <span style={{ opacity: 0.6 }}>Nog niet gekozen (bij Sample- of Verf-advies)</span>}</Kv>
             <Kv k="Adviesverslag">
               {sends.length === 0 ? (
-                <span style={{ opacity: 0.6 }}>Nog niet verstuurd. Versturen doe je via "Klantmail bekijken" bij Gesprek &amp; advies.</span>
+                <span style={{ opacity: 0.6 }}>Nog niet verstuurd. Versturen doe je via "Klantmail bekijken" bij Sample- of Verf-advies.</span>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {sends.map((s) => (

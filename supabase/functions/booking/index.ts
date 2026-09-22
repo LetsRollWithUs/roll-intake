@@ -178,12 +178,18 @@ Deno.serve(async (req) => {
       if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
       const { data: it } = await admin
         .from("intake")
-        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,advice_products,booking_id")
+        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,advice_products,advice_sample,advice_verf,booking_id")
         .eq("id", body.intake_id)
         .maybeSingle();
       if (!it || !(it as any).contact_email) return j({ ok: false, skipped: "geen intake/e-mail" });
       const row = it as any;
-      const advice = Array.isArray(row.advisor_advice) ? row.advisor_advice : [];
+      // Fase (sample|verf): lees de kleuren en producten uit de bijbehorende bundel.
+      // Terugval op de oude, gespiegelde velden voor rijen van vóór de splitsing.
+      const phase = body.phase === "sample" || body.phase === "verf" ? body.phase : null;
+      const bundle = phase === "sample" ? row.advice_sample : phase === "verf" ? row.advice_verf : null;
+      const advice = bundle && Array.isArray(bundle.rooms)
+        ? bundle.rooms.map((r: any) => ({ room: [r.room, r.surface].filter((x: string) => (x ?? "").trim()).join(" · "), color: r.color ?? "", product: r.product ?? "", liters: r.liters ?? "", m2: r.m2 ?? "" }))
+        : (Array.isArray(row.advisor_advice) ? row.advisor_advice : []);
       const stickerPairs: [number, number][] = [];
       const pouchPairs: [number, number][] = [];
       const seenSt = new Set<number>();
@@ -199,17 +205,19 @@ Deno.serve(async (req) => {
         return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, product: a.product ?? "", liters: a.liters ?? "", m2: a.m2 ?? "" };
       });
       const outcome = row.advisor_outcome ?? null;
-      // Vervolgrichting: expliciet meegegeven (werkplek fase 2) of afgeleid van de uitkomst.
-      const given = String(body.route ?? "");
+      // Vervolgrichting: uit de fase-bundel, anders expliciet meegegeven, anders afgeleid.
+      const given = String(bundle?.route ?? body.route ?? "");
       const route = given === "samples" || given === "zelf" || given === "roll"
         ? given
+        : phase === "sample" ? "samples"
         : outcome === "samples_needed" ? "samples" : outcome === "color_chosen" ? "zelf" : "roll";
       const stap = route === "samples" ? "advies_samples" : route === "zelf" ? "advies_verf" : "advies_followup";
       const subject = typeof body.subject === "string" && body.subject.trim() ? body.subject.trim() : null;
       const klantTekst = typeof body.body === "string" && body.body.trim() ? body.body.trim() : null;
 
       // Door de styliste geselecteerde producten -> kaartjes voor de mail (afbeelding, prijs, bestellink).
-      const selection = Array.isArray(row.advice_products) ? row.advice_products : [];
+      const selection = bundle && Array.isArray(bundle.products) ? bundle.products
+        : Array.isArray(row.advice_products) ? row.advice_products : [];
       const producten = selection.map((p: any) => {
         const kind = p.kind as string; const ref = String(p.ref ?? "");
         if (kind === "pack") {
@@ -245,11 +253,12 @@ Deno.serve(async (req) => {
       const quote_url = `${SHOP_BASE}/prijsopgave/${verf_colors[0] ? `?kleur=${encodeURIComponent(verf_colors[0].id)}` : ""}`;
       const props = {
         stap,
+        phase,
         intake_id: body.intake_id,
         booking_id: row.booking_id ?? body.booking_id ?? null,
         outcome,
         route,
-        gesprekssamenvatting: row.advisor_summary ?? null,
+        gesprekssamenvatting: (bundle?.answer ?? row.advisor_summary) ?? null,
         onderwerp: subject,
         klant_tekst: klantTekst,
         advice: enriched,
