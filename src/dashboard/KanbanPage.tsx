@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
 interface Card {
@@ -29,14 +29,22 @@ const COLS = [
 ] as const;
 
 const TZ = "Europe/Amsterdam";
-const fmt = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+const fmt = (iso: string) =>
+  new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+function initials(name: string): string {
+  const p = name.trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return "?";
+  return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+}
 
 export function KanbanPage() {
+  const navigate = useNavigate();
   const [cards, setCards] = useState<Card[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [stylists, setStylists] = useState<{ id: string; name: string }[]>([]);
   const [filter, setFilter] = useState<string>("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,7 +61,6 @@ export function KanbanPage() {
         .in("status", ["confirmed", "paid_unplaced"])
         .order("start_at", { ascending: true });
       const list = (data as unknown as Card[]) ?? [];
-      // Offerte-badge uit de gekoppelde intake.
       const ids = list.map((c) => c.intake_id).filter((x): x is string => !!x);
       if (ids.length) {
         const { data: its } = await supabase.from("intake").select("id,advisor_offer_url").in("id", ids);
@@ -65,9 +72,9 @@ export function KanbanPage() {
     })();
   }, []);
 
-  const patch = async (id: string, jsonPatch: Record<string, unknown>, local: Partial<Card>) => {
-    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...local } : c)));
-    await supabase.rpc("kanban_update", { p_booking_id: id, p_patch: jsonPatch });
+  const move = async (id: string, stage: string) => {
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, kanban_stage: stage } : c)));
+    await supabase.rpc("kanban_update", { p_booking_id: id, p_patch: { kanban_stage: stage } });
   };
 
   const visible = useMemo(
@@ -77,78 +84,59 @@ export function KanbanPage() {
 
   if (loading) return <p className="rd-sub">Laden...</p>;
 
-  const Badge = ({ children }: { children: React.ReactNode }) => (
-    <span className="rd-chip" style={{ fontSize: 11, padding: "2px 8px" }}>{children}</span>
+  const Badge = ({ children, strong }: { children: React.ReactNode; strong?: boolean }) => (
+    <span className="rd-chip" style={{ fontSize: 11, padding: "2px 8px", ...(strong ? { background: "var(--rd-pink)", color: "var(--rd-aubergine)", fontWeight: 700 } : {}) }}>{children}</span>
   );
 
   const card = (c: Card) => {
-    const open = expanded === c.id;
+    const name = c.customer_name || "Klant";
+    const dragging = dragId === c.id;
     return (
-      <div key={c.id} className="rd-card-white" style={{ padding: "10px 12px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--rd-pink-dark)" }}>{fmt(c.start_at)}</div>
-        <div style={{ fontWeight: 800, fontSize: 15, marginTop: 1 }}>{c.customer_name || "Klant"}</div>
-        {isAdmin && <div style={{ fontSize: 12, opacity: 0.6 }}>{c.stylists?.name ?? "—"}</div>}
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-          {c.samples_besteld && <Badge>samples</Badge>}
-          {c.opgevolgd_at && <Badge>opgevolgd</Badge>}
-          {c.offerte && <Badge>offerte</Badge>}
-          {c.upsell_offered && <Badge>upsell{c.upsell_booked ? " ✓" : ""}</Badge>}
-          {c.status === "paid_unplaced" && <Badge>plan nog in</Badge>}
+      <div
+        key={c.id}
+        draggable
+        onDragStart={(e) => { setDragId(c.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.id); }}
+        onDragEnd={() => { setDragId(null); setOver(null); }}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest("select,button,input,label,a")) return;
+          navigate(`/beheer/klant/${c.id}`);
+        }}
+        className="rd-card-white"
+        style={{
+          padding: "12px 14px", cursor: "grab", opacity: dragging ? 0.45 : 1,
+          boxShadow: "0 1px 2px rgba(47,33,65,.06), 0 6px 18px rgba(47,33,65,.06)",
+          border: "1px solid transparent", transition: "transform .12s ease, box-shadow .12s ease",
+        }}
+        title="Klik voor het klantdossier, sleep om de fase te wijzigen"
+      >
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 99, background: "var(--rd-lavender)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flex: "none" }}>
+            {initials(name)}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+            <div style={{ fontSize: 12, color: "var(--rd-pink-dark)", fontWeight: 700 }}>{fmt(c.start_at)}</div>
+          </div>
         </div>
-
-        <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <select
-            className="rd-input"
-            value={c.kanban_stage}
-            onChange={(e) => patch(c.id, { kanban_stage: e.target.value }, { kanban_stage: e.target.value })}
-            aria-label="Fase"
-            style={{ height: 34, flex: "1 1 130px", minWidth: 0, fontSize: 13, padding: "4px 8px" }}
-          >
-            {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
-          </select>
-          {c.intake_id && (
-            <Link to={`/beheer/${c.intake_id}`} className="rd-textlink" style={{ fontSize: 12, minHeight: 30 }}>Intake</Link>
-          )}
-          <button className="rd-textlink" style={{ fontSize: 12, minHeight: 30, opacity: 0.7 }} onClick={() => setExpanded(open ? null : c.id)}>
-            {open ? "Minder" : "Acties"}
-          </button>
-        </div>
-
-        {open && (
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid var(--rd-line)", paddingTop: 8 }}>
-            <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" checked={c.samples_besteld} onChange={(e) => patch(c.id, { samples_besteld: e.target.checked }, { samples_besteld: e.target.checked })} />
-              Samples besteld
-            </label>
-            <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" checked={!!c.opgevolgd_at} onChange={(e) => patch(c.id, { opgevolgd: e.target.checked }, { opgevolgd_at: e.target.checked ? new Date().toISOString() : null })} />
-              Opgevolgd
-            </label>
-            <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" checked={c.upsell_offered} onChange={(e) => patch(c.id, { upsell_offered: e.target.checked }, { upsell_offered: e.target.checked })} />
-              Uitgebreid advies aangeboden
-            </label>
-            {c.upsell_offered && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", paddingLeft: 24 }}>
-                <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="checkbox" checked={c.upsell_booked} onChange={(e) => patch(c.id, { upsell_booked: e.target.checked }, { upsell_booked: e.target.checked })} />
-                  Geboekt
-                </label>
-                {c.upsell_booked && (
-                  <input
-                    className="rd-input"
-                    inputMode="decimal"
-                    placeholder="Opdracht €"
-                    defaultValue={c.upsell_value ?? ""}
-                    onBlur={(e) => patch(c.id, { upsell_value: e.target.value }, { upsell_value: e.target.value ? Number(e.target.value) : null })}
-                    style={{ height: 32, width: 110, fontSize: 13 }}
-                  />
-                )}
-              </div>
-            )}
+        {isAdmin && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6 }}>{c.stylists?.name ?? "—"}</div>}
+        {(c.samples_besteld || c.opgevolgd_at || c.offerte || c.upsell_offered || c.status === "paid_unplaced") && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+            {c.samples_besteld && <Badge>samples</Badge>}
+            {c.opgevolgd_at && <Badge>opgevolgd</Badge>}
+            {c.offerte && <Badge>offerte</Badge>}
+            {c.upsell_offered && <Badge strong>upsell{c.upsell_booked ? " ✓" : ""}</Badge>}
+            {c.status === "paid_unplaced" && <Badge strong>plan nog in</Badge>}
           </div>
         )}
+        <select
+          className="rd-input"
+          value={c.kanban_stage}
+          onChange={(e) => move(c.id, e.target.value)}
+          aria-label="Fase"
+          style={{ marginTop: 10, height: 32, width: "100%", fontSize: 12, padding: "2px 8px", opacity: 0.85 }}
+        >
+          {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
+        </select>
       </div>
     );
   };
@@ -157,8 +145,8 @@ export function KanbanPage() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h1 className="rd-h2" style={{ margin: "2px 0 2px" }}>Gesprekken</h1>
-          <p className="rd-sub" style={{ marginTop: 0 }}>Je trajecten per fase. Zet de fase met het keuzemenu; onder "Acties" leg je samples, opvolging en upsell vast.</p>
+          <h1 className="rd-h2" style={{ margin: "2px 0 2px" }}>Adviesgesprekken</h1>
+          <p className="rd-sub" style={{ marginTop: 0 }}>Sleep een kaartje naar een andere fase, of gebruik het keuzemenu. Klik op een kaartje voor het klantdossier.</p>
         </div>
         {isAdmin && stylists.length > 0 && (
           <select className="rd-input" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ height: 38, flex: "0 0 auto" }}>
@@ -168,17 +156,35 @@ export function KanbanPage() {
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 14, marginTop: 12 }} className="rd-hide-scroll">
+      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 14, marginTop: 14 }} className="rd-hide-scroll">
         {COLS.map((col) => {
           const items = visible.filter((c) => c.kanban_stage === col.key);
+          const isOver = over === col.key;
           return (
-            <div key={col.key} style={{ flex: "0 0 268px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 4px" }}>
+            <div
+              key={col.key}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (over !== col.key) setOver(col.key); }}
+              onDragLeave={() => setOver((o) => (o === col.key ? null : o))}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("text/plain") || dragId;
+                if (id) move(id, col.key);
+                setDragId(null); setOver(null);
+              }}
+              style={{
+                flex: "0 0 264px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8,
+                padding: 8, borderRadius: 18, minHeight: 200,
+                background: isOver ? "var(--rd-lavender)" : "var(--rd-grey-light)",
+                outline: isOver ? "2px dashed var(--rd-pink-dark)" : "2px dashed transparent",
+                transition: "background .12s ease",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 6px 2px" }}>
                 <span className="rd-kicker rd-kicker-pink">{col.label}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.5 }}>{items.length}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, background: "#fff", borderRadius: 99, padding: "1px 8px", opacity: 0.8 }}>{items.length}</span>
               </div>
               {items.length === 0 ? (
-                <div style={{ fontSize: 12, opacity: 0.4, padding: "8px 4px" }}>Leeg</div>
+                <div style={{ fontSize: 12, opacity: 0.45, padding: "10px 6px" }}>Sleep hierheen</div>
               ) : items.map(card)}
             </div>
           );
