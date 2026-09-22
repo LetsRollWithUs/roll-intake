@@ -12,9 +12,10 @@ const GIFT_IDS: number[] = (Deno.env.get("GIFT_PRODUCT_IDS") ?? "")
 
 const isSampleSku = (sku: string) => /^SMP[-_]/i.test(sku || "");
 
-// Verfomzet na klantkortingen, excl. btw: som van line_items.total (Woo levert die excl. btw en
-// na coupon-korting) voor regels die geen advies, cadeau of sample zijn. Tools/verzending vallen
-// buiten line_items of moeten later via een SKU/categorie-regel worden uitgesloten.
+// Commissiebasis na klantkortingen, excl. btw: som van line_items.total (Woo levert die excl. btw
+// en na coupon-korting) voor regels die geen advies, cadeau of sample zijn. Besluit: tools die in
+// de verfbestelling zitten tellen WEL mee; alleen samples en advies worden uitgesloten. Verzending
+// staat niet in line_items en valt dus vanzelf buiten de basis.
 export function verfBaseExcl(order: any): number {
   let sum = 0;
   for (const li of order.line_items ?? []) {
