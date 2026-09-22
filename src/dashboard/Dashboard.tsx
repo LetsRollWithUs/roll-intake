@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Routes, Route, NavLink, Link } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
@@ -15,24 +15,59 @@ import { OnboardingPage } from "./OnboardingPage";
 import { CommissiePage } from "./CommissiePage";
 import { AccountPage } from "./AccountPage";
 import { KanbanPage } from "./KanbanPage";
+import { KlantDossier } from "./KlantDossier";
+import { NotificationsPage } from "./NotificationsPage";
+import { loadNotifications } from "./notifications";
 
-interface NavItem { to: string; label: string; end?: boolean }
+// Menubalk in roll.nl-stijl: paarse afgeronde balk, wit menu, roze Roll-logo in het midden.
+const BAR_CSS = `
+.rd-topbar{max-width:1120px;margin:0 auto;background:var(--rd-aubergine);color:#fff;border-radius:16px;padding:0 18px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:62px;gap:12px}
+.rd-topbar nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.rd-topbar .rd-nl{color:rgba(255,255,255,.82);text-decoration:none;font-weight:600;font-size:15px;padding:8px 12px;border-radius:99px;line-height:1.4;white-space:nowrap;transition:background .12s ease,color .12s ease}
+.rd-topbar .rd-nl:hover{color:#fff;background:rgba(255,255,255,.08)}
+.rd-topbar .rd-nl.active{color:#fff;background:rgba(255,255,255,.14)}
+.rd-topbar .rd-logo{font-weight:900;font-size:28px;letter-spacing:-.04em;color:var(--rd-pink);text-decoration:none;line-height:1;padding:0 6px}
+.rd-topbar .rd-right{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.rd-topbar .rd-ico{position:relative;width:40px;height:40px;border-radius:99px;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none;transition:background .12s ease}
+.rd-topbar .rd-ico:hover,.rd-topbar .rd-ico.active{background:rgba(255,255,255,.12)}
+.rd-topbar .rd-badge{position:absolute;top:3px;right:3px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--rd-pink);color:var(--rd-aubergine);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.rd-topbar .rd-avatar{width:36px;height:36px;border-radius:99px;background:var(--rd-pink);color:var(--rd-aubergine);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;border:0;cursor:pointer;margin-left:4px}
+.rd-menu{position:absolute;right:0;top:46px;background:#fff;color:var(--rd-aubergine);border-radius:14px;box-shadow:0 10px 30px rgba(47,33,65,.18);min-width:210px;padding:6px;z-index:30;display:flex;flex-direction:column}
+.rd-menu a,.rd-menu button{text-align:left;background:none;border:0;font:inherit;font-weight:600;font-size:14px;color:var(--rd-aubergine);text-decoration:none;padding:9px 12px;border-radius:10px;cursor:pointer}
+.rd-menu a:hover,.rd-menu button:hover{background:var(--rd-grey-light)}
+.rd-menu .rd-sep{height:1px;background:var(--rd-line);margin:4px 6px}
+@media (max-width:860px){
+  .rd-topbar{grid-template-columns:1fr auto;grid-template-areas:"logo right" "nav nav";padding:8px 12px 6px}
+  .rd-topbar>nav{grid-area:nav;justify-content:center}
+  .rd-topbar>.rd-logo{grid-area:logo;justify-self:start}
+  .rd-topbar>.rd-right{grid-area:right}
+  .rd-topbar .rd-nl{font-size:14px;padding:6px 10px}
+}
+`;
+
+const BellIcon = () => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" />
+  </svg>
+);
+const CalendarIcon = () => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="4" width="18" height="18" rx="3" /><path d="M16 2v4M8 2v4M3 10h18" />
+  </svg>
+);
 
 export function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [isAdvisor, setIsAdvisor] = useState<boolean | null>(null);
-  const [alertCount, setAlertCount] = useState(0);
+  const [stylistName, setStylistName] = useState<string | null>(null);
+  const [notifCount, setNotifCount] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
-      setIsAdvisor(null);
-    });
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { setSession(s); setIsAdvisor(null); });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -43,94 +78,90 @@ export function Dashboard() {
 
   const isAdmin = !!session && (session.user.email ?? "").toLowerCase().endsWith("@roll.nl");
 
-  // Aantal openstaande meldingen (beheerder) voor het belletje.
+  // Belletje: aantal openstaande acties (styliste: eigen; beheerder: alles incl. systeemmeldingen).
   useEffect(() => {
-    if (!isAdmin) return;
-    supabase.from("system_alerts").select("id", { count: "exact", head: true }).is("acknowledged_at", null)
-      .then(({ count }) => setAlertCount(count ?? 0));
-  }, [isAdmin]);
+    if (!session || isAdvisor !== true) return;
+    (async () => {
+      const { data: st } = await supabase.rpc("current_stylist");
+      const mine = ((st as { id: string; name: string }[]) ?? [])[0] ?? null;
+      setStylistName(mine?.name ?? null);
+      const list = await loadNotifications({ isAdmin, stylistId: isAdmin ? null : mine?.id ?? null });
+      setNotifCount(list.length);
+    })();
+  }, [session, isAdvisor, isAdmin]);
 
-  const navMain: NavItem[] = isAdmin
-    ? [
-        { to: "/beheer", label: "Overzicht", end: true },
-        { to: "/beheer/gesprekken", label: "Gesprekken" },
-        { to: "/beheer/boekingen", label: "Boekingen" },
-        { to: "/beheer/commissie", label: "Commissie" },
-        { to: "/beheer/agenda", label: "Agenda" },
-        { to: "/beheer/cadeaucodes", label: "Cadeaucodes" },
-        { to: "/beheer/adviseurs", label: "Adviseurs" },
-        { to: "/beheer/start", label: "Als styliste" },
-        { to: "/beheer/onboarding", label: "Uitleg" },
-      ]
-    : [
-        { to: "/beheer", label: "Start", end: true },
-        { to: "/beheer/gesprekken", label: "Gesprekken" },
-        { to: "/beheer/commissie", label: "Commissie" },
-        { to: "/beheer/agenda", label: "Agenda" },
-        { to: "/beheer/onboarding", label: "Uitleg" },
-      ];
+  // Profielmenu sluiten bij klik buiten.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpen]);
 
-  const navLinkStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
-    textDecoration: "none",
-    fontWeight: 600,
-    fontSize: 14,
-    padding: "6px 12px",
-    borderRadius: 99,
-    lineHeight: 1.6,
-    color: isActive ? "var(--rd-aubergine)" : "rgba(47,33,65,.62)",
-    background: isActive ? "var(--rd-lavender)" : "transparent",
-    whiteSpace: "nowrap",
-  });
-
-  const initials = (session?.user.email ?? "?").trim().slice(0, 2).toUpperCase();
+  const initials = (() => {
+    const src = stylistName || session?.user.email || "?";
+    const p = src.trim().split(/[\s@.]+/).filter(Boolean);
+    return ((p[0]?.[0] ?? "?") + (p.length > 1 && stylistName ? p[p.length - 1][0] : "")).toUpperCase();
+  })();
 
   const shell = (children: React.ReactNode, chrome = true) => (
     <div style={{ minHeight: "100dvh", background: "var(--rd-offwhite)", color: "var(--rd-aubergine)", fontFamily: "Figtree, system-ui, sans-serif" }}>
+      <style>{BAR_CSS}</style>
       {chrome && session && (
-        <header style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--rd-offwhite)", borderBottom: "1px solid var(--rd-line)" }}>
-          <div style={{ maxWidth: 1040, margin: "0 auto", padding: "12px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-            <Link to="/beheer" style={{ textDecoration: "none", display: "flex", alignItems: "baseline", gap: 8, flex: "none" }}>
-              <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "-.02em", color: "var(--rd-aubergine)" }}>Roll</span>
-              <span className="rd-kicker rd-kicker-pink" style={{ fontSize: 11 }}>kleuradvies</span>
-            </Link>
-            <nav style={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap", flex: 1 }}>
-              {navMain.map((n) => (
-                <NavLink key={n.to} to={n.to} end={n.end} style={navLinkStyle}>{n.label}</NavLink>
-              ))}
+        <header style={{ position: "sticky", top: 0, zIndex: 20, padding: "12px 12px 0", background: "var(--rd-offwhite)" }}>
+          <div className="rd-topbar">
+            <nav>
+              <NavLink to="/beheer" end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Overzicht</NavLink>
+              <NavLink to="/beheer/gesprekken" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Adviesgesprekken</NavLink>
+              <NavLink to="/beheer/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
             </nav>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "none" }}>
-              {isAdmin && (
-                <NavLink to="/beheer/meldingen" title="Meldingen" style={{ position: "relative", textDecoration: "none", width: 38, height: 38, borderRadius: 99, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                  <span aria-hidden>🔔</span>
-                  {alertCount > 0 && (
-                    <span style={{ position: "absolute", top: 2, right: 2, minWidth: 17, height: 17, padding: "0 4px", borderRadius: 99, background: "var(--rd-pink-dark)", color: "#fff", fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{alertCount}</span>
-                  )}
-                </NavLink>
-              )}
-              <NavLink to="/beheer/account" title="Account" style={({ isActive }) => ({
-                textDecoration: "none", width: 38, height: 38, borderRadius: 99, flex: "none",
-                display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13,
-                background: isActive ? "var(--rd-pink)" : "var(--rd-lavender)", color: "var(--rd-aubergine)",
-              })}>{initials}</NavLink>
+            <Link to="/beheer" className="rd-logo" aria-label="Roll">Roll</Link>
+            <div className="rd-right">
+              <NavLink to="/beheer/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
+              <NavLink to="/beheer/notificaties" title="Notificaties" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}>
+                <BellIcon />
+                {notifCount > 0 && <span className="rd-badge">{notifCount > 99 ? "99+" : notifCount}</span>}
+              </NavLink>
+              <NavLink to="/beheer/agenda" title="Agenda" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}><CalendarIcon /></NavLink>
+              <div ref={menuRef} style={{ position: "relative" }}>
+                <button className="rd-avatar" onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen} title="Profiel">{initials}</button>
+                {menuOpen && (
+                  <div className="rd-menu" role="menu" onClick={() => setMenuOpen(false)}>
+                    <div style={{ padding: "6px 12px 8px", fontSize: 12, opacity: 0.6 }}>{session.user.email}</div>
+                    <Link to="/beheer/account">Mijn profiel</Link>
+                    <Link to="/beheer/agenda">Agenda &amp; beschikbaarheid</Link>
+                    {isAdmin && (
+                      <>
+                        <div className="rd-sep" />
+                        <Link to="/beheer/intakes">Alle intakes</Link>
+                        <Link to="/beheer/boekingen">Boekingen</Link>
+                        <Link to="/beheer/cadeaucodes">Cadeaucodes</Link>
+                        <Link to="/beheer/adviseurs">Adviseurs</Link>
+                        <Link to="/beheer/meldingen">Systeemmeldingen</Link>
+                      </>
+                    )}
+                    <div className="rd-sep" />
+                    <button onClick={() => supabase.auth.signOut()}>Uitloggen</button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
       )}
-      <main style={{ maxWidth: 1040, margin: "0 auto", padding: "24px 20px 64px" }}>{children}</main>
+      <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 20px 64px" }}>{children}</main>
     </div>
   );
 
   if (!ready) return null;
   if (!session) return <Login />;
-
   if (isAdvisor === null) return shell(<p className="rd-sub">Toegang controleren...</p>, false);
   if (!isAdvisor)
     return shell(
       <div className="rd-card-white" style={{ maxWidth: 520, margin: "40px auto 0" }}>
         <div className="rd-h2-sm" style={{ marginBottom: 8 }}>Geen toegang</div>
         <p className="rd-sub" style={{ marginTop: 0 }}>
-          Dit account staat niet op de lijst van kleuradviseurs. Vraag de beheerder om je e-mailadres
-          ({session.user.email}) toe te voegen.
+          Dit account staat niet op de lijst van kleuradviseurs. Vraag de beheerder om je e-mailadres ({session.user.email}) toe te voegen.
         </p>
         <button className="rd-textlink" style={{ minHeight: 40, marginTop: 8 }} onClick={() => supabase.auth.signOut()}>Uitloggen</button>
       </div>,
@@ -139,15 +170,17 @@ export function Dashboard() {
 
   return shell(
     <Routes>
-      <Route index element={isAdmin ? <IntakeList /> : <StylistHome />} />
+      <Route index element={<StylistHome />} />
       <Route path="start" element={<StylistHome />} />
+      <Route path="gesprekken" element={<KanbanPage />} />
+      <Route path="klant/:bookingId" element={<KlantDossier />} />
+      <Route path="commissie" element={<CommissiePage />} />
+      <Route path="notificaties" element={<NotificationsPage />} />
       <Route path="account" element={<AccountPage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
-      <Route path="commissie" element={<CommissiePage />} />
-      <Route path="gesprekken" element={<KanbanPage />} />
+      <Route path="agenda" element={<AgendaPage />} />
       <Route path="intakes" element={<IntakeList />} />
       <Route path="boekingen" element={<BoekingenPage />} />
-      <Route path="agenda" element={<AgendaPage />} />
       <Route path="adviseurs" element={<AdvisorsAdmin />} />
       <Route path="meldingen" element={<AlertsPage />} />
       <Route path="cadeaucodes" element={<CadeaucodesPage />} />
