@@ -4,10 +4,13 @@ import { supabase } from "@/lib/supabase";
 import { SURFACES, SUN_MOMENTS, USAGE_TIMES, PLANNING, PAINTERS, MOODS } from "@/data/intake-options";
 import { CustomerPurchases, euro } from "./CustomerPurchases";
 import { formatDate } from "./ui";
-import { OUTCOMES } from "./outcome";
 import { nextAction, type Phase } from "./nextAction";
 import { deriveExpected, leadScore, TEMP_LABEL } from "./lead";
+import { AdviceEditor } from "./AdviceEditor";
 import type { IntakeRow } from "./types";
+
+interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
+const ROUTE_LABEL: Record<string, string> = { samples: "Eerst samples testen", zelf: "Zelf verf bestellen", roll: "Hulp van Roll" };
 
 interface Booking {
   id: string;
@@ -73,6 +76,7 @@ export function GesprekPage() {
   const [intake, setIntake] = useState<IntakeRow | null>(null);
   const [others, setOthers] = useState<Booking[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  const [sends, setSends] = useState<Sent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -83,17 +87,26 @@ export function GesprekPage() {
       setB(cur);
       if (!cur) { setLoading(false); return; }
       const email = (cur.customer_email ?? "").trim().toLowerCase();
-      const [it, all, cm] = await Promise.all([
+      const [it, all, cm, sd] = await Promise.all([
         cur.intake_id ? supabase.from("intake").select("*").eq("id", cur.intake_id).maybeSingle() : Promise.resolve({ data: null }),
         email ? supabase.from("bookings").select(SEL).ilike("customer_email", email).neq("status", "cancelled").order("start_at", { ascending: false }) : Promise.resolve({ data: [] }),
         email ? supabase.from("commissions").select("id,woo_order_id,verf_excl,amount,status,created_at").ilike("customer_email", email).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+        cur.intake_id ? supabase.from("advice_sends").select("id,route,subject,body,sent_to,sent_by,sent_at").eq("intake_id", cur.intake_id).order("sent_at", { ascending: false }) : Promise.resolve({ data: [] }),
       ]);
       setIntake((it.data as IntakeRow) ?? null);
       setOthers(((all.data as unknown as Booking[]) ?? []).filter((x) => x.id !== cur.id));
       setCommissions((cm.data as Commission[]) ?? []);
+      setSends((sd.data as Sent[]) ?? []);
       setLoading(false);
     })();
   }, [bookingId]);
+
+  // Na versturen: verzendlog opnieuw ophalen zodat "Versturen & overdragen" meteen klopt.
+  const reloadSends = async () => {
+    if (!b?.intake_id) return;
+    const { data } = await supabase.from("advice_sends").select("id,route,subject,body,sent_to,sent_by,sent_at").eq("intake_id", b.intake_id).order("sent_at", { ascending: false });
+    setSends((data as Sent[]) ?? []);
+  };
 
   const patch = async (jsonPatch: Record<string, unknown>, local: Partial<Booking>) => {
     if (!b) return;
@@ -129,8 +142,6 @@ export function GesprekPage() {
   }
   const samplesBefore = b.services?.key === "post_sample" || (!!intake?.has_samples && intake.has_samples !== "nee");
   const lead = intake ? leadScore({ rooms: intake.rooms, planning: intake.planning, painter: intake.painter }) : null;
-  const outcomeLabel = OUTCOMES.find((o) => o.key === intake?.advisor_outcome)?.label;
-  const advice = (intake?.advisor_advice ?? []).filter((a) => a.room || a.color);
   const expected = b.expected_purchase_at ?? (past ? deriveExpected(b.start_at, intake?.planning ?? null) : null);
   const totalCommission = commissions.filter((c) => c.status !== "vervallen").reduce((s, c) => s + Number(c.amount), 0);
 
@@ -232,21 +243,19 @@ export function GesprekPage() {
       </Panel>
 
       {/* 2 GESPREK & ADVIES */}
-      <Panel id="gesprek" title="Gesprek & advies" hint="door de styliste vastgelegd" open={openPanel(["gesprek"])}>
+      <Panel id="gesprek" title="Gesprek & advies" hint="door de styliste vastgelegd" open={openPanel(["gesprek", "versturen"])}>
         {!intake ? (
-          <p className="rd-sub" style={{ margin: 0 }}>Het advies leg je vast op de intake; zonder intake is dat nog niet mogelijk.</p>
+          <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen. Vraag de klant de intake in te vullen.</p>
         ) : (
-          <div>
-            {outcomeLabel ? <span className="rd-chip" style={{ background: "var(--rd-aubergine)", color: "#fff", fontWeight: 700 }}>{outcomeLabel}</span> : <span className="rd-chip" style={{ background: "var(--rd-grey-light)" }}>uitkomst nog niet gekozen</span>}
-            <div style={{ marginTop: 10, fontSize: 14, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{intake.advisor_summary || <span style={{ opacity: 0.5 }}>Nog geen samenvatting voor de klant.</span>}</div>
-            {advice.length > 0 && (
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
-                {advice.map((a, i) => <div key={i} style={{ fontSize: 13 }}><strong>{a.room || "Ruimte"}</strong> · {a.color || "—"} <span style={{ opacity: 0.7 }}>· {a.product}{a.m2 ? ` · ${a.m2} m²` : ""}{a.liters ? ` · ${a.liters} L` : ""}</span></div>)}
-              </div>
-            )}
-            {intake.advisor_notes && <div style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}><span className="rd-kicker" style={{ opacity: 0.6, fontSize: 10 }}>Intern</span><div style={{ whiteSpace: "pre-wrap" }}>{intake.advisor_notes}</div></div>}
-            <Link to={`/beheer/${intake.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 14px", marginTop: 12, display: "inline-block" }}>{outcomeLabel ? "Advies bewerken" : "Advies vastleggen"}</Link>
-          </div>
+          <AdviceEditor
+            key={intake.id}
+            intake={intake}
+            bookingId={b.id}
+            customerName={name}
+            stylistName={b.stylists?.name ?? ""}
+            roomLabels={rooms.map((r) => r.label)}
+            onChange={(p) => { setIntake({ ...intake, ...p }); if (p.advisor_followup_sent_at) reloadSends(); }}
+          />
         )}
       </Panel>
 
@@ -254,9 +263,24 @@ export function GesprekPage() {
       <Panel id="versturen" title="Versturen & overdragen" hint="klantmail en hulp van Roll" open={openPanel(["versturen"])}>
         {!intake ? <p className="rd-sub" style={{ margin: 0 }}>Beschikbaar zodra er een intake en advies is.</p> : (
           <div>
-            <Kv k="Adviesverslag">{intake.advisor_followup_sent_at ? <span>Verstuurd {formatDate(intake.advisor_followup_sent_at)}</span> : <span style={{ opacity: 0.6 }}>Nog niet verstuurd</span>} <Link to={`/beheer/${intake.id}`} className="rd-textlink" style={{ fontSize: 13, marginLeft: 8 }}>{intake.advisor_followup_sent_at ? "Opnieuw bekijken" : "Controleren en versturen"}</Link></Kv>
-            <Kv k="Offerte">{intake.advisor_offer_url ? <a href={intake.advisor_offer_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{intake.advisor_offer_url}</a> : <span style={{ opacity: 0.6 }}>Geen offerte; de klant bestelt zelf via roll.nl (hulp: roll.nl/prijsopgave)</span>}{intake.advisor_offer_notes && <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>{intake.advisor_offer_notes}</div>}</Kv>
-            <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Binnenkort: "Hulp van Roll aanvragen" met afmetingen en kleuren; Roll maakt dan de offerte.</p>
+            <Kv k="Vervolgrichting">{intake.followup_route ? <strong>{ROUTE_LABEL[intake.followup_route]}</strong> : <span style={{ opacity: 0.6 }}>Nog niet gekozen (bij Gesprek &amp; advies)</span>}</Kv>
+            <Kv k="Adviesverslag">
+              {sends.length === 0 ? (
+                <span style={{ opacity: 0.6 }}>Nog niet verstuurd. Versturen doe je via "Klantmail bekijken" bij Gesprek &amp; advies.</span>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {sends.map((s) => (
+                    <details key={s.id} style={{ fontSize: 13 }}>
+                      <summary style={{ cursor: "pointer" }}><strong>Verstuurd {formatDate(s.sent_at)}</strong> · {ROUTE_LABEL[s.route] ?? s.route} · aan {s.sent_to}{s.sent_by ? ` · door ${s.sent_by}` : ""}</summary>
+                      <div style={{ marginTop: 6, padding: "10px 12px", background: "var(--rd-grey-light)", borderRadius: 10, whiteSpace: "pre-wrap", lineHeight: 1.5 }}><strong>{s.subject}</strong>{"\n\n"}{s.body}</div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </Kv>
+            <Kv k="Vervolgafspraak">{intake.followup_plan?.what ? <span>{intake.followup_plan.what}{intake.followup_plan.who ? ` · ${intake.followup_plan.who}` : ""}{intake.followup_plan.when ? ` · ${intake.followup_plan.when}` : ""}</span> : <span style={{ opacity: 0.6 }}>Geen</span>}</Kv>
+            <Kv k="Offerte">{intake.advisor_offer_url ? <a href={intake.advisor_offer_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{intake.advisor_offer_url}</a> : <span style={{ opacity: 0.6 }}>Geen offerte; de klant bestelt zelf via roll.nl (hulp: roll.nl/prijsopgave)</span>}</Kv>
+            <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Fase 3: "Hulp van Roll aanvragen" met afmetingen en kleuren; Roll maakt dan de offerte.</p>
           </div>
         )}
       </Panel>
