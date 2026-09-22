@@ -9,8 +9,9 @@ import { deriveExpected, leadScore, TEMP_LABEL } from "./lead";
 import { AdviceEditor } from "./AdviceEditor";
 import { RollHelpForm, type RollTask } from "./RollHelpForm";
 import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
+import { ConceptPanel } from "./ConceptPanel";
 import type { OrdersResp } from "./CustomerPurchases";
-import type { IntakeRow } from "./types";
+import type { IntakeRow, AdviceConcept, AdviceClient } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
 const ROUTE_LABEL: Record<string, string> = { samples: "Eerst samples testen", zelf: "Zelf verf bestellen", roll: "Hulp van Roll" };
@@ -83,7 +84,25 @@ export function GesprekPage() {
   const [task, setTask] = useState<RollTask | null>(null);
   const [tasks, setTasks] = useState<FollowupTask[]>([]);
   const [orders, setOrders] = useState<OrdersResp | null | undefined>(undefined); // undefined = nog aan het laden
+  const [adoptVersion, setAdoptVersion] = useState(0); // remount van de advies-editor na "Overnemen in advies"
   const [loading, setLoading] = useState(true);
+
+  // Concept overnemen: kleurrichtingen worden VOORGESTELDE regels in het advies; de styliste past aan.
+  const adoptConcept = async (c: AdviceConcept) => {
+    if (!intake) return;
+    const existing = intake.advice_client;
+    const rooms = c.richtingen.flatMap((r) => r.kleuren.map((k) => ({
+      room: r.titel, surface: k.toepassing, color: k.naam, status: "voorgesteld" as const, product: "Muurverf", m2: "", liters: "", motivation: r.waarom,
+    })));
+    const next: AdviceClient = {
+      answer: existing?.answer?.trim() ? existing.answer : c.samenvatting,
+      rooms: (existing?.rooms?.filter((r) => r.room.trim() || r.color.trim()) ?? []).concat(rooms),
+      sample_instruction: existing?.sample_instruction ?? "",
+      next_step: existing?.next_step ?? "",
+    };
+    const { error } = await supabase.from("intake").update({ advice_client: next }).eq("id", intake.id);
+    if (!error) { setIntake({ ...intake, advice_client: next }); setAdoptVersion((v) => v + 1); document.getElementById("gesprek")?.setAttribute("open", ""); }
+  };
 
   const loadTasks = async (bid: string) => {
     const { data } = await supabase.from("followup_tasks").select("id,action,owner,due_date,kind,outcome,note,done_at,created_at").eq("booking_id", bid).order("created_at", { ascending: true });
@@ -278,6 +297,13 @@ export function GesprekPage() {
             {lead && <Kv k="Lead">{lead.rooms} ruimte{lead.rooms === 1 ? "" : "s"} · {lead.surfaces} oppervlak{lead.surfaces === 1 ? "" : "ken"} · <span className="rd-chip" style={{ background: TEMP_LABEL[lead.temp].bg, color: TEMP_LABEL[lead.temp].ink, fontWeight: 700 }}>{TEMP_LABEL[lead.temp].label}</span></Kv>}
           </div>
         )}
+        {intake && (
+          <ConceptPanel
+            intake={intake}
+            onConcept={(c, at) => setIntake({ ...intake, advice_concept: c, advice_concept_at: at })}
+            onAdopt={adoptConcept}
+          />
+        )}
         <div style={{ marginTop: 12 }}>
           <CustomerPurchases email={email} title="Eerdere samples & aankopen (WooCommerce)" onData={setOrders} />
         </div>
@@ -289,7 +315,7 @@ export function GesprekPage() {
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen. Vraag de klant de intake in te vullen.</p>
         ) : (
           <AdviceEditor
-            key={intake.id}
+            key={`${intake.id}:${adoptVersion}`}
             intake={intake}
             bookingId={b.id}
             customerName={name}
