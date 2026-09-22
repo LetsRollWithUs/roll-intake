@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { rollColors } from "@/data/roll-colors";
+import { SAMPLE_PACKS } from "@/data/sample-packs";
 import { PRODUCTS } from "./outcome";
-import type { IntakeRow, AdviceClient, AdviceRoom, FollowupPlan } from "./types";
+import type { IntakeRow, AdviceClient, AdviceRoom, FollowupPlan, AdviceProduct } from "./types";
+
+const colorByName = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
 
 // Gestructureerd advies: klanttekst, interne notities en vervolgafspraak, met een bewerkbaar
 // mailconcept. Opslaan verstuurt nooit; versturen is een aparte, expliciete stap in de preview.
@@ -79,6 +82,7 @@ export function AdviceEditor({ intake, bookingId, customerName, stylistName, roo
   const [internal, setInternal] = useState(intake.advice_internal ?? intake.advisor_notes ?? "");
   const [plan, setPlan] = useState<FollowupPlan>(intake.followup_plan ?? { what: "", who: "", when: "" });
   const [route, setRoute] = useState<"samples" | "zelf" | "roll" | null>(intake.followup_route ?? null);
+  const [products, setProducts] = useState<AdviceProduct[]>(intake.advice_products ?? []);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
@@ -91,6 +95,30 @@ export function AdviceEditor({ intake, bookingId, customerName, stylistName, roo
   const setRoom = (i: number, p: Partial<AdviceRoom>) => setAdvice((a) => ({ ...a, rooms: a.rooms.map((r, idx) => (idx === i ? { ...r, ...p } : r)) }));
   const addRoom = () => setAdvice((a) => ({ ...a, rooms: [...a.rooms, emptyRoom()] }));
   const delRoom = (i: number) => setAdvice((a) => ({ ...a, rooms: a.rooms.filter((_, idx) => idx !== i) }));
+
+  // Kandidaat-kleuren uit het advies (match op naam), voor de productkeuze in de mail.
+  const candidates = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; hex: string }>();
+    for (const r of advice.rooms) {
+      const c = colorByName.get((r.color ?? "").trim().toLowerCase());
+      if (c && !seen.has(c.id)) seen.set(c.id, { id: c.id, name: c.name, hex: c.hex });
+    }
+    return [...seen.values()];
+  }, [advice.rooms]);
+  // Best passende sample-bundel op basis van de geadviseerde kleuren.
+  const suggestedPack = useMemo(() => {
+    const ids = new Set(candidates.map((c) => c.id));
+    let best: { id: string; name: string; colorIds: string[]; overlap: number } | null = null;
+    for (const p of SAMPLE_PACKS) {
+      const overlap = p.colorIds.filter((id) => ids.has(id)).length;
+      if (overlap > 0 && (!best || overlap > best.overlap)) best = { id: p.id, name: p.displayName + " Sample Pack", colorIds: p.colorIds, overlap };
+    }
+    return best;
+  }, [candidates]);
+
+  const hasProduct = (kind: AdviceProduct["kind"], ref: string) => products.some((p) => p.kind === kind && p.ref === ref);
+  const toggleProduct = (kind: AdviceProduct["kind"], ref: string, name: string) =>
+    setProducts((ps) => hasProduct(kind, ref) ? ps.filter((p) => !(p.kind === kind && p.ref === ref)) : [...ps, { kind, ref, name }]);
 
   // Oude velden blijven gevuld (intake-detail, notificaties en de opvolgmail lezen die nog).
   const mirrored = useMemo(() => ({
@@ -106,6 +134,7 @@ export function AdviceEditor({ intake, bookingId, customerName, stylistName, roo
       advice_internal: internal.trim() || null,
       followup_plan: plan,
       followup_route: route,
+      advice_products: products,
       ...mirrored,
       advisor_updated_at: new Date().toISOString(),
     };
@@ -221,6 +250,40 @@ export function AdviceEditor({ intake, bookingId, customerName, stylistName, roo
             </label>
           ))}
         </div>
+      </div>
+
+      {/* Producten voor de opvolgmail */}
+      <div>
+        <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>Producten in de mail</div>
+        <p className="rd-sub" style={{ margin: "0 0 10px", fontSize: 13 }}>Kies wat als bestelbaar product in de opvolgmail komt (met afbeelding en prijs). Suggesties komen uit de geadviseerde kleuren.</p>
+        {candidates.length === 0 ? (
+          <p className="rd-sub" style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>Voeg hierboven kleuren met een Roll-naam toe, dan verschijnen hier de producten.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {suggestedPack && (
+              <label style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${hasProduct("pack", suggestedPack.id) ? "var(--rd-aubergine)" : "var(--rd-line)"}`, cursor: "pointer" }}>
+                <input type="checkbox" checked={hasProduct("pack", suggestedPack.id)} onChange={() => toggleProduct("pack", suggestedPack.id, suggestedPack.name)} />
+                <span style={{ display: "flex", gap: 2 }}>
+                  {suggestedPack.colorIds.slice(0, 5).map((id) => <span key={id} style={{ width: 14, height: 20, borderRadius: 3, background: rollColors.find((c) => c.id === id)?.hex ?? "#ccc", border: "1px solid rgba(0,0,0,.1)" }} />)}
+                </span>
+                <span style={{ flex: 1 }}><strong style={{ fontSize: 14 }}>{suggestedPack.name}</strong> <span className="rd-chip" style={{ fontSize: 11 }}>aanbevolen</span><br /><span style={{ fontSize: 12.5, opacity: 0.7 }}>Bundel met o.a. de geadviseerde kleuren · € 10,-</span></span>
+              </label>
+            )}
+            {candidates.map((c) => (
+              <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--rd-line)" }}>
+                <span style={{ width: 20, height: 20, borderRadius: 6, background: c.hex, border: "1px solid rgba(0,0,0,.12)", flex: "none" }} />
+                <span style={{ fontWeight: 700, fontSize: 14, flex: "1 1 120px", minWidth: 0 }}>{c.name}</span>
+                <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
+                  <input type="checkbox" checked={hasProduct("sticker", c.id)} onChange={() => toggleProduct("sticker", c.id, c.name)} /> Sticker <span style={{ opacity: 0.6 }}>€ 2,50</span>
+                </label>
+                <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}>
+                  <input type="checkbox" checked={hasProduct("tester", c.id)} onChange={() => toggleProduct("tester", c.id, c.name)} /> Verftester <span style={{ opacity: 0.6 }}>€ 7,-</span>
+                </label>
+              </div>
+            ))}
+            {products.length > 0 && <p className="rd-sub" style={{ margin: "2px 0 0", fontSize: 12.5 }}>{products.length} product(en) gaan mee in de mail.</p>}
+          </div>
+        )}
       </div>
 
       {/* C. Vervolgafspraak */}

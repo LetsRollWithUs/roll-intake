@@ -267,3 +267,24 @@ export function multiAddUrl(pairs: [number, number][], goto: "cart" | "checkout"
   const spec = pairs.map(([id, qty]) => `${id}:${qty}`).join(",");
   return `${SHOP_BASE}/?multi_add=${spec}&goto=${goto}`;
 }
+
+// ── Opvolgmail-producten (fase: producten in de opvolgmail) ────────────────
+// Sample-pack -> WooCommerce product-id (uit Quiz/src/data/woocommerce-product-ids.ts).
+export const PACK_PRODUCT_IDS: Record<string, number> = {
+  "wit-sample-pack": 6902, "lichtbeige-sample-pack": 13917, "beige-sample-pack": 6873, "greige-sample-pack": 6897,
+  "lichtgrijs-sample-pack": 6904, "donkergrijs-sample-pack": 6907, "grijsgroen-sample-pack": 6956, "lichtgroen-sample-pack": 6951,
+  "donkergroen-sample-pack": 6958, "diep-groenblauw-sample-pack": 6960, "lichtblauw-sample-pack": 6955, "donkerblauw-sample-pack": 6959,
+  "roze-sample-pack": 6946, "oranje-sample-pack": 6949, "paars-sample-pack": 6950, "geel-sample-pack": 6957,
+  "rood-sample-pack": 6948, "bruin-sample-pack": 6961,
+};
+
+// Prijzen (indicatief, zoals in de kleurmatch-mail). Als strings voor directe weergave.
+export const PRICE = { sticker: "€ 2,50", tester: "€ 7,-", pack: "€ 10,-" };
+export const PRICE_NUM = { sticker: 2.5, tester: 7, pack: 10 };
+
+// Publieke Supabase-storage met de productbeelden (zelfde bucket als de mailbeelden).
+const IMG_BASE = "https://lsboujprrvhntgbvlvyu.supabase.co/storage/v1/object/public/sample-images";
+export const sampleImage = (kind: "pack" | "sticker" | "tester", id: string) => {
+  const dir = kind === "pack" ? "packs" : kind === "sticker" ? "stickers" : "pouches";
+  return `${IMG_BASE}/${dir}/${id}.png`;
+};
