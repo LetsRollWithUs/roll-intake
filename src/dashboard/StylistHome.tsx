@@ -141,7 +141,7 @@ export function StylistHome() {
           )}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-          <Link to={`/beheer/klant/${r.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 16px" }}>Open dossier</Link>
+          <Link to={`/beheer/gesprek/${r.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 16px" }}>Open gesprek</Link>
           {r.intake_id ? (
             <Link to={`/beheer/${r.intake_id}`} className="rd-btn rd-btn-outline" style={{ textDecoration: "none", padding: "8px 16px" }}>Intake</Link>
           ) : (
