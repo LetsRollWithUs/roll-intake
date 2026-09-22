@@ -82,6 +82,18 @@ export interface IntakeRow {
   advice_internal: string | null;
   followup_plan: FollowupPlan | null;
   followup_route: "samples" | "zelf" | "roll" | null;
+  // Werkplek fase 5: conceptvoorbereiding (AI-concept, door de styliste goed te keuren)
+  advice_concept: AdviceConcept | null;
+  advice_concept_at: string | null;
+}
+
+export interface AdviceConcept {
+  samenvatting: string;
+  ontbreekt: string[];
+  vragen: string[];
+  richtingen: { titel: string; kleuren: { id: string; naam: string; toepassing: string }[]; waarom: string; gebaseerd_op: string }[];
+  samples_aandacht: string[];
+  model?: string;
 }
 
 export interface AdviceRoom {
