@@ -3,6 +3,7 @@
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { confirmPaid, cancelBooking, createCreditFromOrder } from "../_shared/confirm.ts";
+import { attributeCommission, voidCommission } from "../_shared/commission.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -56,6 +57,8 @@ Deno.serve(async (req) => {
       // Directe aankoop (route 2): geen boeking bij deze order -> maak een advies-tegoed + plan-mail.
       await createCreditFromOrder(admin, order);
     }
+    // Verfcommissie toeschrijven (elke betaalde order kan verf bevatten, ook los van een boeking).
+    await attributeCommission(admin, order);
   } else if (dead) {
     // Refund/annulering: ook een reeds BEVESTIGDE afspraak wordt nu geannuleerd (slot komt vrij).
     // cancelBooking informeert klant + team alleen als het een echte afspraak was.
@@ -66,6 +69,8 @@ Deno.serve(async (req) => {
     // Route 2: een advies-tegoed van deze order is bij refund/annulering niet meer inwisselbaar.
     await admin.from("advice_credits").update({ status: "refunded" })
       .eq("woo_order_id", String(order.id)).neq("status", "refunded");
+    // Verfcommissie op deze order laten vervallen (tenzij al uitbetaald).
+    await voidCommission(admin, order.id);
   }
 
   return new Response("ok");
