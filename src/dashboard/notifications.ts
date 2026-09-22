@@ -6,7 +6,7 @@ import { deriveExpected, todayKey } from "./lead";
 // (De toolkit-herinnering is geparkeerd; de velden blijven in de database.)
 export interface Notif {
   id: string;
-  kind: "vandaag" | "opvolgen" | "advies" | "versturen" | "check" | "plan" | "roll" | "melding";
+  kind: "vandaag" | "opvolgen" | "advies" | "versturen" | "check" | "plan" | "taak" | "roll" | "melding";
   title: string;
   sub?: string;
   to?: string;
@@ -24,6 +24,7 @@ export const KIND_LABEL: Record<Notif["kind"], string> = {
   versturen: "Adviesverslag versturen",
   opvolgen: "Opvolgen",
   check: "Achteraan gaan",
+  taak: "Opvolgtaken",
   roll: "Roll-taken",
   melding: "Systeem",
 };
@@ -80,6 +81,24 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     const expected = r.expected_purchase_at ?? deriveExpected(r.start_at, it?.planning ?? null);
     if (expected < todayKey()) {
       out.push({ id: `check-${r.id}`, kind: "check", title: `${name}: verf verwacht op ${fmtD(expected)}, nog niet gekocht`, sub: "Ga erachteraan en leg de uitkomst vast" + who(r), to: gesprek });
+    }
+  }
+
+  // Open opvolgtaken die vandaag of eerder gepland staan.
+  {
+    let tq = supabase.from("followup_tasks").select("id,action,owner,due_date,booking_id,stylist_id, bookings(customer_name)")
+      .is("done_at", null).lte("due_date", todayKey()).order("due_date", { ascending: true }).limit(30);
+    if (opts.stylistId) tq = tq.eq("stylist_id", opts.stylistId);
+    const { data: ft } = await tq;
+    for (const t of (ft as any[]) ?? []) {
+      if (t.owner === "klant") continue;
+      const late = t.due_date && t.due_date < todayKey();
+      out.push({
+        id: `taak-${t.id}`, kind: "taak",
+        title: `${t.action} · ${t.bookings?.customer_name || "klant"}`,
+        sub: (late ? `Was gepland op ${t.due_date}` : "Gepland voor vandaag") + (t.owner === "roll" ? " · Roll" : ""),
+        to: `/beheer/gesprek/${t.booking_id}`,
+      });
     }
   }
 

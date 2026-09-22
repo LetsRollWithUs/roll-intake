@@ -89,10 +89,14 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
     await admin.from("commissions").update(row).eq("id", existing.id);
   }
 
-  // Kanban automatisch naar 'verf gekocht' voor de advies-boeking (tenzij afgehaakt).
+  // Kanban automatisch naar 'verf gekocht' voor de advies-boeking (tenzij afgehaakt), en
+  // open verkoopherinneringen sluiten: de aankoop is gedaan.
   if (route === "advies" && adviesBookingId) {
     await admin.from("bookings").update({ kanban_stage: "verf" })
       .eq("id", adviesBookingId).neq("kanban_stage", "afgehaakt");
+    await admin.from("followup_tasks")
+      .update({ done_at: new Date().toISOString(), outcome: "verf_gekocht", note: `Automatisch gesloten: verf gekocht (order ${wooId}).` })
+      .eq("booking_id", adviesBookingId).is("done_at", null);
   }
   return { ok: true, stylist, route, amount, conflict };
 }

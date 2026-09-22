@@ -68,9 +68,10 @@ interface Props {
   stylistName: string;
   roomLabels: string[];
   onChange: (patch: Partial<IntakeRow>) => void;
+  onTasksCreated?: () => void;
 }
 
-export function AdviceEditor({ intake, bookingId, customerName, stylistName, roomLabels, onChange }: Props) {
+export function AdviceEditor({ intake, bookingId, customerName, stylistName, roomLabels, onChange, onTasksCreated }: Props) {
   const init: AdviceClient = intake.advice_client ?? {
     answer: intake.advisor_summary ?? "", rooms: roomLabels.map((l) => emptyRoom(l)), sample_instruction: "", next_step: "",
   };
@@ -133,6 +134,25 @@ export function AdviceEditor({ intake, bookingId, customerName, stylistName, roo
     if (error || !(data as { ok?: boolean } | null)?.ok) { setMsg("Versturen lukte niet. Probeer het later opnieuw."); return; }
     const now = new Date().toISOString();
     onChange({ advisor_followup_sent_at: now });
+    // Opvolgtaken aanmaken: sample-check-in bij de samples-route, en de vervolgafspraak als die is ingevuld.
+    const { data: u } = await supabase.auth.getUser();
+    const { data: bk } = await supabase.from("bookings").select("stylist_id,start_at").eq("id", bookingId).maybeSingle();
+    const sid = (bk as { stylist_id: string | null } | null)?.stylist_id ?? null;
+    const startAt = (bk as { start_at: string } | null)?.start_at ?? now;
+    const rows: Record<string, unknown>[] = [];
+    if (route === "samples") {
+      const d = new Date(startAt); d.setDate(d.getDate() + 10);
+      rows.push({ booking_id: bookingId, stylist_id: sid, action: "Check hoe de samples bevallen", owner: "styliste", due_date: d.toISOString().slice(0, 10), kind: "sample_checkin", created_by: u?.user?.email ?? null });
+    }
+    if (plan.what.trim()) {
+      rows.push({ booking_id: bookingId, stylist_id: sid, action: plan.what.trim(), owner: plan.who || "styliste", due_date: plan.when || null, kind: "algemeen", created_by: u?.user?.email ?? null });
+    }
+    if (rows.length) {
+      const { data: existing } = await supabase.from("followup_tasks").select("action").eq("booking_id", bookingId).is("done_at", null);
+      const have = new Set(((existing as { action: string }[]) ?? []).map((t) => t.action));
+      const fresh = rows.filter((r) => !have.has(String(r.action)));
+      if (fresh.length) { await supabase.from("followup_tasks").insert(fresh); onTasksCreated?.(); }
+    }
     setPreview(false);
     setMsg("Advies verstuurd ✓");
   };
