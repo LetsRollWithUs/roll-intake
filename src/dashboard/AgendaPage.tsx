@@ -74,6 +74,7 @@ export function AgendaPage() {
 
   // uitzondering toevoegen
   const [excDate, setExcDate] = useState("");
+  const [excTo, setExcTo] = useState("");
   const [excOff, setExcOff] = useState(true);
   const [excStart, setExcStart] = useState("09:00");
   const [excEnd, setExcEnd] = useState("17:00");
@@ -224,19 +225,28 @@ export function AgendaPage() {
     loadSchedule(selectedId);
   };
 
+  // Eén dag of een periode (van–tot): per dag een rij, zodat de slotberekening ongewijzigd blijft.
   const addException = async () => {
     if (!excDate) return;
-    const row = {
+    const from = new Date(excDate + "T00:00:00");
+    const to = excTo ? new Date(excTo + "T00:00:00") : from;
+    if (to < from) return setErr("De einddatum ligt vóór de begindatum.");
+    const days: string[] = [];
+    for (let d = new Date(from); d <= to && days.length < 120; d.setDate(d.getDate() + 1)) {
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const rows = days.map((date) => ({
       stylist_id: selectedId,
-      date: excDate,
+      date,
       is_off: excOff,
       start_time: excOff ? null : excStart,
       end_time: excOff ? null : excEnd,
-    };
-    const { error } = await supabase.from("availability_exceptions").insert(row);
+    }));
+    const { error } = await supabase.from("availability_exceptions").insert(rows);
     if (error) return setErr(error.message);
     setExcDate("");
-    flash("Uitzondering toegevoegd.");
+    setExcTo("");
+    flash(days.length === 1 ? "Uitzondering toegevoegd." : `${days.length} dagen toegevoegd.`);
     loadSchedule(selectedId);
   };
   const removeException = async (id: string) => {
@@ -549,7 +559,9 @@ export function AgendaPage() {
             </div>
             {canEdit && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <input type="date" className="rd-input" value={excDate} onChange={(e) => setExcDate(e.target.value)} style={{ width: 170, height: 44 }} />
+                <input type="date" className="rd-input" value={excDate} onChange={(e) => setExcDate(e.target.value)} aria-label="Van" style={{ width: 170, height: 44 }} />
+                <span style={{ opacity: 0.6, fontSize: 13 }}>t/m</span>
+                <input type="date" className="rd-input" value={excTo} min={excDate || undefined} onChange={(e) => setExcTo(e.target.value)} aria-label="Tot en met (optioneel)" placeholder="optioneel" style={{ width: 170, height: 44 }} />
                 <select className="rd-input" value={excOff ? "off" : "custom"} onChange={(e) => setExcOff(e.target.value === "off")} style={{ width: 150, height: 44 }}>
                   <option value="off">Hele dag vrij</option>
                   <option value="custom">Andere tijden</option>

@@ -1,5 +1,5 @@
-import { HELP_NEEDS, PLANNING } from "@/data/intake-options";
-import type { PlanningKey } from "@/lib/types";
+import { HELP_NEEDS, PLANNING, PAINTERS } from "@/data/intake-options";
+import type { PlanningKey, PainterKey } from "@/lib/types";
 
 interface Props {
   helpNeeds: string[];
@@ -7,10 +7,12 @@ interface Props {
   multiRoom: boolean;
   questionScope?: "een" | "meerdere";
   planning?: PlanningKey;
+  painter?: PainterKey;
   onHelpNeeds: (v: string[]) => void;
   onQuestion: (v: string) => void;
   onScope: (v: "een" | "meerdere") => void;
   onPlanning: (v: PlanningKey) => void;
+  onPainter: (v: PainterKey) => void;
 }
 
 const MAX = 2;
@@ -21,10 +23,12 @@ export function VraagStep({
   multiRoom,
   questionScope,
   planning,
+  painter,
   onHelpNeeds,
   onQuestion,
   onScope,
   onPlanning,
+  onPainter,
 }: Props) {
   const toggle = (v: string) => {
     if (helpNeeds.includes(v)) onHelpNeeds(helpNeeds.filter((x) => x !== v));
@@ -104,6 +108,24 @@ export function VraagStep({
               className={`rd-plan-chip${planning === p.key ? " is-on" : ""}`}
               onClick={() => onPlanning(p.key)}
               aria-pressed={planning === p.key}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="rd-kicker" style={{ opacity: 0.55, marginBottom: 10 }}>
+          Wie gaat er schilderen?
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {PAINTERS.map((p) => (
+            <button
+              key={p.key}
+              className={`rd-plan-chip${painter === p.key ? " is-on" : ""}`}
+              onClick={() => onPainter(p.key)}
+              aria-pressed={painter === p.key}
             >
               {p.label}
             </button>

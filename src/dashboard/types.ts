@@ -61,6 +61,7 @@ export interface IntakeRow {
   other_inspiration_url: string | null;
   inspiration_images: DbPhoto[] | null;
   planning: string | null;
+  painter: string | null;
   complexity_level: string | null;
   complexity_score: number | null;
   payload: Record<string, unknown> | null;

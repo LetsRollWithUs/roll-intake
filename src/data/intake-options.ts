@@ -7,6 +7,7 @@ import type {
   SampleSource,
   Verdict,
   PlanningKey,
+  PainterKey,
 } from "@/lib/types";
 
 export interface RoomType {
@@ -101,6 +102,13 @@ export const HELP_NEEDS: string[] = [
   "Kiezen tussen samples",
   "Muren, plafond en houtwerk combineren",
   "Compleet kleurpalet bepalen",
+];
+
+// Wie gaat schilderen (leadkwalificatie: bij een schilder loopt de verf vaak via de schilder).
+export const PAINTERS: { key: PainterKey; label: string }[] = [
+  { key: "zelf", label: "Ik schilder zelf" },
+  { key: "schilder", label: "Een schilder doet het" },
+  { key: "deels", label: "Deels zelf, deels schilder" },
 ];
 
 export const PLANNING: { key: PlanningKey; label: string }[] = [

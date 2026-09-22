@@ -11,6 +11,8 @@ export type UsageTime = "overdag" | "avond" | "heledag";
 export type SampleSource = "nee" | "roll" | "andere" | "allebei";
 export type Verdict = "favoriet" | "twijfel" | "valt-af";
 export type PlanningKey = "2weken" | "maand" | "3maanden" | "later" | "weet-niet";
+/** Wie gaat schilderen (leadkwalificatie). */
+export type PainterKey = "zelf" | "schilder" | "deels";
 
 export interface UploadedImage {
   id: string;
@@ -104,6 +106,7 @@ export interface IntakeState {
 
   // Planning & contact
   planning?: PlanningKey;
+  painter?: PainterKey;
   contactName: string;
   contactEmail: string;
 
@@ -132,6 +135,7 @@ export function emptyState(): IntakeState {
     mainQuestion: "",
     questionScope: undefined,
     planning: undefined,
+    painter: undefined,
     contactName: "",
     contactEmail: "",
     updatedAt: Date.now(),

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { deriveExpected, daysSince, leadScore, TEMP_LABEL, TOOLKIT_DAYS, todayKey, planningLabel } from "./lead";
 
 interface Card {
   id: string;
   start_at: string;
+  created_at: string;
   status: string;
   customer_name: string | null;
   customer_phone: string | null;
@@ -16,8 +18,16 @@ interface Card {
   upsell_offered: boolean;
   upsell_booked: boolean;
   upsell_value: number | null;
+  expected_purchase_at: string | null;
+  toolkit_offered_at: string | null;
   stylists: { name: string } | null;
+  services: { key: string } | null;
+  // uit de intake
   offerte?: boolean;
+  planning?: string | null;
+  painter?: string | null;
+  hasSamplesBefore?: boolean;
+  rooms?: { surfaces?: string[] }[] | null;
 }
 
 const COLS = [
@@ -29,8 +39,8 @@ const COLS = [
 ] as const;
 
 const TZ = "Europe/Amsterdam";
-const fmt = (iso: string) =>
-  new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+const fmt = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+const fmtD = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, day: "numeric", month: "short" }).format(new Date(iso));
 function initials(name: string): string {
   const p = name.trim().split(/\s+/).filter(Boolean);
   if (!p.length) return "?";
@@ -48,8 +58,7 @@ export function KanbanPage() {
   const [showArchive, setShowArchive] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Afgeronde trajecten (verf gekocht / afgehaakt) ouder dan 30 dagen gaan in het archief,
-  // zodat het bord de lopende gesprekken laat zien. Ze blijven meetellen in de cijfers.
+  // Afgeronde trajecten (verf gekocht / afgehaakt) ouder dan 30 dagen gaan in het archief.
   const ARCHIVE_DAYS = 30;
   const archiveCutoff = Date.now() - ARCHIVE_DAYS * 864e5;
   const isFinal = (key: string) => key === "verf" || key === "afgehaakt";
@@ -64,16 +73,24 @@ export function KanbanPage() {
       }
       const { data } = await supabase
         .from("bookings")
-        .select("id,start_at,status,customer_name,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value, stylists(name)")
+        .select("id,start_at,created_at,status,customer_name,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at, stylists(name), services(key)")
         .in("status", ["confirmed", "paid_unplaced"])
         .order("start_at", { ascending: true });
       const list = (data as unknown as Card[]) ?? [];
       const ids = list.map((c) => c.intake_id).filter((x): x is string => !!x);
       if (ids.length) {
-        const { data: its } = await supabase.from("intake").select("id,advisor_offer_url").in("id", ids);
-        const offer = new Map((its ?? []).map((i: any) => [i.id, !!i.advisor_offer_url]));
-        for (const c of list) c.offerte = c.intake_id ? offer.get(c.intake_id) ?? false : false;
+        const { data: its } = await supabase.from("intake").select("id,advisor_offer_url,planning,painter,has_samples,rooms").in("id", ids);
+        const byId = new Map(((its as any[]) ?? []).map((i) => [i.id, i]));
+        for (const c of list) {
+          const i = c.intake_id ? byId.get(c.intake_id) : null;
+          c.offerte = !!i?.advisor_offer_url;
+          c.planning = i?.planning ?? null;
+          c.painter = i?.painter ?? null;
+          c.rooms = i?.rooms ?? null;
+          c.hasSamplesBefore = c.services?.key === "post_sample" || (!!i?.has_samples && i.has_samples !== "nee");
+        }
       }
+      for (const c of list) if (c.hasSamplesBefore === undefined) c.hasSamplesBefore = c.services?.key === "post_sample";
       setCards(list);
       setLoading(false);
     })();
@@ -91,57 +108,71 @@ export function KanbanPage() {
 
   if (loading) return <p className="rd-sub">Laden...</p>;
 
-  const Badge = ({ children, strong }: { children: React.ReactNode; strong?: boolean }) => (
-    <span className="rd-chip" style={{ fontSize: 11, padding: "2px 8px", ...(strong ? { background: "var(--rd-pink)", color: "var(--rd-aubergine)", fontWeight: 700 } : {}) }}>{children}</span>
+  const Badge = ({ children, tone }: { children: React.ReactNode; tone?: "pink" | "warn" | "ok" }) => (
+    <span className="rd-chip" style={{
+      fontSize: 11, padding: "2px 8px",
+      ...(tone === "pink" ? { background: "var(--rd-pink)", color: "var(--rd-aubergine)", fontWeight: 700 } : {}),
+      ...(tone === "warn" ? { background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700 } : {}),
+      ...(tone === "ok" ? { background: "#C9E6CE", color: "#1e4429", fontWeight: 700 } : {}),
+    }}>{children}</span>
   );
 
   const card = (c: Card) => {
     const name = c.customer_name || "Klant";
     const dragging = dragId === c.id;
+    const past = new Date(c.start_at).getTime() < Date.now();
+    const open = c.kanban_stage !== "verf" && c.kanban_stage !== "afgehaakt";
+    const expected = c.expected_purchase_at ?? (past ? deriveExpected(c.start_at, c.planning) : null);
+    const overdue = open && past && !!expected && expected < todayKey();
+    const toolkitDue = open && past && daysSince(c.start_at) >= TOOLKIT_DAYS && !c.toolkit_offered_at;
+    const lead = leadScore({ rooms: c.rooms, planning: c.planning, painter: c.painter });
+    const t = TEMP_LABEL[lead.temp];
     return (
       <div
         key={c.id}
         draggable
         onDragStart={(e) => { setDragId(c.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.id); }}
         onDragEnd={() => { setDragId(null); setOver(null); }}
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest("select,button,input,label,a")) return;
-          navigate(`/beheer/klant/${c.id}`);
-        }}
+        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/beheer/klant/${c.id}`); }}
         className="rd-card-white"
-        style={{
-          padding: "12px 14px", cursor: "grab", opacity: dragging ? 0.45 : 1,
-          boxShadow: "0 1px 2px rgba(47,33,65,.06), 0 6px 18px rgba(47,33,65,.06)",
-          border: "1px solid transparent", transition: "transform .12s ease, box-shadow .12s ease",
-        }}
+        style={{ padding: "12px 14px", cursor: "grab", opacity: dragging ? 0.45 : 1, boxShadow: "0 1px 2px rgba(47,33,65,.06), 0 6px 18px rgba(47,33,65,.06)", border: overdue ? "1px solid var(--rd-pink-dark)" : "1px solid transparent" }}
         title="Klik voor het klantdossier, sleep om de fase te wijzigen"
       >
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ width: 34, height: 34, borderRadius: 99, background: "var(--rd-lavender)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flex: "none" }}>
-            {initials(name)}
-          </div>
+          <div style={{ width: 34, height: 34, borderRadius: 99, background: "var(--rd-lavender)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flex: "none" }}>{initials(name)}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-            <div style={{ fontSize: 12, color: "var(--rd-pink-dark)", fontWeight: 700 }}>{fmt(c.start_at)}</div>
+            <div style={{ fontSize: 12, color: "var(--rd-pink-dark)", fontWeight: 700 }}>{past ? "Gesprek " : ""}{fmt(c.start_at)}</div>
           </div>
+          {c.intake_id && (
+            <span className="rd-chip" style={{ fontSize: 11, padding: "2px 8px", background: t.bg, color: t.ink, fontWeight: 700, flex: "none" }} title={`Omvang ${lead.rooms} ruimte(s), ${lead.surfaces} oppervlak(ken)`}>{t.label}</span>
+          )}
         </div>
-        {isAdmin && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 6 }}>{c.stylists?.name ?? "—"}</div>}
-        {(c.samples_besteld || c.opgevolgd_at || c.offerte || c.upsell_offered || c.status === "paid_unplaced") && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-            {c.samples_besteld && <Badge>samples</Badge>}
-            {c.opgevolgd_at && <Badge>opgevolgd</Badge>}
-            {c.offerte && <Badge>offerte</Badge>}
-            {c.upsell_offered && <Badge strong>upsell{c.upsell_booked ? " ✓" : ""}</Badge>}
-            {c.status === "paid_unplaced" && <Badge strong>plan nog in</Badge>}
-          </div>
-        )}
-        <select
-          className="rd-input"
-          value={c.kanban_stage}
-          onChange={(e) => move(c.id, e.target.value)}
-          aria-label="Fase"
-          style={{ marginTop: 10, height: 32, width: "100%", fontSize: 12, padding: "2px 8px", opacity: 0.85 }}
-        >
+
+        {/* Tijdlijn */}
+        <div style={{ fontSize: 11.5, opacity: 0.75, marginTop: 8, lineHeight: 1.5 }}>
+          <span>Gekocht {fmtD(c.created_at)}</span>
+          {c.opgevolgd_at && <span> · Opgevolgd {fmtD(c.opgevolgd_at)}</span>}
+          {open && expected && <span style={overdue ? { color: "var(--rd-pink-dark)", fontWeight: 700 } : undefined}> · Verf verwacht {fmtD(expected)}</span>}
+          {c.intake_id && (c.rooms?.length ?? 0) > 0 && <span> · {lead.rooms} ruimte{lead.rooms === 1 ? "" : "s"}{planningLabel(c.planning) ? ` · ${planningLabel(c.planning)?.toLowerCase()}` : ""}</span>}
+        </div>
+        {isAdmin && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>{c.stylists?.name ?? "—"}</div>}
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+          {c.hasSamplesBefore && <Badge>samples vooraf</Badge>}
+          {c.samples_besteld && <Badge tone="ok">samples na gesprek</Badge>}
+          {c.opgevolgd_at && <Badge>opgevolgd</Badge>}
+          {c.offerte && <Badge>offerte</Badge>}
+          {c.upsell_offered && <Badge tone="pink">upsell{c.upsell_booked ? " ✓" : ""}</Badge>}
+          {c.painter === "schilder" && <Badge tone="warn">schilder</Badge>}
+          {c.painter === "deels" && <Badge>deels schilder</Badge>}
+          {c.toolkit_offered_at && <Badge>toolkit aangeboden</Badge>}
+          {overdue && <Badge tone="warn">verwachte datum verstreken</Badge>}
+          {toolkitDue && !overdue && <Badge tone="pink">{TOOLKIT_DAYS}+ dgn: toolkit?</Badge>}
+          {c.status === "paid_unplaced" && <Badge tone="warn">plan nog in</Badge>}
+        </div>
+
+        <select className="rd-input" value={c.kanban_stage} onChange={(e) => move(c.id, e.target.value)} aria-label="Fase" style={{ marginTop: 10, height: 32, width: "100%", fontSize: 12, padding: "2px 8px", opacity: 0.85 }}>
           {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
         </select>
       </div>
@@ -174,19 +205,8 @@ export function KanbanPage() {
               key={col.key}
               onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (over !== col.key) setOver(col.key); }}
               onDragLeave={() => setOver((o) => (o === col.key ? null : o))}
-              onDrop={(e) => {
-                e.preventDefault();
-                const id = e.dataTransfer.getData("text/plain") || dragId;
-                if (id) move(id, col.key);
-                setDragId(null); setOver(null);
-              }}
-              style={{
-                flex: "0 0 264px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8,
-                padding: 8, borderRadius: 18, minHeight: 200,
-                background: isOver ? "var(--rd-lavender)" : "var(--rd-grey-light)",
-                outline: isOver ? "2px dashed var(--rd-pink-dark)" : "2px dashed transparent",
-                transition: "background .12s ease",
-              }}
+              onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || dragId; if (id) move(id, col.key); setDragId(null); setOver(null); }}
+              style={{ flex: "0 0 272px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8, padding: 8, borderRadius: 18, minHeight: 200, background: isOver ? "var(--rd-lavender)" : "var(--rd-grey-light)", outline: isOver ? "2px dashed var(--rd-pink-dark)" : "2px dashed transparent", transition: "background .12s ease" }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 6px 2px" }}>
                 <span className="rd-kicker rd-kicker-pink">{col.label}</span>
@@ -196,14 +216,10 @@ export function KanbanPage() {
                 <div style={{ fontSize: 12, opacity: 0.45, padding: "10px 6px" }}>Sleep hierheen</div>
               ) : items.map(card)}
               {isFinal(col.key) && archived > 0 && (
-                <button className="rd-textlink" onClick={() => setShowArchive(true)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>
-                  + {archived} in archief (ouder dan {ARCHIVE_DAYS} dagen)
-                </button>
+                <button className="rd-textlink" onClick={() => setShowArchive(true)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>+ {archived} in archief (ouder dan {ARCHIVE_DAYS} dagen)</button>
               )}
               {isFinal(col.key) && showArchive && all.length > 0 && (
-                <button className="rd-textlink" onClick={() => setShowArchive(false)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>
-                  Archief verbergen
-                </button>
+                <button className="rd-textlink" onClick={() => setShowArchive(false)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>Archief verbergen</button>
               )}
             </div>
           );

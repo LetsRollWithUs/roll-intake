@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { SURFACES, DAYLIGHT, DAYLIGHT_DIRS, SUN_MOMENTS, USAGE_TIMES, PLANNING } from "@/data/intake-options";
+import { SURFACES, DAYLIGHT, DAYLIGHT_DIRS, SUN_MOMENTS, USAGE_TIMES, PLANNING, PAINTERS } from "@/data/intake-options";
 import { INSPIRATIONS } from "@/data/inspiration";
 import { rollColors } from "@/data/roll-colors";
 import { STATUSES, type AdvisorStatus } from "./status";
@@ -659,7 +659,7 @@ export function IntakeDetail() {
       {/* Planning */}
       <Section title="Planning">
         <div style={{ fontSize: 14 }}>
-          Wil schilderen: {lbl(PLANNING, row.planning) || "onbekend"}
+          Wil schilderen: {lbl(PLANNING, row.planning) || "onbekend"} · Wie: {lbl(PAINTERS, row.painter) || "onbekend"}
           {row.complexity_level && ` · inschatting: ${row.complexity_level}`}
         </div>
       </Section>
