@@ -6,7 +6,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "../_shared/klaviyo.ts";
 import { confirmPaid, createCreditFromOrder } from "../_shared/confirm.ts";
-import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, colorNameToId, multiAddUrl, SHOP_BASE } from "../_shared/roll-products.ts";
+import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, PACK_PRODUCT_IDS, PRICE, colorNameToId, multiAddUrl, sampleImage, SHOP_BASE } from "../_shared/roll-products.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
       const { data: it } = await admin
         .from("intake")
-        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,booking_id")
+        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,advice_products,booking_id")
         .eq("id", body.intake_id)
         .maybeSingle();
       if (!it || !(it as any).contact_email) return j({ ok: false, skipped: "geen intake/e-mail" });
@@ -205,6 +205,32 @@ Deno.serve(async (req) => {
       const stap = route === "samples" ? "advies_samples" : route === "zelf" ? "advies_verf" : "advies_followup";
       const subject = typeof body.subject === "string" && body.subject.trim() ? body.subject.trim() : null;
       const klantTekst = typeof body.body === "string" && body.body.trim() ? body.body.trim() : null;
+
+      // Door de styliste geselecteerde producten -> kaartjes voor de mail (afbeelding, prijs, bestellink).
+      const selection = Array.isArray(row.advice_products) ? row.advice_products : [];
+      const producten = selection.map((p: any) => {
+        const kind = p.kind as string; const ref = String(p.ref ?? "");
+        if (kind === "pack") {
+          const pid = PACK_PRODUCT_IDS[ref];
+          return { kind, id: ref, name: p.name ?? ref, price: PRICE.pack, image_url: sampleImage("pack", ref), url: pid ? multiAddUrl([[pid, 1]], "cart") : `${SHOP_BASE}/?s=${encodeURIComponent(p.name ?? ref)}` };
+        }
+        if (kind === "sticker") {
+          const pid = SAMPLE_STICKER_IDS[ref];
+          return { kind, id: ref, name: p.name ?? ref, price: PRICE.sticker, image_url: sampleImage("sticker", ref), url: pid ? multiAddUrl([[pid, 1]], "cart") : null };
+        }
+        if (kind === "tester") {
+          const pid = SAMPLE_POUCH_IDS[ref];
+          return { kind, id: ref, name: p.name ?? ref, price: PRICE.tester, image_url: sampleImage("tester", ref), url: pid ? multiAddUrl([[pid, 1]], "cart") : null };
+        }
+        return null;
+      }).filter(Boolean);
+      // Alles-in-mandje link voor de geselecteerde stickers + testers samen.
+      const selPairs: [number, number][] = [];
+      for (const p of selection as any[]) {
+        const map = p.kind === "sticker" ? SAMPLE_STICKER_IDS : p.kind === "tester" ? SAMPLE_POUCH_IDS : p.kind === "pack" ? PACK_PRODUCT_IDS : null;
+        if (map && map[String(p.ref)]) selPairs.push([map[String(p.ref)], 1]);
+      }
+      const producten_cart_url = multiAddUrl(selPairs, "cart");
       const props = {
         stap,
         intake_id: body.intake_id,
@@ -215,6 +241,8 @@ Deno.serve(async (req) => {
         onderwerp: subject,
         klant_tekst: klantTekst,
         advice: enriched,
+        producten,
+        producten_cart_url,
         samples_stickers_url: multiAddUrl(stickerPairs, "cart"),
         samples_testers_url: multiAddUrl(pouchPairs, "cart"),
         offer_url: row.advisor_offer_url || `${SHOP_BASE}/prijsopgave`,

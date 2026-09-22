@@ -85,7 +85,10 @@ export interface IntakeRow {
   // Werkplek fase 5: conceptvoorbereiding (AI-concept, door de styliste goed te keuren)
   advice_concept: AdviceConcept | null;
   advice_concept_at: string | null;
+  advice_products: AdviceProduct[] | null;
 }
+
+export interface AdviceProduct { kind: "pack" | "sticker" | "tester"; ref: string; name: string }
 
 export interface AdviceConcept {
   samenvatting: string;
