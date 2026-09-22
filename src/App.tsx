@@ -527,10 +527,12 @@ export function App() {
           multiRoom={multiRoom}
           questionScope={state.questionScope}
           planning={state.planning}
+          painter={state.painter}
           onHelpNeeds={(helpNeeds) => update({ helpNeeds })}
           onQuestion={(mainQuestion) => update({ mainQuestion })}
           onScope={(questionScope) => update({ questionScope })}
           onPlanning={(planning) => update({ planning })}
+          onPainter={(painter) => update({ painter })}
         />
       )}
       {screen === "planning" && <PlanningStep state={state} onEdit={goEdit} />}

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { loadNotifications, KIND_LABEL, type Notif } from "./notifications";
 
-const ORDER: Notif["kind"][] = ["vandaag", "plan", "advies", "opvolgen", "melding"];
+const ORDER: Notif["kind"][] = ["vandaag", "plan", "advies", "opvolgen", "check", "toolkit", "melding"];
 
 export function NotificationsPage() {
   const [items, setItems] = useState<Notif[]>([]);

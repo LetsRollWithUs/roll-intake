@@ -4,11 +4,15 @@ import { supabase } from "@/lib/supabase";
 import { CustomerPurchases, euro } from "./CustomerPurchases";
 import { StatusPill, formatDate } from "./ui";
 import { OUTCOMES } from "./outcome";
+import { deriveExpected, daysSince, leadScore, TEMP_LABEL, TOOLKIT_DAYS, todayKey, planningLabel, painterLabel } from "./lead";
 import type { IntakeRow } from "./types";
 
 interface Booking {
   id: string;
   start_at: string;
+  created_at: string;
+  expected_purchase_at: string | null;
+  toolkit_offered_at: string | null;
   status: string;
   customer_name: string | null;
   customer_email: string | null;
@@ -65,7 +69,7 @@ export function KlantDossier() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const SEL = "id,start_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value, stylists(name)";
+  const SEL = "id,start_at,created_at,expected_purchase_at,toolkit_offered_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value, stylists(name)";
 
   useEffect(() => {
     (async () => {
@@ -175,6 +179,64 @@ export function KlantDossier() {
           )}
         </div>
       </Section>
+
+      {/* Tijdlijn + leadkwalificatie */}
+      {(() => {
+        const past = new Date(current.start_at).getTime() < Date.now();
+        const open = current.kanban_stage !== "verf" && current.kanban_stage !== "afgehaakt";
+        const expected = current.expected_purchase_at ?? (past ? deriveExpected(current.start_at, intake?.planning ?? null) : null);
+        const overdue = open && !!expected && expected < todayKey();
+        const toolkitDue = open && past && daysSince(current.start_at) >= TOOLKIT_DAYS && !current.toolkit_offered_at;
+        const lead = leadScore({ rooms: intake?.rooms ?? null, planning: intake?.planning ?? null, painter: intake?.painter ?? null });
+        const t = TEMP_LABEL[lead.temp];
+        const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", fontSize: 14, borderTop: "1px solid var(--rd-line)", padding: "8px 0" }}>
+            <span style={{ opacity: 0.65 }}>{label}</span>
+            <span style={{ textAlign: "right" }}>{children}</span>
+          </div>
+        );
+        return (
+          <Section title="Tijdlijn & lead">
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <Row label="Advies gekocht">{formatDate(current.created_at)}</Row>
+              <Row label="Gesprek">{formatDate(current.start_at)}</Row>
+              <Row label="Opgevolgd">{current.opgevolgd_at ? formatDate(current.opgevolgd_at) : <span style={{ opacity: 0.5 }}>nog niet</span>}</Row>
+              <Row label="Verwachte verfaankoop">
+                <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <input type="date" className="rd-input" value={expected ?? ""} onChange={(e) => patch({ expected_purchase_at: e.target.value }, { expected_purchase_at: e.target.value || null })} style={{ height: 36, width: 160 }} />
+                  {overdue && <span className="rd-chip" style={{ background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700 }}>verstreken: ga erachteraan</span>}
+                </span>
+              </Row>
+              <Row label={`Toolkit-korting (na ${TOOLKIT_DAYS} dgn zonder verf)`}>
+                {current.toolkit_offered_at ? (
+                  <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                    Aangeboden {formatDate(current.toolkit_offered_at)}
+                    <button className="rd-textlink" style={{ fontSize: 12, opacity: 0.6 }} onClick={() => patch({ toolkit_offered: false }, { toolkit_offered_at: null })}>ongedaan</button>
+                  </span>
+                ) : (
+                  <button className={`rd-plan-chip${toolkitDue ? " is-on" : ""}`} onClick={() => patch({ toolkit_offered: true }, { toolkit_offered_at: new Date().toISOString() })}>
+                    {toolkitDue ? "Nu aanbieden: markeer als aangeboden" : "Markeer als aangeboden"}
+                  </button>
+                )}
+              </Row>
+              <Row label="Lead">
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {intake ? (
+                    <>
+                      <span className="rd-chip" style={{ background: t.bg, color: t.ink, fontWeight: 700 }}>{t.label}</span>
+                      <span style={{ fontSize: 13, opacity: 0.8 }}>{lead.rooms} ruimte{lead.rooms === 1 ? "" : "s"} · {lead.surfaces} oppervlak{lead.surfaces === 1 ? "" : "ken"}{planningLabel(intake.planning) ? ` · ${planningLabel(intake.planning)?.toLowerCase()}` : ""}</span>
+                      {intake.painter && <span className="rd-chip" style={intake.painter === "schilder" ? { background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700 } : {}}>{painterLabel(intake.painter)}</span>}
+                    </>
+                  ) : <span style={{ opacity: 0.5 }}>nog geen intake</span>}
+                </span>
+              </Row>
+              {intake?.painter === "schilder" && (
+                <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 13 }}>Let op: bij een schilder loopt de verf vaak via de schilder. Bespreek in het gesprek dat de klant zelf bij Roll bestelt (of de schilder via de klant).</p>
+              )}
+            </div>
+          </Section>
+        );
+      })()}
 
       {/* Gesprekken (alle, ook toekomstige) */}
       <Section title="Gesprekken">

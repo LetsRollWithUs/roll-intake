@@ -135,6 +135,7 @@ export async function submitIntake(
     other_inspiration_url: state.otherInspirationUrl || null,
     inspiration_images: inspirationImages,
     planning: state.planning ?? null,
+    painter: state.painter ?? null,
     booking_id: opts?.bookingId ?? null,
     mode: opts?.mode ?? null,
     complexity_level: cx.level,
