@@ -59,10 +59,16 @@ function initials(name: string): string {
 // Inklapbaar onderdeel; het onderdeel dat bij de fase past staat open.
 function Panel({ id, title, hint, open, children }: { id: string; title: string; hint?: string; open: boolean; children: React.ReactNode }) {
   return (
-    <details id={id} open={open} className="rd-card-white" style={{ marginTop: 12, padding: 0, overflow: "hidden" }}>
+    <details id={id} open={open} className="gp-panel rd-card-white" style={{ marginTop: 12, padding: 0, overflow: "hidden" }}>
       <summary style={{ listStyle: "none", cursor: "pointer", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <span className="rd-kicker rd-kicker-pink">{title}</span>
-        {hint && <span style={{ fontSize: 12, opacity: 0.6 }}>{hint}</span>}
+        <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <span className="gp-chev" aria-hidden style={{ color: "var(--rd-pink-dark)", fontSize: 15, transition: "transform .15s ease", flex: "none" }}>▸</span>
+          <span className="rd-kicker rd-kicker-pink">{title}</span>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {hint && <span className="gp-hint" style={{ fontSize: 12, opacity: 0.6 }}>{hint}</span>}
+          <span className="gp-toggle" style={{ fontSize: 12, fontWeight: 700, color: "var(--rd-pink-dark)", flex: "none" }}>Openen</span>
+        </span>
       </summary>
       <div style={{ padding: "0 18px 18px" }}>{children}</div>
     </details>
@@ -180,8 +186,37 @@ export function GesprekPage() {
   const expected = b.expected_purchase_at ?? (past ? deriveExpected(b.start_at, intake?.planning ?? null) : null);
   const totalCommission = commissions.filter((c) => c.status !== "vervallen").reduce((s, c) => s + Number(c.amount), 0);
 
+  // Traject in 6 stappen. States: done | active | attention | skip | todo.
+  const sentRoutes = new Set(sends.map((s) => s.route));
+  const boughtVerf = (orders?.product_items ?? 0) > 0 || commissions.some((c) => c.status !== "vervallen") || b.kanban_stage === "verf";
+  const boughtSamples = (orders?.sample_items ?? 0) > 0 || b.samples_besteld;
+  const sampleSkipped = samplesBefore && !sentRoutes.has("samples");
+  const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen";
+  type St = "done" | "active" | "attention" | "skip" | "todo";
+  const steps: { n: number; label: string; state: St }[] = [
+    { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active" },
+    { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active" },
+    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo" },
+    { n: 4, label: "Opvolging samples", state: b.opgevolgd_at ? "done" : boughtSamples ? "active" : (sentRoutes.has("samples") || boughtSamples) ? "todo" : "skip" },
+    { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo" },
+    { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo" },
+  ];
+  const STEP_C: Record<St, { bg: string; ink: string; ring?: string }> = {
+    done: { bg: "var(--rd-aubergine)", ink: "#fff" },
+    active: { bg: "var(--rd-pink)", ink: "var(--rd-aubergine)", ring: "var(--rd-pink-dark)" },
+    attention: { bg: "var(--rd-pink-dark)", ink: "#fff", ring: "var(--rd-pink-dark)" },
+    skip: { bg: "var(--rd-grey-light)", ink: "rgba(47,33,65,.45)" },
+    todo: { bg: "var(--rd-grey-light)", ink: "rgba(47,33,65,.55)" },
+  };
+
   return (
     <div style={{ maxWidth: 900 }}>
+      <style>{`
+        .gp-panel[open] > summary .gp-chev{transform:rotate(90deg)}
+        .gp-panel[open] > summary .gp-toggle{display:none}
+        .gp-panel:not([open]) > summary .gp-hint{display:none}
+        .gp-panel > summary:hover{background:var(--rd-grey-light)}
+      `}</style>
       <Link to="/beheer/gesprekken" className="rd-textlink" style={{ textDecoration: "none" }}>← Adviesgesprekken</Link>
 
       {/* KOP */}
@@ -228,30 +263,28 @@ export function GesprekPage() {
         </div>
       </div>
 
-      {/* Drie losse statussen: afspraak, advies, aankoop */}
-      {(() => {
-        const openTasks = tasks.filter((t) => !t.done_at);
-        const adviceDone = !!(intake?.advisor_outcome && intake?.advisor_summary);
-        const afspraak = b.status === "paid_unplaced" ? "nog inplannen" : past ? "geweest" : "ingepland";
-        const advies = b.kanban_stage === "verf" || b.kanban_stage === "afgehaakt" ? "afgerond"
-          : !intake ? "wacht op intake" : !adviceDone ? "vastleggen" : !intake.advisor_followup_sent_at ? "versturen"
-          : openTasks.length ? "in opvolging" : "verstuurd";
-        const aankoop = orders === undefined ? "laden…" : commissions.some((c) => c.status !== "vervallen") || (orders?.product_items ?? 0) > 0 ? "verf gekocht"
-          : (orders?.sample_items ?? 0) > 0 ? "samples gekocht" : orders === null ? "geen koppeling" : "geen gekoppelde aankoop gevonden";
-        const Pill = ({ k, v, strong }: { k: string; v: string; strong?: boolean }) => (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-            <span style={{ opacity: 0.55 }}>{k}</span>
-            <span className="rd-chip" style={{ fontWeight: 700, ...(strong ? { background: "var(--rd-aubergine)", color: "#fff" } : {}) }}>{v}</span>
-          </span>
-        );
-        return (
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, padding: "0 4px" }}>
-            <Pill k="Afspraak" v={afspraak} />
-            <Pill k="Advies" v={advies} strong />
-            <Pill k="Aankoop" v={aankoop} />
-          </div>
-        );
-      })()}
+      {/* Traject in stappen */}
+      <div className="rd-card-white" style={{ marginTop: 12, padding: "14px 12px" }}>
+        <div style={{ display: "flex", gap: 4, alignItems: "flex-start", overflowX: "auto" }} className="rd-hide-scroll">
+          {steps.map((s, i) => {
+            const c = STEP_C[s.state];
+            return (
+              <div key={s.n} style={{ display: "flex", alignItems: "flex-start", flex: "1 0 auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: 92, textAlign: "center" }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 99, background: c.bg, color: c.ink, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, boxShadow: c.ring ? `0 0 0 3px ${c.ring}33` : "none", border: c.ring ? `1.5px solid ${c.ring}` : "1.5px solid transparent" }}>
+                    {s.state === "done" ? "✓" : s.state === "skip" ? "–" : s.n}
+                  </div>
+                  <span style={{ fontSize: 11.5, lineHeight: 1.2, fontWeight: s.state === "active" || s.state === "attention" ? 700 : 500, color: s.state === "skip" ? "rgba(47,33,65,.45)" : "var(--rd-aubergine)" }}>{s.label}</span>
+                  {s.state === "active" && <span className="rd-chip" style={{ fontSize: 10, padding: "1px 7px", background: "var(--rd-pink)", color: "var(--rd-aubergine)", fontWeight: 700 }}>nu</span>}
+                  {s.state === "attention" && <span className="rd-chip" style={{ fontSize: 10, padding: "1px 7px", background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700 }}>actie</span>}
+                  {s.state === "skip" && <span style={{ fontSize: 10, opacity: 0.5 }}>n.v.t.</span>}
+                </div>
+                {i < steps.length - 1 && <div style={{ height: 2, background: "var(--rd-line)", flex: 1, minWidth: 12, marginTop: 15 }} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 1 VOORBEREIDING */}
       <Panel id="voorbereiding" title="Voorbereiding" hint="door de klant ingevuld" open={openPanel(["voorbereiding", "gesprek"])}>
