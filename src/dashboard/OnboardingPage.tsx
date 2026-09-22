@@ -76,10 +76,10 @@ export function OnboardingPage() {
           </ul>
           <p style={{ margin: 0 }}>
             Deze twee versterken elkaar: goed advies maakt de aankoop een logische, prettige stap. Help de
-            klant ook in beweging te komen, want uitstel is de grootste vijand van een mooi resultaat. Je
-            mag daarbij een korting geven die 72 uur geldig is: een echt, eerlijk zetje om nu te beslissen
-            in plaats van het op de lange baan te schuiven. Smeed het ijzer als het heet is, en sluit elk
-            gesprek af met een heldere volgende stap.
+            klant ook in beweging te komen, want uitstel is de grootste vijand van een mooi resultaat. Doe
+            dat met een concrete vervolgstap die past bij hun schilderplanning, niet met kunstmatige
+            tijdsdruk. Er geldt een vaste 10% samplekorting op de verf; daar komen geen losse tijdskortingen
+            bovenop. Smeed het ijzer als het heet is, en sluit elk gesprek af met een heldere volgende stap.
           </p>
         </Block>
 
