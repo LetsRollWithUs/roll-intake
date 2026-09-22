@@ -3,7 +3,7 @@
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { confirmPaid, cancelBooking, createCreditFromOrder } from "../_shared/confirm.ts";
-import { attributeCommission, voidCommission } from "../_shared/commission.ts";
+import { attributeCommission, voidCommission, flagSamplesOrdered } from "../_shared/commission.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -59,6 +59,8 @@ Deno.serve(async (req) => {
     }
     // Verfcommissie toeschrijven (elke betaalde order kan verf bevatten, ook los van een boeking).
     await attributeCommission(admin, order);
+    // Sample-badge op de bijbehorende boeking zetten wanneer er samples zijn besteld.
+    await flagSamplesOrdered(admin, order);
   } else if (dead) {
     // Refund/annulering: ook een reeds BEVESTIGDE afspraak wordt nu geannuleerd (slot komt vrij).
     // cancelBooking informeert klant + team alleen als het een echte afspraak was.
