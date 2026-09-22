@@ -197,15 +197,23 @@ Deno.serve(async (req) => {
         return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, product: a.product ?? "", liters: a.liters ?? "", m2: a.m2 ?? "" };
       });
       const outcome = row.advisor_outcome ?? null;
-      const route = outcome === "samples_needed" ? "samples" : outcome === "color_chosen" ? "verf" : "followup";
-      const stap = route === "samples" ? "advies_samples" : route === "verf" ? "advies_verf" : "advies_followup";
+      // Vervolgrichting: expliciet meegegeven (werkplek fase 2) of afgeleid van de uitkomst.
+      const given = String(body.route ?? "");
+      const route = given === "samples" || given === "zelf" || given === "roll"
+        ? given
+        : outcome === "samples_needed" ? "samples" : outcome === "color_chosen" ? "zelf" : "roll";
+      const stap = route === "samples" ? "advies_samples" : route === "zelf" ? "advies_verf" : "advies_followup";
+      const subject = typeof body.subject === "string" && body.subject.trim() ? body.subject.trim() : null;
+      const klantTekst = typeof body.body === "string" && body.body.trim() ? body.body.trim() : null;
       const props = {
         stap,
         intake_id: body.intake_id,
-        booking_id: row.booking_id ?? null,
+        booking_id: row.booking_id ?? body.booking_id ?? null,
         outcome,
         route,
         gesprekssamenvatting: row.advisor_summary ?? null,
+        onderwerp: subject,
+        klant_tekst: klantTekst,
         advice: enriched,
         samples_stickers_url: multiAddUrl(stickerPairs, "cart"),
         samples_testers_url: multiAddUrl(pouchPairs, "cart"),
@@ -221,7 +229,15 @@ Deno.serve(async (req) => {
         admin,
       );
       if (r.ok) {
-        await admin.from("intake").update({ advisor_followup_sent_at: new Date().toISOString() }).eq("id", body.intake_id);
+        const now = new Date().toISOString();
+        await admin.from("intake").update({ advisor_followup_sent_at: now }).eq("id", body.intake_id);
+        // Verzendlog: exact wat er naar de klant ging (of de gegenereerde standaardtekst).
+        const { data: u } = await caller.auth.getUser();
+        await admin.from("advice_sends").insert({
+          intake_id: body.intake_id, booking_id: row.booking_id ?? body.booking_id ?? null, route,
+          subject: subject ?? `Jouw kleuradvies van Roll (${stap})`, body: klantTekst ?? (row.advisor_summary ?? ""),
+          sent_to: row.contact_email, sent_by: u?.user?.email ?? null, sent_at: now,
+        });
       }
       return j({ ok: r.ok, detail: r.detail });
     }

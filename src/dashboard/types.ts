@@ -77,7 +77,30 @@ export interface IntakeRow {
   advisor_followup_sent_at: string | null;
   advisor_summary: string | null;
   advisor_offer_notes: string | null;
+  // Werkplek fase 2: gestructureerd advies
+  advice_client: AdviceClient | null;
+  advice_internal: string | null;
+  followup_plan: FollowupPlan | null;
+  followup_route: "samples" | "zelf" | "roll" | null;
 }
+
+export interface AdviceRoom {
+  room: string;
+  surface: string;
+  color: string;
+  status: "voorgesteld" | "definitief";
+  product: string;
+  m2: string;
+  liters: string;
+  motivation: string;
+}
+export interface AdviceClient {
+  answer: string;
+  rooms: AdviceRoom[];
+  sample_instruction: string;
+  next_step: string;
+}
+export interface FollowupPlan { what: string; who: "styliste" | "roll" | "klant" | ""; when: string }
 
 export interface AdviceRow {
   room: string;
