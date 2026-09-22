@@ -272,7 +272,7 @@ export function AgendaPage() {
   return (
     <div>
       <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>
-        ← Alle intakes
+        ← Terug
       </Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>
         Agenda & beschikbaarheid
