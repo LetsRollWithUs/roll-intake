@@ -45,19 +45,22 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
 
   // Route 'advies': recente bevestigde afspraak op hetzelfde e-mailadres binnen het venster.
   let adviesStylist: string | null = null;
+  let adviesBookingId: string | null = null;
   if (email) {
     const orderMs = new Date(order.date_created ?? order.date_created_gmt ?? Date.now()).getTime();
     const since = new Date(orderMs - WINDOW_DAYS * 864e5).toISOString();
     const { data: bk } = await admin
       .from("bookings")
-      .select("stylist_id,start_at")
+      .select("id,stylist_id,start_at")
       .ilike("customer_email", email)
       .eq("status", "confirmed")
       .gte("start_at", since)
       .lte("start_at", new Date(orderMs).toISOString())
       .order("start_at", { ascending: false })
       .limit(1);
-    adviesStylist = ((bk ?? [])[0] as any)?.stylist_id ?? null;
+    const b = (bk ?? [])[0] as any;
+    adviesStylist = b?.stylist_id ?? null;
+    adviesBookingId = b?.id ?? null;
   }
 
   // E-mail (advies) is primair en het meest betrouwbaar; de persoonlijke code is de fallback
@@ -85,7 +88,34 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
   } else if (existing.status === "te_controleren") {
     await admin.from("commissions").update(row).eq("id", existing.id);
   }
+
+  // Kanban automatisch naar 'verf gekocht' voor de advies-boeking (tenzij afgehaakt).
+  if (route === "advies" && adviesBookingId) {
+    await admin.from("bookings").update({ kanban_stage: "verf" })
+      .eq("id", adviesBookingId).neq("kanban_stage", "afgehaakt");
+  }
   return { ok: true, stylist, route, amount, conflict };
+}
+
+// Zet de sample-badge op de bijbehorende boeking wanneer een klant samples bestelt.
+export async function flagSamplesOrdered(admin: any, order: any) {
+  const hasSample = (order.line_items ?? []).some((li: any) => /^SMP[-_]/i.test(li.sku || ""));
+  if (!hasSample) return;
+  const email = String(order.billing?.email ?? "").trim().toLowerCase();
+  if (!email) return;
+  const orderMs = new Date(order.date_created ?? order.date_created_gmt ?? Date.now()).getTime();
+  const since = new Date(orderMs - WINDOW_DAYS * 864e5).toISOString();
+  const { data: bk } = await admin
+    .from("bookings")
+    .select("id")
+    .ilike("customer_email", email)
+    .eq("status", "confirmed")
+    .gte("start_at", since)
+    .lte("start_at", new Date(orderMs).toISOString())
+    .order("start_at", { ascending: false })
+    .limit(1);
+  const id = ((bk ?? [])[0] as any)?.id;
+  if (id) await admin.from("bookings").update({ samples_besteld: true }).eq("id", id);
 }
 
 // Bij refund/annulering: commissie laten vervallen, tenzij al uitbetaald (dan handmatig terugvorderen).

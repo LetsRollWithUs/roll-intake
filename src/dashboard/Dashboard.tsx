@@ -14,6 +14,7 @@ import { StylistHome } from "./StylistHome";
 import { OnboardingPage } from "./OnboardingPage";
 import { CommissiePage } from "./CommissiePage";
 import { AccountPage } from "./AccountPage";
+import { KanbanPage } from "./KanbanPage";
 
 interface NavItem { to: string; label: string; end?: boolean }
 
@@ -52,6 +53,7 @@ export function Dashboard() {
   const navMain: NavItem[] = isAdmin
     ? [
         { to: "/beheer", label: "Overzicht", end: true },
+        { to: "/beheer/gesprekken", label: "Gesprekken" },
         { to: "/beheer/boekingen", label: "Boekingen" },
         { to: "/beheer/commissie", label: "Commissie" },
         { to: "/beheer/agenda", label: "Agenda" },
@@ -62,6 +64,7 @@ export function Dashboard() {
       ]
     : [
         { to: "/beheer", label: "Start", end: true },
+        { to: "/beheer/gesprekken", label: "Gesprekken" },
         { to: "/beheer/commissie", label: "Commissie" },
         { to: "/beheer/agenda", label: "Agenda" },
         { to: "/beheer/onboarding", label: "Uitleg" },
@@ -141,6 +144,7 @@ export function Dashboard() {
       <Route path="account" element={<AccountPage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="commissie" element={<CommissiePage />} />
+      <Route path="gesprekken" element={<KanbanPage />} />
       <Route path="intakes" element={<IntakeList />} />
       <Route path="boekingen" element={<BoekingenPage />} />
       <Route path="agenda" element={<AgendaPage />} />
