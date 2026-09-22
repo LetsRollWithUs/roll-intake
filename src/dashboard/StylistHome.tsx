@@ -34,9 +34,32 @@ function isToday(iso: string): boolean {
   return d.format(new Date(iso)) === d.format(new Date());
 }
 
+interface Stats {
+  month: number;
+  done: number;
+  upcoming: number;
+  colorChosen: number;
+}
+
+function StatTile({ value, label }: { value: number; label: string }) {
+  return (
+    <div
+      className="rd-card-white"
+      style={{ padding: "12px 14px", flex: "1 1 120px", minWidth: 0, textAlign: "center" }}
+    >
+      <div style={{ fontSize: 26, fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2, lineHeight: 1.25 }}>{label}</div>
+    </div>
+  );
+}
+
+const monthKey = (iso: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit" }).format(new Date(iso));
+
 export function StylistHome() {
   const [me, setMe] = useState<Stylist | null>(null);
   const [rows, setRows] = useState<BookingRow[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,9 +72,25 @@ export function StylistHome() {
         .from("bookings")
         .select("id,start_at,status,customer_name,customer_phone,intake_id, services(key)")
         .in("status", ["confirmed", "paid_unplaced"])
-        .gte("start_at", new Date(Date.now() - 2 * 3600 * 1000).toISOString())
         .order("start_at", { ascending: true });
-      setRows((data as unknown as BookingRow[]) ?? []);
+      const all = (data as unknown as BookingRow[]) ?? [];
+
+      const nowMs = Date.now();
+      const upcoming = all.filter((r) => new Date(r.start_at).getTime() >= nowMs - 2 * 3600 * 1000);
+      setRows(upcoming);
+
+      // Cijfers: afgeronde (verleden), deze maand, komend, en kleur-gekozen als conversie-signaal.
+      const past = all.filter((r) => new Date(r.start_at).getTime() < nowMs);
+      const thisMonth = monthKey(new Date().toISOString());
+      const month = all.filter((r) => monthKey(r.start_at) === thisMonth).length;
+      let colorChosen = 0;
+      const pastIntakeIds = past.map((r) => r.intake_id).filter((x): x is string => !!x);
+      if (pastIntakeIds.length > 0) {
+        const { data: its } = await supabase.from("intake").select("id,advisor_outcome").in("id", pastIntakeIds);
+        colorChosen = ((its as { advisor_outcome: string | null }[]) ?? []).filter((i) => i.advisor_outcome === "color_chosen").length;
+      }
+      setStats({ month, done: past.length, upcoming: upcoming.length, colorChosen });
+
       setLoading(false);
     })();
   }, []);
@@ -117,6 +156,18 @@ export function StylistHome() {
           ? `Je hebt vandaag ${today.length} afspra${today.length === 1 ? "ak" : "aken"}.`
           : `Je hebt ${rows.length} afspra${rows.length === 1 ? "ak" : "aken"} in de planning.`}
       </p>
+
+      {stats && (stats.done > 0 || stats.month > 0 || stats.upcoming > 0) && (
+        <section style={{ marginTop: 12 }}>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Jouw cijfers</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <StatTile value={stats.month} label="Deze maand" />
+            <StatTile value={stats.done} label="Gesprekken gedaan" />
+            <StatTile value={stats.upcoming} label="Nog ingepland" />
+            <StatTile value={stats.colorChosen} label="Kleur gekozen" />
+          </div>
+        </section>
+      )}
 
       {rows.length === 0 ? (
         <div className="rd-card-white" style={{ marginTop: 14, textAlign: "center", padding: "26px 18px" }}>
