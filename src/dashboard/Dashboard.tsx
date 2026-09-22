@@ -17,6 +17,7 @@ import { AccountPage } from "./AccountPage";
 import { KanbanPage } from "./KanbanPage";
 import { KlantDossier } from "./KlantDossier";
 import { GesprekPage } from "./GesprekPage";
+import { TakenPage } from "./TakenPage";
 import { NotificationsPage } from "./NotificationsPage";
 import { loadNotifications } from "./notifications";
 
@@ -136,6 +137,7 @@ export function Dashboard() {
                     {isAdmin && (
                       <>
                         <div className="rd-sep" />
+                        <Link to="/beheer/taken">Roll-taken</Link>
                         <Link to="/beheer/intakes">Alle intakes</Link>
                         <Link to="/beheer/boekingen">Boekingen</Link>
                         <Link to="/beheer/cadeaucodes">Cadeaucodes</Link>
@@ -178,6 +180,7 @@ export function Dashboard() {
       <Route path="gesprekken" element={<KanbanPage />} />
       <Route path="klant/:bookingId" element={<KlantDossier />} />
       <Route path="gesprek/:bookingId" element={<GesprekPage />} />
+      <Route path="taken" element={<TakenPage />} />
       <Route path="commissie" element={<CommissiePage />} />
       <Route path="notificaties" element={<NotificationsPage />} />
       <Route path="account" element={<AccountPage />} />
