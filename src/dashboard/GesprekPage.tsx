@@ -10,6 +10,7 @@ import { AdviceEditor } from "./AdviceEditor";
 import { RollHelpForm, type RollTask } from "./RollHelpForm";
 import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
 import { ConceptPanel } from "./ConceptPanel";
+import { MeasurePanel } from "./MeasurePanel";
 import type { OrdersResp } from "./CustomerPurchases";
 import type { IntakeRow, AdviceConcept, AdvicePhase } from "./types";
 
@@ -205,7 +206,7 @@ export function GesprekPage() {
     { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo", to: "sample" },
     { n: 4, label: "Opvolging samples", state: b.opgevolgd_at ? "done" : boughtSamples ? "active" : (sentRoutes.has("samples") || boughtSamples) ? "todo" : "skip", to: "opvolging" },
     { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo", to: "verf" },
-    { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "versturen" },
+    { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "opmeten" },
   ];
   const goToStep = (to?: string) => {
     if (to === "top" || !to) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
@@ -397,6 +398,21 @@ export function GesprekPage() {
             sentAt={verfSentAt}
             onSaved={(bundle) => setIntake({ ...intake, advice_verf: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
             onSent={() => { reloadSends(); loadTasks(b.id); }}
+          />
+        )}
+      </Panel>
+
+      {/* 4 OPMETEN & MATERIALEN (stap 6, offerte-voorbereiding) */}
+      <Panel id="opmeten" title="Opmeten & materialen" hint="m² en materialen voor de offerte" open={openPanel(["versturen"])}>
+        {!intake ? (
+          <p className="rd-sub" style={{ margin: 0 }}>Beschikbaar zodra er een intake is.</p>
+        ) : (
+          <MeasurePanel
+            key={`measure:${intake.id}`}
+            intakeId={intake.id}
+            rooms={rooms}
+            value={intake.room_measures}
+            onSaved={(next) => setIntake({ ...intake, room_measures: next })}
           />
         )}
       </Panel>
