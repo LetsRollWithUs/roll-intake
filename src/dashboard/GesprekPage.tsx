@@ -11,6 +11,8 @@ import { RollHelpForm, type RollTask } from "./RollHelpForm";
 import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
 import { ConceptPanel } from "./ConceptPanel";
 import { MeasurePanel } from "./MeasurePanel";
+import { Photos } from "./Photos";
+import { SampleCheckin } from "./SampleCheckin";
 import type { OrdersResp } from "./CustomerPurchases";
 import type { IntakeRow, AdviceConcept, AdvicePhase } from "./types";
 
@@ -183,7 +185,16 @@ export function GesprekPage() {
     intake: intake ? { advisor_outcome: intake.advisor_outcome, advisor_summary: intake.advisor_summary, advisor_followup_sent_at: intake.advisor_followup_sent_at, planning: intake.planning } : null,
     rollTask: task ? { type: task.type, status: task.status, owner: task.owner } : null,
     openTasks: tasks.filter((t) => !t.done_at).map((t) => ({ action: t.action, owner: t.owner, due_date: t.due_date })),
-  }) : null), [b, intake, task, tasks]);
+    checkinNext: (() => {
+      const c = intake?.sample_checkin;
+      if (!c) return null;
+      const verfSent = sends.some((s) => s.route === "zelf" || s.route === "roll");
+      const newSamples = sends.some((s) => s.route === "samples" && s.sent_at > c.at);
+      if (c.outcome === "keuze_gemaakt" && !verfSent) return "verf";
+      if (c.outcome === "meer_samples" && !verfSent && !newSamples) return "samples";
+      return null;
+    })(),
+  }) : null), [b, intake, task, tasks, sends]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
   if (!b || !action) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Gesprek niet gevonden.</p></div>;
@@ -218,14 +229,21 @@ export function GesprekPage() {
   const boughtSamples = (orders?.sample_items ?? 0) > 0 || b.samples_besteld;
   const sampleSkipped = samplesBefore && !sentRoutes.has("samples");
   const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen";
+  // Check-in: "meer samples nodig" start een nieuwe sample-ronde; een nieuwe sample-mail daarna opent de check-in weer.
+  const ci = intake?.sample_checkin ?? null;
+  const samplesOut = sentRoutes.has("samples") || boughtSamples;
+  const showCheckin = samplesOut || !!ci;
+  const moreSamples = ci?.outcome === "meer_samples" && !verfAdviceDone && !boughtVerf;
+  const newRound = moreSamples && !!sampleSentAt && ci!.at < sampleSentAt;
+  const checkinDone = !!ci && ci.outcome !== "geen_reactie" && !moreSamples;
   type St = "done" | "active" | "attention" | "skip" | "todo";
   const steps: { n: number; label: string; state: St; to?: string }[] = [
     { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active", to: "top" },
     { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active", to: "voorbereiding" },
     // Verder in het traject betekent dat eerdere stappen klaar of niet van toepassing zijn.
-    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : (sampleSkipped || verfAdviceDone || boughtVerf) ? "skip" : (intake && past) ? "active" : "todo", to: "sample" },
-    { n: 4, label: "Opvolging samples", state: (b.opgevolgd_at || verfAdviceDone || boughtVerf) ? (sentRoutes.has("samples") || boughtSamples ? "done" : "skip") : (sentRoutes.has("samples") || boughtSamples) ? "active" : "skip", to: "opvolging" },
-    { n: 5, label: "Verf-advies", state: (verfAdviceDone || boughtVerf) ? "done" : (b.opgevolgd_at || (sampleSkipped && past)) ? "active" : "todo", to: "verf" },
+    { n: 3, label: "Sample-advies", state: moreSamples && !newRound ? "active" : sentRoutes.has("samples") ? "done" : (sampleSkipped || verfAdviceDone || boughtVerf) ? "skip" : (intake && past) ? "active" : "todo", to: "sample" },
+    { n: 4, label: "Check-in samples", state: moreSamples ? (newRound ? "active" : "todo") : (checkinDone || b.opgevolgd_at || verfAdviceDone || boughtVerf) ? (samplesOut ? "done" : "skip") : samplesOut ? "active" : "skip", to: showCheckin ? "checkin" : "opvolging" },
+    { n: 5, label: "Verf-advies", state: (verfAdviceDone || boughtVerf) ? "done" : !moreSamples && (checkinDone || b.opgevolgd_at || (sampleSkipped && past)) ? "active" : "todo", to: "verf" },
     { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "opmeten" },
   ];
   const goToStep = (to?: string) => {
@@ -332,16 +350,17 @@ export function GesprekPage() {
           <div>
             <Kv k="Hulpvraag"><strong>{intake.main_question || "niet ingevuld"}</strong>{(intake.help_needs?.length ?? 0) > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>{intake.help_needs!.map((h) => <span key={h} className="rd-chip">{h}</span>)}</div>}</Kv>
             <Kv k="Ruimtes">
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {rooms.map((r) => (
                   <div key={r.id}>
-                    <div style={{ fontWeight: 700 }}>{r.label}{r.priority ? " ★" : ""} <span style={{ fontWeight: 500, opacity: 0.6, fontSize: 13 }}>· {(r.photos?.length ?? 0)} foto('s)</span></div>
-                    <div style={{ fontSize: 13, opacity: 0.8 }}>
+                    <div style={{ fontWeight: 700 }}>{r.label}{r.priority ? " ★" : ""}</div>
+                    <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 6 }}>
                       {(r.surfaces ?? []).map((s) => lbl(SURFACES, s)).join(", ") || "oppervlak onbekend"}
                       {r.noWindows ? " · geen ramen" : (r.sun?.length ? ` · zon: ${r.sun.map((k) => lbl(SUN_MOMENTS, k)).join(", ")}` : " · lichtinval onbekend")}
                       {r.skylight && " · dakraam"}{r.usage && ` · ${lbl(USAGE_TIMES, r.usage)}`}
                       {r.otherChanges && ` · verandert: ${r.otherChangesNote || "ja"}`}
                     </div>
+                    <Photos photos={r.photos} size={112} />
                   </div>
                 ))}
                 {rooms.length === 0 && <span style={{ opacity: 0.5 }}>geen ruimtes</span>}
@@ -381,7 +400,7 @@ export function GesprekPage() {
       </Panel>
 
       {/* 2 SAMPLE-ADVIES (stap 3) */}
-      <Panel id="sample" title="Sample-advies" hint="kleuren om thuis te testen" open={openPanel(["gesprek"]) && steps[4].state !== "active"}>
+      <Panel id="sample" title="Sample-advies" hint="kleuren om thuis te testen" open={steps[2].state === "active"}>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen. Vraag de klant de intake in te vullen.</p>
         ) : (
@@ -401,8 +420,27 @@ export function GesprekPage() {
         )}
       </Panel>
 
-      {/* 3 VERF-ADVIES (stap 5) */}
-      <Panel id="verf" title="Verf-advies" hint="de definitieve kleur en zo bestelt de klant" open={openPanel(["gesprek", "versturen"]) && steps[4].state === "active"}>
+      {/* CHECK-IN SAMPLES (stap 4) */}
+      {intake && showCheckin && (
+        <Panel id="checkin" title="Check-in samples" hint="welke kleur wint per ruimte" open={steps[3].state === "active"}>
+          <SampleCheckin
+            key={`checkin:${intake.id}:${newRound ? "nieuw" : "oud"}`}
+            intake={intake}
+            tasks={tasks}
+            startEditing={newRound}
+            onSaved={(p, o) => {
+              setIntake({ ...intake, ...p });
+              loadTasks(b.id);
+              if (o.followed && !b.opgevolgd_at) patch({ opgevolgd: true }, { opgevolgd_at: new Date().toISOString() });
+              if (o.toVerf) { setAdoptVersion((v) => v + 1); setTimeout(() => goToStep("verf"), 50); }
+              if (o.toSamples) setTimeout(() => goToStep("sample"), 50);
+            }}
+          />
+        </Panel>
+      )}
+
+      {/* VERF-ADVIES (stap 5) */}
+      <Panel id="verf" title="Verf-advies" hint="de definitieve kleur en zo bestelt de klant" open={steps[4].state === "active"}>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen.</p>
         ) : (
@@ -423,7 +461,7 @@ export function GesprekPage() {
       </Panel>
 
       {/* 4 OPMETEN & MATERIALEN (stap 6, offerte-voorbereiding) */}
-      <Panel id="opmeten" title="Opmeten & materialen" hint="m² en materialen voor de offerte" open={openPanel(["versturen"])}>
+      <Panel id="opmeten" title="Opmeten & materialen" hint="m² en materialen voor de offerte" open={openPanel(["versturen"]) || steps[5].state === "active"}>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Beschikbaar zodra er een intake is.</p>
         ) : (

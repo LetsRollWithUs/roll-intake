@@ -20,6 +20,8 @@ export interface NextActionInput {
   rollTask?: { type: "offerte" | "contact"; status: string; owner: string | null } | null;
   // Open opvolgtaken (fase 4): de eerstvolgende bepaalt de actie.
   openTasks?: { action: string; owner: "styliste" | "roll" | "klant"; due_date: string | null }[];
+  // Na de sample-check-in: wat is de logische volgende stap (alleen vanuit de werkplek meegegeven).
+  checkinNext?: "verf" | "samples" | null;
 }
 export type Phase = "voorbereiding" | "gesprek" | "versturen" | "opvolging" | "klaar";
 export interface NextAction { title: string; sub?: string; owner: "Styliste" | "Roll" | "Niemand"; to?: string; phase: Phase }
@@ -67,6 +69,12 @@ export function nextAction(b: NextActionInput): NextAction {
   }
   if (rt && rt.status === "verstuurd") {
     return { title: "Roll heeft de offerte verstuurd", sub: "Volg of de klant bestelt; help bij twijfel.", owner: "Styliste", to: gesprek, phase: "opvolging" };
+  }
+  if (b.checkinNext === "verf") {
+    return { title: "Stuur het verf-advies: de kleuren zijn gekozen", sub: "De winnende kleuren uit de check-in staan al klaar.", owner: "Styliste", to: gesprek, phase: "gesprek" };
+  }
+  if (b.checkinNext === "samples") {
+    return { title: "Stel een nieuwe ronde samples samen", sub: "Uit de check-in bleek dat er meer samples nodig zijn.", owner: "Styliste", to: gesprek, phase: "gesprek" };
   }
   // Open opvolgtaak: de eerstvolgende (op datum) is de actie.
   const tasks = (b.openTasks ?? []).slice().sort((a, c) => (a.due_date ?? "9999").localeCompare(c.due_date ?? "9999"));
