@@ -410,9 +410,12 @@ export function GesprekPage() {
           <MeasurePanel
             key={`measure:${intake.id}`}
             intakeId={intake.id}
+            bookingId={b.id}
             rooms={rooms}
             value={intake.room_measures}
+            offerUrl={intake.advisor_offer_url}
             onSaved={(next) => setIntake({ ...intake, room_measures: next })}
+            onOffer={(url) => setIntake({ ...intake, advisor_offer_url: url })}
           />
         )}
       </Panel>

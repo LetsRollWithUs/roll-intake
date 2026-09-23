@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { PLANNING, SURFACES } from "@/data/intake-options";
+import { summarizeMeasure } from "@/lib/verfcalc";
 import type { IntakeState, UploadedImage } from "@/lib/types";
 
 type EditTarget =
-  | "contact" | "rooms" | "surfaces" | "photos" | "beelden" | "gevoel" | "kleuren" | "inspiratie" | "vraag";
+  | "contact" | "rooms" | "surfaces" | "maten" | "photos" | "beelden" | "gevoel" | "kleuren" | "inspiratie" | "vraag";
 
 interface Props {
   state: IntakeState;
@@ -119,6 +120,26 @@ export function PlanningStep({ state, onEdit }: Props) {
               </div>
             ) : empty}
           </Card>
+
+          {/* Maten */}
+          {(() => {
+            const rows = state.rooms
+              .map((r) => ({ label: r.label, lines: r.measure ? summarizeMeasure(r.measure) : [] }))
+              .filter((r) => r.lines.length);
+            if (!rows.length) return null;
+            return (
+              <Card label="Maten" onEdit={() => onEdit("maten")}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {rows.map((r) => (
+                    <div key={r.label} style={{ fontSize: 14 }}>
+                      <div style={{ fontWeight: 700 }}>{r.label}</div>
+                      <div style={{ opacity: 0.75, lineHeight: 1.5 }}>{r.lines.join(" · ")}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
 
           {/* Foto's */}
           <Card label="Foto's" onEdit={() => onEdit("photos")}>

@@ -16,12 +16,15 @@ const nEUR = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
 
 interface Props {
   intakeId: string;
+  bookingId: string;
   rooms: DbRoom[];
   value: Record<string, RoomMeasure> | null;
+  offerUrl: string | null;
   onSaved: (next: Record<string, RoomMeasure>) => void;
+  onOffer: (url: string) => void;
 }
 
-export function MeasurePanel({ intakeId, rooms, value, onSaved }: Props) {
+export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSaved, onOffer }: Props) {
   const measured = rooms.filter((r) => showWalls(r) || showCeiling(r) || showWood(r));
   const [map, setMap] = useState<Record<string, RoomMeasure>>(() => {
     const m: Record<string, RoomMeasure> = {};
@@ -30,6 +33,8 @@ export function MeasurePanel({ intakeId, rooms, value, onSaved }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [offering, setOffering] = useState(false);
+  const [offerMsg, setOfferMsg] = useState<string | null>(null);
 
   const setRoom = (id: string, p: Partial<RoomMeasure>) => setMap((m) => ({ ...m, [id]: { ...m[id], ...p } }));
   const project = useMemo(() => calcProject(measured.map((r) => map[r.id])), [map, measured]);
@@ -40,6 +45,22 @@ export function MeasurePanel({ intakeId, rooms, value, onSaved }: Props) {
     setSaving(false);
     if (error) { setMsg("Opslaan mislukte."); return; }
     onSaved(map); setMsg("Maten opgeslagen ✓"); setTimeout(() => setMsg(null), 2500);
+  };
+
+  // Offerte genereren: eerst maten opslaan, dan de ruimtedata naar de offerte-tool sturen.
+  const generateOffer = async () => {
+    setOffering(true); setOfferMsg(null);
+    const { error: se } = await supabase.from("intake").update({ room_measures: map }).eq("id", intakeId);
+    if (se) { setOffering(false); setOfferMsg("Opslaan van de maten mislukte."); return; }
+    onSaved(map);
+    const { data, error } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId } });
+    setOffering(false);
+    const d = data as { ok?: boolean; offer_url?: string | null; skipped?: string; error?: string; payload?: { ruimtes?: unknown[] } } | null;
+    if (error) { setOfferMsg("Offerte aanmaken lukte niet."); return; }
+    if (d?.ok && d.offer_url) { onOffer(d.offer_url); setOfferMsg("Offerte aangemaakt ✓"); return; }
+    if (d?.skipped === "offerte-tool endpoint niet gekoppeld") { setOfferMsg(`Ruimtedata staat klaar (${d.payload?.ruimtes?.length ?? 0} ruimte(s)). De offerte-tool moet nog gekoppeld worden om automatisch te versturen.`); return; }
+    if (d?.skipped === "geen ruimtes met maten") { setOfferMsg("Vul eerst de maten in."); return; }
+    setOfferMsg(d?.error || "Offerte niet aangemaakt.");
   };
 
   if (measured.length === 0) return <p className="rd-sub" style={{ margin: 0 }}>Geen ruimtes met te verven oppervlakken in de intake. Voeg oppervlakken toe bij Voorbereiding.</p>;
@@ -183,10 +204,18 @@ export function MeasurePanel({ intakeId, rooms, value, onSaved }: Props) {
         <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Voorstrijk en primer worden op de opgetelde m² berekend, zodat je niet per ruimte te veel inkoopt. Prijzen komen straks live uit de webshop.</p>
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <button className="rd-btn rd-btn-primary" onClick={save} disabled={saving} style={{ width: "auto", padding: "0 22px" }}>{saving ? "Opslaan..." : "Maten opslaan"}</button>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="rd-btn rd-btn-outline" onClick={save} disabled={saving} style={{ width: "auto", padding: "0 20px" }}>{saving ? "Opslaan..." : "Maten opslaan"}</button>
+        <button className="rd-btn rd-btn-primary" onClick={generateOffer} disabled={offering} style={{ width: "auto", padding: "0 22px" }}>{offering ? "Bezig..." : "Genereer offerte"}</button>
         {msg && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>{msg}</span>}
+        {offerMsg && <span style={{ color: "var(--rd-aubergine)", fontWeight: 600, fontSize: 13 }}>{offerMsg}</span>}
       </div>
+      {offerUrl && (
+        <div style={{ fontSize: 13 }}>
+          Offerte: <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{offerUrl}</a>
+        </div>
+      )}
+      <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De offerte-tool rekent de prijzen (live uit de webshop) en verstuurt de klant de mail met "alles in winkelmandje". Zet eerst de kleuren bij het verf-advies, dan komen ze mee in de offerte.</p>
     </div>
   );
 }
