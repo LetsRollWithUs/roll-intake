@@ -4,6 +4,7 @@ import { Shell } from "@/components/Shell";
 import { ContactStep } from "@/components/steps/ContactStep";
 import { RoomsStep } from "@/components/steps/RoomsStep";
 import { SurfacesStep } from "@/components/steps/SurfacesStep";
+import { MatenStep } from "@/components/steps/MatenStep";
 import { PhotosStep } from "@/components/steps/PhotosStep";
 import { SfeerBeeldenStep } from "@/components/steps/SfeerBeeldenStep";
 import { GevoelStep } from "@/components/steps/GevoelStep";
@@ -20,6 +21,7 @@ import type { Room } from "@/lib/types";
 type StepScreen =
   | "rooms"
   | "surfaces"
+  | "maten"
   | "photos"
   | "beelden"
   | "gevoel"
@@ -32,6 +34,7 @@ type Screen = "intro" | "contact" | StepScreen | "done";
 const FLOW: StepScreen[] = [
   "rooms",
   "surfaces",
+  "maten",
   "photos",
   "beelden",
   "gevoel",
@@ -53,38 +56,43 @@ const META: Record<StepScreen, { kicker: string; title: string; sub?: string }> 
     title: "Wat wil je per ruimte schilderen?",
     sub: "Kies wat er onder handen komt. Dit bepaalt mee het advies.",
   },
+  maten: {
+    kicker: "Stap 3 · Maten",
+    title: "Hoe groot is het ongeveer?",
+    sub: "Zo weten we wat en hoeveel je wilt verven. Een schatting is prima.",
+  },
   photos: {
-    kicker: "Stap 3 · Foto's & licht",
+    kicker: "Stap 4 · Foto's & licht",
     title: "Laat ons de ruimte zien",
     sub: "Foto's zijn een van de belangrijkste inputs voor je advies.",
   },
   beelden: {
-    kicker: "Stap 4 · Sfeerbeelden",
+    kicker: "Stap 5 · Sfeerbeelden",
     title: "Welke interieurs spreken je aan?",
     sub: "Kies maximaal 2 beelden die het dichtst bij jouw richting komen.",
   },
   gevoel: {
-    kicker: "Stap 5 · Gewenst gevoel",
+    kicker: "Stap 6 · Gewenst gevoel",
     title: "Hoe wil je dat het straks voelt?",
     sub: "Kies maximaal 3 omschrijvingen. Er is geen goed of fout.",
   },
   kleuren: {
-    kicker: "Stap 6 · Kleuren & samples",
+    kicker: "Stap 7 · Kleuren & samples",
     title: "Wat heb je al, en wat overweeg je?",
     sub: "Wat je al hebt geprobeerd helpt enorm bij het advies.",
   },
   inspiratie: {
-    kicker: "Stap 7 · Inspiratie",
+    kicker: "Stap 8 · Inspiratie",
     title: "Laat zien wat je mooi vindt",
     sub: "Optioneel, maar vaak goud waard voor je adviseur.",
   },
   vraag: {
-    kicker: "Stap 8 · Jouw vraag",
+    kicker: "Stap 9 · Jouw vraag",
     title: "Waar mogen we je mee helpen?",
     sub: "Vertel wat je uit het gesprek wilt halen en wanneer je aan de slag wilt.",
   },
   planning: {
-    kicker: "Stap 9 · Afronden",
+    kicker: "Stap 10 · Afronden",
     title: "Klopt alles?",
     sub: "Controleer je intake. Zodra je hem instuurt, bereidt je kleuradviseur het gesprek ermee voor.",
   },
@@ -348,6 +356,18 @@ export function App() {
       hint = empty ? `Kies wat je in de ${empty.label.toLowerCase()} wilt schilderen.` : "";
       break;
     }
+    case "maten": {
+      // Verplicht maar soepel: alleen de maat die de berekening echt nodig heeft, conditioneel.
+      const need = state.rooms.find((r) => {
+        const m = r.measure;
+        if (r.surfaces.includes("muren") && !((m?.walls?.[0]?.w ?? 0) > 0)) return true;
+        if (r.surfaces.includes("plafond") && !(m?.ceilings?.some((c) => c.l > 0 && c.b > 0))) return true;
+        return false;
+      });
+      canAdvance = !need;
+      hint = need ? `Vul de maten in voor de ${need.label.toLowerCase()} (een schatting is prima).` : "";
+      break;
+    }
     case "photos": {
       const sunOk = !!currentRoom && ((currentRoom.sun?.length ?? 0) > 0 || currentRoom.noWindows === true);
       canAdvance = !!currentRoom && currentRoom.photos.length >= 1 && sunOk;
@@ -449,6 +469,7 @@ export function App() {
     const map: Record<string, StepScreen> = {
       rooms: "rooms",
       surfaces: "surfaces",
+      maten: "maten",
       photos: "photos",
       beelden: "beelden",
       gevoel: "gevoel",
@@ -471,6 +492,7 @@ export function App() {
     >
       {screen === "rooms" && <RoomsStep rooms={state.rooms} setRooms={setRooms} />}
       {screen === "surfaces" && <SurfacesStep rooms={state.rooms} setRooms={setRooms} />}
+      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} />}
       {screen === "photos" && currentRoom && (
         <PhotosStep room={currentRoom} index={photoIdx} total={state.rooms.length} patch={patchRoom} />
       )}

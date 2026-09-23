@@ -46,6 +46,8 @@ export interface Room {
   /** Voorrang bij 3+ ruimtes (30-minuten-gesprek). */
   priority?: boolean;
   photos: UploadedImage[];
+  /** Meetgegevens (m² voor de reken-engine); optioneel, klant vult per ruimte in. */
+  measure?: import("./verfcalc").RoomMeasure;
 }
 
 /** Een Roll-kleur die iemand overweegt. */
