@@ -19,6 +19,7 @@ export interface FollowupTask {
 export const OUTCOMES_FU: { key: string; label: string }[] = [
   { key: "keuze_gemaakt", label: "Keuze gemaakt" },
   { key: "nog_twijfel", label: "Nog twijfel" },
+  { key: "meer_samples", label: "Meer samples nodig" },
   { key: "later_schilderen", label: "Later schilderen" },
   { key: "hulp_roll", label: "Hulp van Roll nodig" },
   { key: "geen_reactie", label: "Geen reactie" },

@@ -90,6 +90,17 @@ export interface IntakeRow {
   advice_verf: AdvicePhase | null;
   // Meetgegevens per ruimte (key = room id) voor de reken-engine; zie src/lib/verfcalc.ts.
   room_measures: Record<string, import("@/lib/verfcalc").RoomMeasure> | null;
+  // Uitkomst van de sample-check-in (stap 4).
+  sample_checkin: SampleCheckin | null;
+}
+
+export type CheckinOutcome = "keuze_gemaakt" | "meer_samples" | "nog_twijfel" | "later_schilderen" | "geen_reactie";
+export interface SampleCheckin {
+  at: string;
+  by: string | null;
+  outcome: CheckinOutcome;
+  winners: { room: string; surface: string; color: string }[];
+  note: string;
 }
 
 export interface AdviceProduct { kind: "pack" | "sticker" | "tester"; ref: string; name: string }
