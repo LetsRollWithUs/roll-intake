@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { rollColors } from "@/data/roll-colors";
 import { SURFACES } from "@/data/intake-options";
 import { SampleComposer } from "./SampleComposer";
+import { roomIdFor } from "./roomMatch";
 import type { AdviceRoom, AdvicePhase } from "./types";
 
 const colorByName = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
@@ -11,20 +12,21 @@ const SURF_LABEL: Record<string, string> = Object.fromEntries(SURFACES.map((s) =
 const emptyRoom = (room = "", surface = ""): AdviceRoom => ({ room, surface, color: "", status: "voorgesteld", product: "Muurverf", m2: "", liters: "", motivation: "" });
 const isWood = (s: string) => /kozijn|deur|houtwerk|plint|lak|trap/i.test(s);
 // Rijen voorvullen vanuit de intake: één regel per ruimte met het belangrijkste oppervlak.
-function seedRooms(roomSeeds: { label: string; surfaces: string[] }[]): AdviceRoom[] {
+function seedRooms(roomSeeds: RoomSeed[]): AdviceRoom[] {
   if (!roomSeeds.length) return [emptyRoom()];
   return roomSeeds.map((r) => {
     const s = r.surfaces ?? [];
     const primary = s.includes("muren") ? "muren" : s[0];
-    return emptyRoom(r.label, primary ? SURF_LABEL[primary] ?? primary : "");
+    return { ...emptyRoom(r.label, primary ? SURF_LABEL[primary] ?? primary : ""), room_id: r.id };
   });
 }
+export interface RoomSeed { id: string; label: string; surfaces: string[] }
 const DEFAULT_SAMPLE_INSTRUCTION =
   "Test de samples op twee plekken in de ruimte en bekijk ze op verschillende momenten van de dag, zeker in het licht waarin je de ruimte het meest gebruikt.";
 
 const VERF_ROUTES: { key: "zelf" | "roll"; label: string; hint: string }[] = [
   { key: "zelf", label: "Klant bestelt zelf", hint: "De mail linkt per kleur naar de kleurpagina op roll.nl." },
-  { key: "roll", label: "Roll maakt een offerte", hint: "Maak de offerte bij Opmeten & materialen." },
+  { key: "roll", label: "Roll maakt een offerte", hint: "Maak de offerte hieronder bij Maten & offerte." },
 ];
 
 export function buildMail(opts: { customerName: string; stylistName: string; phase: AdvicePhase }): { subject: string; body: string } {
@@ -61,7 +63,7 @@ interface Props {
   bookingId: string;
   customerName: string;
   stylistName: string;
-  roomSeeds: { label: string; surfaces: string[] }[];
+  roomSeeds: RoomSeed[];
   sentAt: string | null;
   onSaved: (bundle: AdvicePhase) => void;
   onSent: () => void;
@@ -149,6 +151,7 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <datalist id="advice-roll-colors">{rollColors.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+      <datalist id={`advice-rooms-${phase}`}>{roomSeeds.map((r) => <option key={r.id} value={r.label} />)}</datalist>
 
       {/* Kleuren per ruimte */}
       <div>
@@ -159,7 +162,7 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
             const c = colorByName.get((r.color ?? "").trim().toLowerCase());
             return (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(110px,1fr) minmax(110px,1fr) minmax(140px,1.2fr) auto", gap: 8, alignItems: "center", padding: "8px 10px", borderRadius: 12, background: "var(--rd-offwhite)", border: "1px solid var(--rd-line)" }}>
-                <input className="rd-input" value={r.room} onChange={(e) => setRoom(i, { room: e.target.value })} placeholder="Ruimte" aria-label="Ruimte" style={{ height: 38 }} />
+                <input className="rd-input" list={`advice-rooms-${phase}`} value={r.room} onChange={(e) => setRoom(i, { room: e.target.value, room_id: roomIdFor(e.target.value, roomSeeds) ?? r.room_id })} placeholder="Ruimte" aria-label="Ruimte" style={{ height: 38 }} />
                 <input className="rd-input" value={r.surface} onChange={(e) => setRoom(i, { surface: e.target.value })} placeholder="Oppervlak" aria-label="Oppervlak" style={{ height: 38 }} />
                 <div style={{ position: "relative" }}>
                   {c && <span style={{ position: "absolute", left: 10, top: 11, width: 16, height: 16, borderRadius: 5, background: c.hex, border: "1px solid rgba(0,0,0,.15)" }} />}
