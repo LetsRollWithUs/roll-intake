@@ -19,7 +19,7 @@ interface Measure {
   wood_substrate?: string;
   coats?: number;
 }
-interface AdviceRoomLike { room?: string; surface?: string; color?: string; status?: string }
+interface AdviceRoomLike { room_id?: string; room?: string; surface?: string; color?: string; status?: string }
 
 export interface OfferRoom {
   naam: string;
@@ -59,13 +59,10 @@ export function buildOfferPayload(row: {
   const measures = row.room_measures ?? {};
   const rooms = row.rooms ?? [];
 
-  // Kleuren per ruimtelabel uit het verf-advies (voorgesteld/definitief).
-  const colorsByRoom = new Map<string, AdviceRoomLike[]>();
-  for (const a of row.advice_verf?.rooms ?? []) {
-    const key = (a.room ?? "").trim().toLowerCase();
-    if (!key || !(a.color ?? "").trim()) continue;
-    (colorsByRoom.get(key) ?? colorsByRoom.set(key, []).get(key)!).push(a);
-  }
+  // Kleuren uit het verf-advies, per intake-ruimte: eerst op ruimte-id, anders op naam.
+  const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+  const verfRows = (row.advice_verf?.rooms ?? []).filter((a) => (a.color ?? "").trim());
+  const colorsFor = (r: { id: string; label: string }) => verfRows.filter((a) => (a.room_id ? a.room_id === r.id : norm(a.room) === norm(r.label)));
 
   const ruimtes: OfferRoom[] = [];
   for (const r of rooms) {
@@ -83,7 +80,7 @@ export function buildOfferPayload(row: {
     const hasWood = doors > 0 || windows.length > 0 || plinth > 0 || radiators.length > 0 || cabinets.length > 0;
     if (!hasMuur && !hasWood) continue;
 
-    const kleuren = (colorsByRoom.get(r.label.trim().toLowerCase()) ?? []).map((a) => {
+    const kleuren = colorsFor(r).map((a) => {
       const c = NAME_TO_COLOR.get((a.color ?? "").trim().toLowerCase());
       return { vlak: a.surface ?? "", naam: a.color ?? "", kleur_id: c?.id ?? null, hex: c?.hex ?? null };
     });

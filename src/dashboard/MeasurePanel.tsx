@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { DbRoom } from "./types";
+import type { DbRoom, IntakeRow } from "./types";
+import { buildTaskPayload, RollTaskStatus, type RollTask } from "./RollHelpForm";
 import {
   calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE,
   type RoomMeasure, type BlikCombo, type MaterialLine,
@@ -15,16 +16,21 @@ const fmtBlik = (b: BlikCombo[]) => b.length ? b.map((x) => `${x.count}× ${Stri
 const nEUR = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
 
 interface Props {
-  intakeId: string;
+  intake: IntakeRow;
   bookingId: string;
+  stylistId: string | null;
   rooms: DbRoom[];
   value: Record<string, RoomMeasure> | null;
   offerUrl: string | null;
+  colorsByRoom: Record<string, { surface: string; color: string; hex?: string }[]>; // gekozen kleuren uit het verf-advies
+  task: RollTask | null;
   onSaved: (next: Record<string, RoomMeasure>) => void;
   onOffer: (url: string) => void;
+  onTask: (t: RollTask) => void;
 }
 
-export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSaved, onOffer }: Props) {
+export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offerUrl, colorsByRoom, task, onSaved, onOffer, onTask }: Props) {
+  const intakeId = intake.id;
   const measured = rooms.filter((r) => showWalls(r) || showCeiling(r) || showWood(r));
   const [map, setMap] = useState<Record<string, RoomMeasure>>(() => {
     const m: Record<string, RoomMeasure> = {};
@@ -35,6 +41,7 @@ export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSa
   const [msg, setMsg] = useState<string | null>(null);
   const [offering, setOffering] = useState(false);
   const [offerMsg, setOfferMsg] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
 
   const setRoom = (id: string, p: Partial<RoomMeasure>) => setMap((m) => ({ ...m, [id]: { ...m[id], ...p } }));
   const project = useMemo(() => calcProject(measured.map((r) => map[r.id])), [map, measured]);
@@ -47,20 +54,39 @@ export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSa
     onSaved(map); setMsg("Maten opgeslagen ✓"); setTimeout(() => setMsg(null), 2500);
   };
 
-  // Offerte genereren: eerst maten opslaan, dan de ruimtedata naar de offerte-tool sturen.
-  const generateOffer = async () => {
+  // Aanvraag bij Roll (offerte of contact), met gegevens uit het verf-advies en de maten.
+  const createRollTask = async (type: RollTask["type"]) => {
+    const { data: u } = await supabase.auth.getUser();
+    const due = new Date(); due.setDate(due.getDate() + 3);
+    const payload = buildTaskPayload({ ...intake, room_measures: map }, notes.trim());
+    const { data, error } = await supabase.from("roll_tasks").insert({
+      type, booking_id: bookingId, intake_id: intakeId, stylist_id: stylistId,
+      requested_by: u?.user?.email ?? null, due_date: due.toISOString().slice(0, 10), payload,
+    }).select("id,type,status,owner,due_date,payload,result,created_at,updated_at").single();
+    if (error || !data) return false;
+    onTask(data as RollTask);
+    return true;
+  };
+
+  // Eén actie: offerte via de offerte-tool; is die (nog) niet bereikbaar, dan maakt Roll de offerte.
+  const makeOffer = async () => {
     setOffering(true); setOfferMsg(null);
     const { error: se } = await supabase.from("intake").update({ room_measures: map }).eq("id", intakeId);
     if (se) { setOffering(false); setOfferMsg("Opslaan van de maten mislukte."); return; }
     onSaved(map);
-    const { data, error } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId } });
+    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId } });
+    const d = data as { ok?: boolean; offer_url?: string | null; skipped?: string } | null;
+    if (d?.ok && d.offer_url) { setOffering(false); onOffer(d.offer_url); setOfferMsg("Offerte gemaakt ✓"); return; }
+    if (d?.skipped === "geen ruimtes met maten") { setOffering(false); setOfferMsg("Vul eerst de maten in, of laat Roll contact opnemen met de klant."); return; }
+    const ok = await createRollTask("offerte");
     setOffering(false);
-    const d = data as { ok?: boolean; offer_url?: string | null; skipped?: string; error?: string; payload?: { ruimtes?: unknown[] } } | null;
-    if (error) { setOfferMsg("Offerte aanmaken lukte niet."); return; }
-    if (d?.ok && d.offer_url) { onOffer(d.offer_url); setOfferMsg("Offerte aangemaakt ✓"); return; }
-    if (d?.skipped === "offerte-tool endpoint niet gekoppeld") { setOfferMsg(`Ruimtedata staat klaar (${d.payload?.ruimtes?.length ?? 0} ruimte(s)). De offerte-tool moet nog gekoppeld worden om automatisch te versturen.`); return; }
-    if (d?.skipped === "geen ruimtes met maten") { setOfferMsg("Vul eerst de maten in."); return; }
-    setOfferMsg(d?.error || "Offerte niet aangemaakt.");
+    setOfferMsg(ok ? "Roll maakt de offerte en stuurt die naar de klant." : "Aanvragen lukte niet. Probeer het opnieuw.");
+  };
+  const askContact = async () => {
+    setOffering(true); setOfferMsg(null);
+    const ok = await createRollTask("contact");
+    setOffering(false);
+    setOfferMsg(ok ? "Roll neemt contact op met de klant." : "Aanvragen lukte niet. Probeer het opnieuw.");
   };
 
   if (measured.length === 0) return <p className="rd-sub" style={{ margin: 0 }}>Geen ruimtes met te verven oppervlakken in de intake. Voeg oppervlakken toe bij Voorbereiding.</p>;
@@ -82,7 +108,7 @@ export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSa
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>Vul de maten per ruimte in (schatting is prima). De m² en materialen rekenen live mee. De klant vult dit later zelf voor in de intake; jij hoeft dan alleen bij te stellen.</p>
+      <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>De maten komen uit de intake; stel bij waar nodig (een schatting is prima). m² en materialen rekenen live mee.</p>
 
       {measured.map((r) => {
         const m = map[r.id];
@@ -96,6 +122,16 @@ export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSa
                 {calc.ceiling_m2 > 0 && `plafond ${nEUR(calc.ceiling_m2)} m² · `}
                 {calc.woodwork_m2 > 0 && `houtwerk ${nEUR(calc.woodwork_m2)} m²`}
               </span>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              {(colorsByRoom[r.id] ?? []).length === 0
+                ? <span style={{ fontSize: 12.5, opacity: 0.6 }}>Nog geen kleur gekozen in het verf-advies</span>
+                : colorsByRoom[r.id].map((c, i) => (
+                  <span key={i} className="rd-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 4, background: c.hex ?? "#eee", border: "1px solid rgba(0,0,0,.12)" }} />
+                    {c.color}{c.surface ? ` · ${c.surface}` : ""}
+                  </span>
+                ))}
             </div>
 
             {/* MUREN */}
@@ -206,16 +242,27 @@ export function MeasurePanel({ intakeId, bookingId, rooms, value, offerUrl, onSa
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button className="rd-btn rd-btn-outline" onClick={save} disabled={saving} style={{ width: "auto", padding: "0 20px" }}>{saving ? "Opslaan..." : "Maten opslaan"}</button>
-        <button className="rd-btn rd-btn-primary" onClick={generateOffer} disabled={offering} style={{ width: "auto", padding: "0 22px" }}>{offering ? "Bezig..." : "Genereer offerte"}</button>
         {msg && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>{msg}</span>}
+      </div>
+
+      {/* Offerte: één actie. Via de offerte-tool, of anders maakt Roll hem. */}
+      <div style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="rd-kicker rd-kicker-pink">Offerte</div>
+        {offerUrl && (
+          <div style={{ fontSize: 14 }}>Offerte klaar: <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{offerUrl}</a></div>
+        )}
+        {task ? <RollTaskStatus task={task} /> : !offerUrl && (
+          <>
+            <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>Roll rekent de prijzen live uit de webshop en stuurt de klant de offerte met "alles in winkelmandje". De kleuren en maten hierboven gaan automatisch mee.</p>
+            <input className="rd-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Toelichting voor Roll (optioneel), bijv. klant wil graag de 10 L-blikken" style={{ height: 38, fontSize: 13 }} />
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button className="rd-btn rd-btn-primary" onClick={makeOffer} disabled={offering} style={{ width: "auto", padding: "0 22px" }}>{offering ? "Bezig..." : "Maak offerte"}</button>
+              <button className="rd-textlink" onClick={askContact} disabled={offering}>Liever dat Roll contact opneemt met de klant</button>
+            </div>
+          </>
+        )}
         {offerMsg && <span style={{ color: "var(--rd-aubergine)", fontWeight: 600, fontSize: 13 }}>{offerMsg}</span>}
       </div>
-      {offerUrl && (
-        <div style={{ fontSize: 13 }}>
-          Offerte: <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{offerUrl}</a>
-        </div>
-      )}
-      <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De offerte-tool rekent de prijzen (live uit de webshop) en verstuurt de klant de mail met "alles in winkelmandje". Zet eerst de kleuren bij het verf-advies, dan komen ze mee in de offerte.</p>
     </div>
   );
 }

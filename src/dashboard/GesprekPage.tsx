@@ -7,7 +7,9 @@ import { formatDate } from "./ui";
 import { nextAction, type Phase } from "./nextAction";
 import { deriveExpected, leadScore, TEMP_LABEL } from "./lead";
 import { AdviceEditor } from "./AdviceEditor";
-import { RollHelpForm, type RollTask } from "./RollHelpForm";
+import type { RollTask } from "./RollHelpForm";
+import { sameRoom } from "./roomMatch";
+import { rollColors } from "@/data/roll-colors";
 import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
 import { ConceptPanel } from "./ConceptPanel";
 import { MeasurePanel } from "./MeasurePanel";
@@ -17,6 +19,7 @@ import type { OrdersResp } from "./CustomerPurchases";
 import type { IntakeRow, AdviceConcept, AdvicePhase } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
+const HEX_BY_NAME = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c.hex]));
 const ROUTE_LABEL: Record<string, string> = { samples: "Sample-advies", zelf: "Verf-advies (zelf bestellen)", roll: "Verf-advies (offerte door Roll)", offerte: "Offerte aangemaakt" };
 
 // Eén plek voor interne notities over deze klant (alleen styliste en Roll). Slaat op bij verlaten van het veld.
@@ -228,7 +231,15 @@ export function GesprekPage() {
   const boughtVerf = (orders?.product_items ?? 0) > 0 || commissions.some((c) => c.status !== "vervallen") || b.kanban_stage === "verf";
   const boughtSamples = (orders?.sample_items ?? 0) > 0 || b.samples_besteld;
   const sampleSkipped = samplesBefore && !sentRoutes.has("samples");
-  const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen";
+  const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen" || !!task || !!intake?.advisor_offer_url;
+  const roomSeeds = rooms.map((r) => ({ id: r.id, label: r.label, surfaces: r.surfaces ?? [] }));
+  // Gekozen verfkleuren per intake-ruimte (op id, anders naam) voor het maten-blok.
+  const colorsByRoom: Record<string, { surface: string; color: string; hex?: string }[]> = {};
+  for (const r of rooms) {
+    colorsByRoom[r.id] = (intake?.advice_verf?.rooms ?? [])
+      .filter((a) => a.color.trim() && sameRoom(a, r))
+      .map((a) => ({ surface: a.surface, color: a.color, hex: HEX_BY_NAME.get(a.color.trim().toLowerCase()) }));
+  }
   // Check-in: "meer samples nodig" start een nieuwe sample-ronde; een nieuwe sample-mail daarna opent de check-in weer.
   const ci = intake?.sample_checkin ?? null;
   const samplesOut = sentRoutes.has("samples") || boughtSamples;
@@ -250,7 +261,8 @@ export function GesprekPage() {
     if (to === "top" || !to) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     const el = document.getElementById(to);
     if (!el) return;
-    if (el.tagName === "DETAILS") (el as HTMLDetailsElement).open = true;
+    const d = (el.tagName === "DETAILS" ? el : el.closest("details")) as HTMLDetailsElement | null;
+    if (d) d.open = true;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   const STEP_C: Record<St, { bg: string; ink: string; ring?: string }> = {
@@ -412,7 +424,7 @@ export function GesprekPage() {
             bookingId={b.id}
             customerName={name}
             stylistName={b.stylists?.name ?? ""}
-            roomSeeds={rooms.map((r) => ({ label: r.label, surfaces: r.surfaces ?? [] }))}
+            roomSeeds={roomSeeds}
             sentAt={sampleSentAt}
             onSaved={(bundle) => setIntake({ ...intake, advice_sample: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
             onSent={() => { reloadSends(); loadTasks(b.id); }}
@@ -439,50 +451,43 @@ export function GesprekPage() {
         </Panel>
       )}
 
-      {/* VERF-ADVIES (stap 5) */}
-      <Panel id="verf" title="Verf-advies" hint="de definitieve kleur en zo bestelt de klant" open={steps[4].state === "active"}>
+      {/* VERF-ADVIES (stap 5 + 6): definitieve kleuren, maten en offerte op één plek */}
+      <Panel id="verf" title="Verf-advies" hint="kleuren, maten en offerte" open={steps[4].state === "active" || steps[5].state === "active" || openPanel(["versturen"])}>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen.</p>
         ) : (
-          <AdviceEditor
-            key={`verf:${intake.id}:${adoptVersion}`}
-            intakeId={intake.id}
-            phase="verf"
-            value={intake.advice_verf}
-            bookingId={b.id}
-            customerName={name}
-            stylistName={b.stylists?.name ?? ""}
-            roomSeeds={rooms.map((r) => ({ label: r.label, surfaces: r.surfaces ?? [] }))}
-            sentAt={verfSentAt}
-            onSaved={(bundle) => setIntake({ ...intake, advice_verf: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
-            onSent={() => { reloadSends(); loadTasks(b.id); }}
-          />
-        )}
-      </Panel>
-
-      {/* 4 OPMETEN & MATERIALEN (stap 6, offerte-voorbereiding) */}
-      <Panel id="opmeten" title="Opmeten & materialen" hint="m² en materialen voor de offerte" open={openPanel(["versturen"]) || steps[5].state === "active"}>
-        {!intake ? (
-          <p className="rd-sub" style={{ margin: 0 }}>Beschikbaar zodra er een intake is.</p>
-        ) : (
-          <MeasurePanel
-            key={`measure:${intake.id}`}
-            intakeId={intake.id}
-            bookingId={b.id}
-            rooms={rooms}
-            value={intake.room_measures}
-            offerUrl={intake.advisor_offer_url}
-            onSaved={(next) => setIntake({ ...intake, room_measures: next })}
-            onOffer={(url) => setIntake({ ...intake, advisor_offer_url: url })}
-          />
-        )}
-        {intake && (
-          <details style={{ marginTop: 14 }}>
-            <summary style={{ cursor: "pointer", fontSize: 13.5, fontWeight: 700 }}>Liever dat Roll het oppakt of contact opneemt?</summary>
-            <div style={{ marginTop: 10 }}>
-              <RollHelpForm bookingId={b.id} stylistId={b.stylist_id} intake={intake} task={task} onCreated={(t) => setTask(t)} />
+          <>
+            <AdviceEditor
+              key={`verf:${intake.id}:${adoptVersion}`}
+              intakeId={intake.id}
+              phase="verf"
+              value={intake.advice_verf}
+              bookingId={b.id}
+              customerName={name}
+              stylistName={b.stylists?.name ?? ""}
+              roomSeeds={roomSeeds}
+              sentAt={verfSentAt}
+              onSaved={(bundle) => setIntake({ ...intake, advice_verf: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
+              onSent={() => { reloadSends(); loadTasks(b.id); }}
+            />
+            <div id="opmeten" style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--rd-line)" }}>
+              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & offerte</div>
+              <MeasurePanel
+                key={`measure:${intake.id}`}
+                intake={intake}
+                bookingId={b.id}
+                stylistId={b.stylist_id}
+                rooms={rooms}
+                value={intake.room_measures}
+                offerUrl={intake.advisor_offer_url}
+                colorsByRoom={colorsByRoom}
+                task={task}
+                onSaved={(next) => setIntake({ ...intake, room_measures: next })}
+                onOffer={(url) => setIntake({ ...intake, advisor_offer_url: url })}
+                onTask={(t) => setTask(t)}
+              />
             </div>
-          </details>
+          </>
         )}
       </Panel>
 

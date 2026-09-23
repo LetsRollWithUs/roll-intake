@@ -4,6 +4,7 @@ import { rollColors } from "@/data/roll-colors";
 import { SURFACES } from "@/data/intake-options";
 import type { IntakeRow, AdvicePhase, AdviceRoom, CheckinOutcome, SampleCheckin as Checkin } from "./types";
 import type { FollowupTask } from "./FollowupTasks";
+import { norm, roomIdFor } from "./roomMatch";
 
 // Stap 4: hoe bevallen de samples? Per ruimte de winnaar kiezen; die gaat door naar het verf-advies.
 const colorByName = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
@@ -19,7 +20,7 @@ const OUTCOMES: { key: CheckinOutcome; label: string; hint: string }[] = [
 ];
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
 
-interface Group { key: string; room: string; surface: string; colors: string[] }
+interface Group { key: string; room_id?: string; room: string; surface: string; colors: string[] }
 
 interface Props {
   intake: IntakeRow;
@@ -34,11 +35,12 @@ export function SampleCheckin({ intake, tasks, startEditing, onSaved }: Props) {
   // Groepen per ruimte + oppervlak uit het sample-advies; zonder advies de ruimtes uit de intake.
   const groups = useMemo<Group[]>(() => {
     const extra = (intake.advice_sample?.products ?? []).filter((p) => p.kind !== "pack").map((p) => p.name);
+    const intakeRooms = (intake.rooms ?? []).map((r) => ({ id: r.id, label: r.label }));
     const map = new Map<string, Group>();
     for (const r of intake.advice_sample?.rooms ?? []) {
       if (!r.room.trim() && !r.color.trim()) continue;
       const key = `${r.room.trim().toLowerCase()}|${r.surface.trim().toLowerCase()}`;
-      const g = map.get(key) ?? { key, room: r.room.trim(), surface: r.surface.trim(), colors: [] };
+      const g = map.get(key) ?? { key, room_id: r.room_id ?? roomIdFor(r.room, intakeRooms), room: r.room.trim(), surface: r.surface.trim(), colors: [] };
       if (r.color.trim() && !g.colors.includes(r.color.trim())) g.colors.push(r.color.trim());
       map.set(key, g);
     }
@@ -46,7 +48,7 @@ export function SampleCheckin({ intake, tasks, startEditing, onSaved }: Props) {
       for (const r of intake.rooms ?? []) {
         const s = r.surfaces ?? [];
         const surface = SURF_LABEL[s.includes("muren") ? "muren" : s[0]] ?? "";
-        map.set(`${r.label.toLowerCase()}|${surface.toLowerCase()}`, { key: `${r.label.toLowerCase()}|${surface.toLowerCase()}`, room: r.label, surface, colors: [] });
+        map.set(`${r.label.toLowerCase()}|${surface.toLowerCase()}`, { key: `${r.label.toLowerCase()}|${surface.toLowerCase()}`, room_id: r.id, room: r.label, surface, colors: [] });
       }
     }
     return [...map.values()].map((g) => ({ ...g, colors: [...g.colors, ...extra.filter((c) => !g.colors.includes(c))] }));
@@ -65,7 +67,7 @@ export function SampleCheckin({ intake, tasks, startEditing, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const winners = groups.map((g) => ({ room: g.room, surface: g.surface, color: (sel[g.key] ?? "").trim() })).filter((w) => w.color);
+  const winners = groups.map((g) => ({ room_id: g.room_id, room: g.room, surface: g.surface, color: (sel[g.key] ?? "").trim() })).filter((w) => w.color);
   const effOutcome: CheckinOutcome = outcome || (winners.length ? "keuze_gemaakt" : "nog_twijfel");
 
   const save = async () => {
@@ -79,8 +81,8 @@ export function SampleCheckin({ intake, tasks, startEditing, onSaved }: Props) {
       const base: AdvicePhase = intake.advice_verf ?? { answer: "", rooms: [], sample_instruction: "", next_step: "", internal: "", plan: { what: "", who: "", when: "" }, route: "zelf", products: [] };
       const rooms: AdviceRoom[] = base.rooms.filter((r) => r.room.trim() || r.color.trim());
       for (const w of winners) {
-        const i = rooms.findIndex((r) => r.room.trim().toLowerCase() === w.room.toLowerCase() && r.surface.trim().toLowerCase() === w.surface.toLowerCase());
-        const row: AdviceRoom = { room: w.room, surface: w.surface, color: w.color, status: "definitief", product: isWood(w.surface) ? "Lak" : "Muurverf", m2: "", liters: "", motivation: i >= 0 ? rooms[i].motivation : "" };
+        const i = rooms.findIndex((r) => (r.room_id && w.room_id ? r.room_id === w.room_id : norm(r.room) === norm(w.room)) && norm(r.surface) === norm(w.surface));
+        const row: AdviceRoom = { room_id: w.room_id, room: w.room, surface: w.surface, color: w.color, status: "definitief", product: isWood(w.surface) ? "Lak" : "Muurverf", m2: "", liters: "", motivation: i >= 0 ? rooms[i].motivation : "" };
         if (i >= 0) rooms[i] = { ...rooms[i], ...row }; else rooms.push(row);
       }
       patch.advice_verf = { ...base, rooms };

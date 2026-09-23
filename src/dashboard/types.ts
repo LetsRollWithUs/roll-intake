@@ -99,7 +99,7 @@ export interface SampleCheckin {
   at: string;
   by: string | null;
   outcome: CheckinOutcome;
-  winners: { room: string; surface: string; color: string }[];
+  winners: { room_id?: string; room: string; surface: string; color: string }[];
   note: string;
 }
 
@@ -127,6 +127,7 @@ export interface AdviceConcept {
 }
 
 export interface AdviceRoom {
+  room_id?: string; // koppeling met de ruimte uit de intake (bij voorkeur boven de naam)
   room: string;
   surface: string;
   color: string;
