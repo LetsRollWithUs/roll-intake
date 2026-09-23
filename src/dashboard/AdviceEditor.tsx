@@ -2,12 +2,23 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 import { rollColors } from "@/data/roll-colors";
-import { SAMPLE_PACKS } from "@/data/sample-packs";
 import { PRODUCTS } from "./outcome";
-import type { AdviceRoom, FollowupPlan, AdviceProduct, AdvicePhase } from "./types";
+import { SURFACES } from "@/data/intake-options";
+import { SampleComposer } from "./SampleComposer";
+import type { AdviceRoom, FollowupPlan, AdvicePhase } from "./types";
 
 const colorByName = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
-const emptyRoom = (room = ""): AdviceRoom => ({ room, surface: "", color: "", status: "voorgesteld", product: "Muurverf", m2: "", liters: "", motivation: "" });
+const SURF_LABEL: Record<string, string> = Object.fromEntries(SURFACES.map((s) => [s.key, s.label]));
+const emptyRoom = (room = "", surface = ""): AdviceRoom => ({ room, surface, color: "", status: "voorgesteld", product: "Muurverf", m2: "", liters: "", motivation: "" });
+// Rijen voorvullen vanuit de intake: één regel per ruimte met het belangrijkste oppervlak.
+function seedRooms(roomSeeds: { label: string; surfaces: string[] }[]): AdviceRoom[] {
+  if (!roomSeeds.length) return [emptyRoom()];
+  return roomSeeds.map((r) => {
+    const s = r.surfaces ?? [];
+    const primary = s.includes("muren") ? "muren" : s[0];
+    return emptyRoom(r.label, primary ? SURF_LABEL[primary] ?? primary : "");
+  });
+}
 const DEFAULT_SAMPLE_INSTRUCTION =
   "Test de samples op twee plekken in de ruimte en bekijk ze op verschillende momenten van de dag, zeker in het licht waarin je de ruimte het meest gebruikt.";
 
@@ -60,16 +71,16 @@ interface Props {
   bookingId: string;
   customerName: string;
   stylistName: string;
-  roomLabels: string[];
+  roomSeeds: { label: string; surfaces: string[] }[];
   sentAt: string | null;
   onSaved: (bundle: AdvicePhase) => void;
   onSent: () => void;
 }
 
-export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, stylistName, roomLabels, sentAt, onSaved, onSent }: Props) {
+export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, stylistName, roomSeeds, sentAt, onSaved, onSent }: Props) {
   const isSample = phase === "sample";
   const init: AdvicePhase = value ?? {
-    answer: "", rooms: isSample ? roomLabels.map((l) => emptyRoom(l)) : [emptyRoom()],
+    answer: "", rooms: seedRooms(roomSeeds),
     sample_instruction: "", next_step: "", internal: "", plan: { what: "", who: "", when: "" },
     route: isSample ? "samples" : "zelf", products: [],
   };
@@ -91,16 +102,6 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
     for (const r of advice.rooms) { const c = colorByName.get((r.color ?? "").trim().toLowerCase()); if (c && !seen.has(c.id)) seen.set(c.id, { id: c.id, name: c.name, hex: c.hex }); }
     return [...seen.values()];
   }, [advice.rooms]);
-  const suggestedPack = useMemo(() => {
-    const ids = new Set(candidates.map((c) => c.id));
-    let best: { id: string; name: string; colorIds: string[]; overlap: number } | null = null;
-    for (const p of SAMPLE_PACKS) { const overlap = p.colorIds.filter((id) => ids.has(id)).length; if (overlap > 0 && (!best || overlap > best.overlap)) best = { id: p.id, name: p.displayName + " Sample Pack", colorIds: p.colorIds, overlap }; }
-    return best;
-  }, [candidates]);
-  const hasProduct = (kind: AdviceProduct["kind"], ref: string) => advice.products.some((p) => p.kind === kind && p.ref === ref);
-  const toggleProduct = (kind: AdviceProduct["kind"], ref: string, name: string) =>
-    set({ products: hasProduct(kind, ref) ? advice.products.filter((p) => !(p.kind === kind && p.ref === ref)) : [...advice.products, { kind, ref, name }] });
-
   const outcome = isSample ? "samples_needed" : advice.route === "zelf" ? "color_chosen" : "followup_needed";
   const persist = async () => {
     const clean = { ...advice, rooms: advice.rooms.filter((r) => r.room.trim() || r.color.trim()) };
@@ -208,31 +209,7 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
 
       {/* Producten alleen bij het sample-advies */}
       {isSample && (
-        <div>
-          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>Producten in de mail</div>
-          <p className="rd-sub" style={{ margin: "0 0 10px", fontSize: 13 }}>Kies wat als bestelbaar product in de mail komt (afbeelding + prijs). Suggesties komen uit de geadviseerde kleuren.</p>
-          {candidates.length === 0 ? (
-            <p className="rd-sub" style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>Voeg hierboven kleuren met een Roll-naam toe.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {suggestedPack && (
-                <label style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${hasProduct("pack", suggestedPack.id) ? "var(--rd-aubergine)" : "var(--rd-line)"}`, cursor: "pointer" }}>
-                  <input type="checkbox" checked={hasProduct("pack", suggestedPack.id)} onChange={() => toggleProduct("pack", suggestedPack.id, suggestedPack.name)} />
-                  <span style={{ display: "flex", gap: 2 }}>{suggestedPack.colorIds.slice(0, 5).map((id) => <span key={id} style={{ width: 14, height: 20, borderRadius: 3, background: rollColors.find((c) => c.id === id)?.hex ?? "#ccc", border: "1px solid rgba(0,0,0,.1)" }} />)}</span>
-                  <span style={{ flex: 1 }}><strong style={{ fontSize: 14 }}>{suggestedPack.name}</strong> <span className="rd-chip" style={{ fontSize: 11 }}>aanbevolen</span><br /><span style={{ fontSize: 12.5, opacity: 0.7 }}>Bundel met o.a. de geadviseerde kleuren · € 10,-</span></span>
-                </label>
-              )}
-              {candidates.map((c) => (
-                <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, border: "1px solid var(--rd-line)" }}>
-                  <span style={{ width: 20, height: 20, borderRadius: 6, background: c.hex, border: "1px solid rgba(0,0,0,.12)", flex: "none" }} />
-                  <span style={{ fontWeight: 700, fontSize: 14, flex: "1 1 120px", minWidth: 0 }}>{c.name}</span>
-                  <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={hasProduct("sticker", c.id)} onChange={() => toggleProduct("sticker", c.id, c.name)} /> Sticker <span style={{ opacity: 0.6 }}>€ 2,50</span></label>
-                  <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={hasProduct("tester", c.id)} onChange={() => toggleProduct("tester", c.id, c.name)} /> Verftester <span style={{ opacity: 0.6 }}>€ 7,-</span></label>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <SampleComposer value={advice.products} onChange={(p) => set({ products: p })} suggested={candidates} />
       )}
 
       <div>

@@ -373,7 +373,7 @@ export function GesprekPage() {
             bookingId={b.id}
             customerName={name}
             stylistName={b.stylists?.name ?? ""}
-            roomLabels={rooms.map((r) => r.label)}
+            roomSeeds={rooms.map((r) => ({ label: r.label, surfaces: r.surfaces ?? [] }))}
             sentAt={sampleSentAt}
             onSaved={(bundle) => setIntake({ ...intake, advice_sample: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
             onSent={() => { reloadSends(); loadTasks(b.id); }}
@@ -394,7 +394,7 @@ export function GesprekPage() {
             bookingId={b.id}
             customerName={name}
             stylistName={b.stylists?.name ?? ""}
-            roomLabels={rooms.map((r) => r.label)}
+            roomSeeds={rooms.map((r) => ({ label: r.label, surfaces: r.surfaces ?? [] }))}
             sentAt={verfSentAt}
             onSaved={(bundle) => setIntake({ ...intake, advice_verf: bundle, followup_route: bundle.route, followup_plan: bundle.plan })}
             onSent={() => { reloadSends(); loadTasks(b.id); }}
