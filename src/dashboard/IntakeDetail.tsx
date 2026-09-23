@@ -8,7 +8,10 @@ import { STATUSES, type AdvisorStatus } from "./status";
 import { OUTCOMES, BUY_MOMENTS, PRODUCTS } from "./outcome";
 import { StatusPill, formatDate } from "./ui";
 import { CustomerPurchases } from "./CustomerPurchases";
+import { summarizeMeasure, calcRoom } from "@/lib/verfcalc";
 import type { IntakeRow, DbPhoto, AdviceRow } from "./types";
+
+const g1 = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
 
 function lbl(list: { key: string; label: string }[], key?: string | null): string {
   if (!key) return "";
@@ -560,6 +563,25 @@ export function IntakeDetail() {
                   Verandert nog: vloer/meubels/gordijnen{r.otherChangesNote ? ` — ${r.otherChangesNote}` : ""}
                 </div>
               )}
+              {(() => {
+                const m = row.room_measures?.[r.id];
+                if (!m) return null;
+                const lines = summarizeMeasure(m);
+                if (!lines.length) return null;
+                const c = calcRoom(m);
+                const areas = [
+                  c.wall_m2 > 0 ? `wand ${g1(c.wall_m2)} m²` : "",
+                  c.ceiling_m2 > 0 ? `plafond ${g1(c.ceiling_m2)} m²` : "",
+                  c.woodwork_m2 > 0 ? `houtwerk ${g1(c.woodwork_m2)} m²` : "",
+                ].filter(Boolean).join(" · ");
+                return (
+                  <div style={{ margin: "0 0 8px", padding: "8px 12px", background: "var(--rd-grey-light)", borderRadius: 10, fontSize: 13 }}>
+                    <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Maten (door de klant opgegeven)</div>
+                    {lines.map((l, i) => <div key={i} style={{ opacity: 0.85 }}>{l}</div>)}
+                    {areas && <div style={{ marginTop: 4, fontWeight: 700 }}>{areas}</div>}
+                  </div>
+                );
+              })()}
               <Photos photos={r.photos} />
             </div>
           ))}

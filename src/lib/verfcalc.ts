@@ -116,6 +116,25 @@ export function packBlikken(liters: number, sizes: (number | BlikSize)[]): BlikC
   return [...winner.combo.entries()].map(([size, count]) => ({ size, count })).sort((a, b) => b.size - a.size);
 }
 
+// Leesbare samenvatting van de maten (voor het review-scherm en de intake-detail).
+export function summarizeMeasure(m: RoomMeasure): string[] {
+  const g = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+  const out: string[] = [];
+  const w0 = m.walls.find((w) => num(w.w) > 0);
+  if (w0) out.push(`Muren: ${g(num(w0.w))} × ${g(num(w0.h) || STANDAARD_HOOGTE)} m${m.wall_substrate === "nieuw" ? " · nieuw stucwerk" : ""}`);
+  const cs = m.ceilings.filter((c) => num(c.l) > 0 && num(c.b) > 0);
+  if (cs.length) out.push(`Plafond: ${cs.map((c) => `${g(num(c.l))} × ${g(num(c.b))} m`).join(" + ")}`);
+  const w = m.woodwork;
+  const wood: string[] = [];
+  if (num(w.doors) > 0) wood.push(`${num(w.doors)} deur${num(w.doors) === 1 ? "" : "en"}`);
+  const win = w.windows.filter((x) => num(x.w) > 0 || num(x.h) > 0).length;
+  if (win) wood.push(`${win} raamkozijn${win === 1 ? "" : "en"}`);
+  if (num(w.plinths_m) > 0) wood.push(`${g(num(w.plinths_m))} m plint`);
+  if (num(w.radiators.reduce((s, r) => s + num(r.w), 0)) > 0) wood.push(`${w.radiators.filter((r) => num(r.w) > 0).length} radiator`);
+  if (wood.length) out.push(`Houtwerk: ${wood.join(", ")}${m.wood_substrate === "kaal" ? " · kaal hout/metaal" : ""}`);
+  return out;
+}
+
 export interface MaterialLine {
   key: "muurverf" | "lak" | "voorstrijk" | "primer";
   label: string;
