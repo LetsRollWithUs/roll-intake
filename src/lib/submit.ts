@@ -118,6 +118,10 @@ export async function submitIntake(
 
   const cx = assessComplexity(state);
 
+  // Meetgegevens per ruimte (key = room id) voor de reken-engine in het dashboard.
+  const roomMeasures: Record<string, unknown> = {};
+  for (const room of state.rooms) if (room.measure) roomMeasures[room.id] = room.measure;
+
   const row = {
     contact_name: state.contactName || null,
     contact_email: state.contactEmail || null,
@@ -136,6 +140,7 @@ export async function submitIntake(
     inspiration_images: inspirationImages,
     planning: state.planning ?? null,
     painter: state.painter ?? null,
+    room_measures: roomMeasures,
     booking_id: opts?.bookingId ?? null,
     mode: opts?.mode ?? null,
     complexity_level: cx.level,
