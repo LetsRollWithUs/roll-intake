@@ -118,7 +118,7 @@ export function Dashboard() {
               <NavLink to="/beheer/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
             </nav>
             <Link to="/beheer" className="rd-logo" aria-label="Roll advies">
-              <img src="/roll-advies-logo.png" alt="Roll advies" style={{ height: 46, width: "auto", display: "block" }} />
+              <img src="/roll-advies-logo.png" alt="Roll advies" style={{ height: 40, width: "auto", display: "block" }} />
             </Link>
             <div className="rd-right">
               <NavLink to="/beheer/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
