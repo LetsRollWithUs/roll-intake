@@ -15,7 +15,26 @@ import type { OrdersResp } from "./CustomerPurchases";
 import type { IntakeRow, AdviceConcept, AdvicePhase } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
-const ROUTE_LABEL: Record<string, string> = { samples: "Eerst samples testen", zelf: "Zelf verf bestellen", roll: "Hulp van Roll" };
+const ROUTE_LABEL: Record<string, string> = { samples: "Sample-advies", zelf: "Verf-advies (zelf bestellen)", roll: "Verf-advies (offerte door Roll)", offerte: "Offerte aangemaakt" };
+
+// Eén plek voor interne notities over deze klant (alleen styliste en Roll). Slaat op bij verlaten van het veld.
+function NotesField({ intake, onSaved }: { intake: IntakeRow; onSaved: (v: string) => void }) {
+  const initial = intake.advice_internal ?? intake.advisor_notes ?? [intake.advice_sample?.internal, intake.advice_verf?.internal].filter((x) => (x ?? "").trim()).join("\n");
+  const [v, setV] = useState(initial ?? "");
+  const [last, setLast] = useState(initial ?? "");
+  const [ok, setOk] = useState(false);
+  const save = async () => {
+    if (v === last) return;
+    const { error } = await supabase.from("intake").update({ advice_internal: v.trim() || null, advisor_notes: v.trim() || null }).eq("id", intake.id);
+    if (!error) { setLast(v); onSaved(v); setOk(true); setTimeout(() => setOk(false), 2000); }
+  };
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span className="rd-kicker rd-kicker-pink">Interne notities {ok && <span style={{ opacity: 0.7, textTransform: "none", letterSpacing: 0 }}>· opgeslagen</span>}</span>
+      <textarea className="rd-input" value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder="Alleen voor jou en Roll: twijfels, afspraken, info voor de offerte." style={{ height: 72, paddingTop: 10, resize: "vertical", lineHeight: 1.45 }} />
+    </label>
+  );
+}
 
 interface Booking {
   id: string;
@@ -145,7 +164,7 @@ export function GesprekPage() {
     })();
   }, [bookingId]);
 
-  // Na versturen: verzendlog opnieuw ophalen zodat "Versturen & overdragen" meteen klopt.
+  // Na versturen: verzendlog opnieuw ophalen zodat de mail-historie meteen klopt.
   const reloadSends = async () => {
     if (!b?.intake_id) return;
     const { data } = await supabase.from("advice_sends").select("id,route,subject,body,sent_to,sent_by,sent_at").eq("intake_id", b.intake_id).order("sent_at", { ascending: false });
@@ -203,9 +222,10 @@ export function GesprekPage() {
   const steps: { n: number; label: string; state: St; to?: string }[] = [
     { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active", to: "top" },
     { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active", to: "voorbereiding" },
-    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : sampleSkipped ? "skip" : (intake && past && !verfAdviceDone) ? "active" : "todo", to: "sample" },
-    { n: 4, label: "Opvolging samples", state: b.opgevolgd_at ? "done" : boughtSamples ? "active" : (sentRoutes.has("samples") || boughtSamples) ? "todo" : "skip", to: "opvolging" },
-    { n: 5, label: "Verf-advies", state: verfAdviceDone ? "done" : boughtVerf ? "done" : (sentRoutes.has("samples") || sampleSkipped || b.opgevolgd_at) ? "active" : "todo", to: "verf" },
+    // Verder in het traject betekent dat eerdere stappen klaar of niet van toepassing zijn.
+    { n: 3, label: "Sample-advies", state: sentRoutes.has("samples") ? "done" : (sampleSkipped || verfAdviceDone || boughtVerf) ? "skip" : (intake && past) ? "active" : "todo", to: "sample" },
+    { n: 4, label: "Opvolging samples", state: (b.opgevolgd_at || verfAdviceDone || boughtVerf) ? (sentRoutes.has("samples") || boughtSamples ? "done" : "skip") : (sentRoutes.has("samples") || boughtSamples) ? "active" : "skip", to: "opvolging" },
+    { n: 5, label: "Verf-advies", state: (verfAdviceDone || boughtVerf) ? "done" : (b.opgevolgd_at || (sampleSkipped && past)) ? "active" : "todo", to: "verf" },
     { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "opmeten" },
   ];
   const goToStep = (to?: string) => {
@@ -418,41 +438,20 @@ export function GesprekPage() {
             onOffer={(url) => setIntake({ ...intake, advisor_offer_url: url })}
           />
         )}
-      </Panel>
-
-      {/* 3 VERSTUREN & OVERDRAGEN */}
-      <Panel id="versturen" title="Versturen & overdragen" hint="klantmail en hulp van Roll" open={openPanel(["versturen"])}>
-        {!intake ? <p className="rd-sub" style={{ margin: 0 }}>Beschikbaar zodra er een intake en advies is.</p> : (
-          <div>
-            <Kv k="Vervolgrichting">{intake.followup_route ? <strong>{ROUTE_LABEL[intake.followup_route]}</strong> : <span style={{ opacity: 0.6 }}>Nog niet gekozen (bij Sample- of Verf-advies)</span>}</Kv>
-            <Kv k="Adviesverslag">
-              {sends.length === 0 ? (
-                <span style={{ opacity: 0.6 }}>Nog niet verstuurd. Versturen doe je via "Klantmail bekijken" bij Sample- of Verf-advies.</span>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {sends.map((s) => (
-                    <details key={s.id} style={{ fontSize: 13 }}>
-                      <summary style={{ cursor: "pointer" }}><strong>Verstuurd {formatDate(s.sent_at)}</strong> · {ROUTE_LABEL[s.route] ?? s.route} · aan {s.sent_to}{s.sent_by ? ` · door ${s.sent_by}` : ""}</summary>
-                      <div style={{ marginTop: 6, padding: "10px 12px", background: "var(--rd-grey-light)", borderRadius: 10, whiteSpace: "pre-wrap", lineHeight: 1.5 }}><strong>{s.subject}</strong>{"\n\n"}{s.body}</div>
-                    </details>
-                  ))}
-                </div>
-              )}
-            </Kv>
-            <Kv k="Vervolgafspraak">{intake.followup_plan?.what ? <span>{intake.followup_plan.what}{intake.followup_plan.who ? ` · ${intake.followup_plan.who}` : ""}{intake.followup_plan.when ? ` · ${intake.followup_plan.when}` : ""}</span> : <span style={{ opacity: 0.6 }}>Geen</span>}</Kv>
-            <Kv k="Offerte">{intake.advisor_offer_url ? <a href={intake.advisor_offer_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{intake.advisor_offer_url}</a> : <span style={{ opacity: 0.6 }}>Geen offerte; de klant bestelt zelf via roll.nl (hulp: roll.nl/prijsopgave)</span>}</Kv>
-            <div style={{ marginTop: 14 }}>
-              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Hulp van Roll</div>
-              <p className="rd-sub" style={{ margin: "0 0 10px", fontSize: 13 }}>Roll maakt de offerte en bepaalt liters, verpakkingen en primer. Jij levert de kleuren en afmetingen aan, of laat Roll contact opnemen.</p>
+        {intake && (
+          <details style={{ marginTop: 14 }}>
+            <summary style={{ cursor: "pointer", fontSize: 13.5, fontWeight: 700 }}>Liever dat Roll het oppakt of contact opneemt?</summary>
+            <div style={{ marginTop: 10 }}>
               <RollHelpForm bookingId={b.id} stylistId={b.stylist_id} intake={intake} task={task} onCreated={(t) => setTask(t)} />
             </div>
-          </div>
+          </details>
         )}
       </Panel>
 
-      {/* 4 OPVOLGING & HISTORIE */}
-      <Panel id="opvolging" title="Opvolging & historie" hint="fase, tijdlijn, gesprekken, commissie" open={openPanel(["opvolging", "klaar"])}>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+      {/* OPVOLGING & NOTITIES */}
+      <Panel id="opvolging" title="Opvolging & notities" hint="notities, taken, verstuurde mails, commissie" open={openPanel(["opvolging", "klaar"])}>
+        {intake && <NotesField intake={intake} onSaved={(v) => setIntake({ ...intake, advice_internal: v, advisor_notes: v })} />}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "14px 0 6px" }}>
           <select className="rd-input" value={b.kanban_stage} onChange={(e) => patch({ kanban_stage: e.target.value }, { kanban_stage: e.target.value })} style={{ height: 38, flex: "0 1 200px" }}>
             {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
@@ -467,6 +466,18 @@ export function GesprekPage() {
           <p className="rd-sub" style={{ margin: "0 0 8px", fontSize: 13 }}>Elke taak heeft een actie, eigenaar en datum; bij afronden leg je de uitkomst vast. Een verfaankoop sluit open taken automatisch.</p>
           <FollowupTasks bookingId={b.id} stylistId={b.stylist_id} tasks={tasks} onChange={(t) => { setTasks(t); if (t.some((x) => x.done_at) && !b.opgevolgd_at) patch({ opgevolgd: true }, { opgevolgd_at: new Date().toISOString() }); }} />
         </div>
+        <Kv k="Verstuurde mails">
+          {sends.length === 0 ? <span style={{ opacity: 0.6 }}>Nog niets verstuurd.</span> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {sends.map((s) => (
+                <details key={s.id} style={{ fontSize: 13 }}>
+                  <summary style={{ cursor: "pointer" }}><strong>{formatDate(s.sent_at)}</strong> · {ROUTE_LABEL[s.route] ?? s.route}{s.sent_by ? ` · door ${s.sent_by}` : ""}</summary>
+                  <div style={{ marginTop: 6, padding: "10px 12px", background: "var(--rd-grey-light)", borderRadius: 10, whiteSpace: "pre-wrap", lineHeight: 1.5 }}><strong>{s.subject}</strong>{"\n\n"}{s.body}</div>
+                </details>
+              ))}
+            </div>
+          )}
+        </Kv>
         <Kv k="Advies gekocht">{formatDate(b.created_at)}</Kv>
         <Kv k="Gesprek">{formatDate(b.start_at)}</Kv>
         <Kv k="Opgevolgd">{b.opgevolgd_at ? formatDate(b.opgevolgd_at) : <span style={{ opacity: 0.5 }}>nog niet</span>}</Kv>

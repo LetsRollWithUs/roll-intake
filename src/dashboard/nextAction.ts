@@ -38,7 +38,6 @@ export function nextAction(b: NextActionInput): NextAction {
   const past = new Date(b.start_at).getTime() < Date.now();
   const it = b.intake ?? null;
   const gesprek = `/beheer/gesprek/${b.id}`;
-  const intakeEdit = b.intake_id ? `/beheer/${b.intake_id}` : undefined;
 
   if (b.status === "paid_unplaced") {
     return { title: "Afspraak nog inplannen", sub: "De klant heeft betaald maar het moment is niet meer beschikbaar.", owner: "Roll", to: "/beheer/boekingen", phase: "voorbereiding" };
@@ -56,10 +55,10 @@ export function nextAction(b: NextActionInput): NextAction {
   }
   const adviceDone = !!(it?.advisor_outcome && it?.advisor_summary);
   if (!adviceDone) {
-    return { title: "Leg het besproken advies vast", sub: "Uitkomst, kleuren per ruimte en de samenvatting voor de klant.", owner: "Styliste", to: intakeEdit, phase: "gesprek" };
+    return { title: "Leg het advies vast", sub: "Kies de kleuren per ruimte en stel de samples samen.", owner: "Styliste", to: gesprek, phase: "gesprek" };
   }
   if (!it?.advisor_followup_sent_at) {
-    return { title: "Controleer en verstuur het adviesverslag", sub: "De klant ontvangt de samenvatting en de volgende stap.", owner: "Styliste", to: gesprek, phase: "versturen" };
+    return { title: "Verstuur het advies aan de klant", sub: "Bekijk de mail en verstuur; de opvolgtaak komt er vanzelf bij.", owner: "Styliste", to: gesprek, phase: "gesprek" };
   }
   const rt = b.rollTask ?? null;
   if (rt && (rt.status === "aangevraagd" || rt.status === "opgepakt")) {
