@@ -88,6 +88,8 @@ export interface IntakeRow {
   advice_products: AdviceProduct[] | null;
   advice_sample: AdvicePhase | null;
   advice_verf: AdvicePhase | null;
+  // Meetgegevens per ruimte (key = room id) voor de reken-engine; zie src/lib/verfcalc.ts.
+  room_measures: Record<string, import("@/lib/verfcalc").RoomMeasure> | null;
 }
 
 export interface AdviceProduct { kind: "pack" | "sticker" | "tester"; ref: string; name: string }
