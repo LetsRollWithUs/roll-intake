@@ -1,108 +1,119 @@
-// Bouwt de gestructureerde ruimtedata voor de offerte-tool (WP-plugin).
-// Zelfde veldnamen als een offerte-ruimte: type, ondergrond, wandvlakken, plafondvlakken,
-// houtwerk-objecten, voorbehandeling, lagen, kleur. Prijzen doet de tool zelf (WooCommerce).
-// Renovlies staat bewust op false (nog niet in gebruik).
-import { ROLL_COLORS } from "./roll-collection.ts";
-
-const NAME_TO_COLOR = new Map<string, { id: string; hex: string }>(
-  ROLL_COLORS.map((c) => [c.name.trim().toLowerCase(), { id: c.id, hex: c.hex }]),
-);
+// Overdracht naar de offerte-tool (roll-verfcalculator v1.40.0): POST roll-advies/v1/offerte.
+// Per intake-ruimte een "muur"-surface (muurvlakken + plafond) en zo nodig een "lak"-surface
+// (houtwerk). Kleur per vlak als naam; kleurId blijft 0 zolang de koppeling op ID niet bekend is.
+// Prijzen, blikken en de tools doet de offerte-tool zelf.
 
 const n = (v: unknown) => { const x = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", ".")); return Number.isFinite(x) && x > 0 ? x : 0; };
+const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+const isWoodS = (s: string) => /kozijn|deur|houtwerk|plint|lak|trap/i.test(s);
+const isCeilS = (s: string) => /plafond/i.test(s);
 
-interface Vlak2 { w?: number; h?: number; l?: number; b?: number }
+interface Vlak2 { w?: number; h?: number; l?: number; b?: number; color?: string }
 interface Measure {
   walls?: Vlak2[];
   ceilings?: Vlak2[];
   woodwork?: { doors?: number; windows?: Vlak2[]; plinths_m?: number; radiators?: Vlak2[]; cabinets?: Vlak2[] };
   wall_substrate?: string;
   wood_substrate?: string;
+  wall_condition?: string;
   coats?: number;
+  ceiling_color?: string;
+  wood_color?: string;
+  voorstrijk?: boolean;
+  primer?: boolean;
+  renovlies?: boolean;
 }
-interface AdviceRoomLike { room_id?: string; room?: string; surface?: string; color?: string; status?: string }
+interface AdviceRoomLike { room_id?: string; room?: string; surface?: string; color?: string }
 
-export interface OfferRoom {
+type Vlak =
+  | { soort: "muur"; breedte: number; hoogte: number; kleurId: number; kleurNaam: string }
+  | { soort: "plafond"; delen: { breedte: number; diepte: number }[]; kleurId: number; kleurNaam: string }
+  | { soort: "lak"; objecten: Record<string, unknown>[]; kleurId: number; kleurNaam: string };
+export interface OfferSurface {
   naam: string;
-  type: string[]; // "muur" en/of "lak"
-  ondergrond: { muren: string | null; houtwerk: string | null };
-  wandvlakken: { breedte: number; hoogte: number }[];
-  plafondvlakken: { lengte: number; breedte: number }[];
-  houtwerk: {
-    deuren: number;
-    raamkozijnen: { breedte: number; hoogte: number }[];
-    plinten_m: number;
-    radiatoren: { breedte: number; hoogte: number }[];
-    kasten: { breedte: number; hoogte: number }[];
-  };
-  voorbehandeling: { voorstrijk: boolean; primer: boolean };
-  renovlies: boolean;
+  type: "muur" | "lak";
+  ondergrond: string;
   lagen: number;
-  kleuren: { vlak: string; naam: string; kleur_id: string | null; hex: string | null }[];
+  renovlies: boolean;
+  voorbehandeling: boolean;
+  vlakken: Vlak[];
 }
 export interface OfferPayload {
+  titel: string;
+  klant: { voornaam: string; achternaam: string; email: string; telefoon: string; straat: string; postcode: string; plaats: string };
+  project: { surfaces: OfferSurface[] };
+  tools_in_mandje: boolean;
+  notitie: string;
+  bron: string;
   intake_id: string;
-  booking_id: string | null;
-  klant: { naam: string | null; email: string | null };
-  ruimtes: OfferRoom[];
 }
 
-// intakeRow: rij uit public.intake (rooms, room_measures, advice_verf, contact_*).
 export function buildOfferPayload(row: {
   id: string;
-  booking_id?: string | null;
   contact_name?: string | null;
   contact_email?: string | null;
   rooms?: { id: string; label: string; surfaces?: string[] }[] | null;
   room_measures?: Record<string, Measure> | null;
   advice_verf?: { rooms?: AdviceRoomLike[] } | null;
-}): OfferPayload {
-  const measures = row.room_measures ?? {};
-  const rooms = row.rooms ?? [];
+}, opts: { phone?: string | null; name?: string | null; toolsInCart?: boolean; notes?: string } = {}): OfferPayload {
+  const full = (row.contact_name || opts.name || "").trim();
+  const [voornaam, ...rest] = full.split(/\s+/);
+  const verf = (row.advice_verf?.rooms ?? []).filter((a) => (a.color ?? "").trim());
+  const surfaces: OfferSurface[] = [];
 
-  // Kleuren uit het verf-advies, per intake-ruimte: eerst op ruimte-id, anders op naam.
-  const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
-  const verfRows = (row.advice_verf?.rooms ?? []).filter((a) => (a.color ?? "").trim());
-  const colorsFor = (r: { id: string; label: string }) => verfRows.filter((a) => (a.room_id ? a.room_id === r.id : norm(a.room) === norm(r.label)));
-
-  const ruimtes: OfferRoom[] = [];
-  for (const r of rooms) {
-    const m = measures[r.id];
+  for (const r of row.rooms ?? []) {
+    const m = row.room_measures?.[r.id];
     if (!m) continue;
-    const walls = (m.walls ?? []).filter((w) => n(w.w) > 0).map((w) => ({ breedte: n(w.w), hoogte: n(w.h) || 2.6 }));
-    const plaf = (m.ceilings ?? []).filter((c) => n(c.l) > 0 && n(c.b) > 0).map((c) => ({ lengte: n(c.l), breedte: n(c.b) }));
+    // Standaardkleuren uit het verf-advies (op ruimte-id, anders naam) als een vlak geen eigen kleur heeft.
+    const mine = verf.filter((a) => (a.room_id ? a.room_id === r.id : norm(a.room) === norm(r.label)));
+    const dMuur = mine.find((a) => !isWoodS(a.surface ?? "") && !isCeilS(a.surface ?? ""))?.color ?? "";
+    const dPlaf = mine.find((a) => isCeilS(a.surface ?? ""))?.color ?? "";
+    const dHout = mine.find((a) => isWoodS(a.surface ?? ""))?.color ?? "";
+    const lagen = n(m.coats) || 2;
+
+    const walls = (m.walls ?? []).filter((w) => n(w.w) > 0);
+    const plaf = (m.ceilings ?? []).filter((c) => n(c.l) > 0 && n(c.b) > 0);
+    if (walls.length || plaf.length) {
+      const vlakken: Vlak[] = walls.map((w) => ({ soort: "muur", breedte: n(w.w), hoogte: n(w.h) || 2.6, kleurId: 0, kleurNaam: (w.color ?? "").trim() || dMuur }));
+      if (plaf.length) vlakken.push({ soort: "plafond", delen: plaf.map((c) => ({ breedte: n(c.b), diepte: n(c.l) })), kleurId: 0, kleurNaam: (m.ceiling_color ?? "").trim() || dPlaf });
+      surfaces.push({
+        naam: r.label,
+        type: "muur",
+        ondergrond: m.wall_substrate === "nieuw" ? "nieuw" : "bestaand",
+        lagen,
+        renovlies: m.renovlies ?? (m.wall_condition === "oneffen" || m.wall_condition === "scheuren"),
+        voorbehandeling: m.voorstrijk ?? m.wall_substrate === "nieuw",
+        vlakken,
+      });
+    }
+
     const w = m.woodwork ?? {};
-    const doors = n(w.doors);
-    const windows = (w.windows ?? []).filter((x) => n(x.w) > 0 || n(x.h) > 0).map((x) => ({ breedte: n(x.w), hoogte: n(x.h) }));
-    const plinth = n(w.plinths_m);
-    const radiators = (w.radiators ?? []).filter((x) => n(x.w) > 0).map((x) => ({ breedte: n(x.w), hoogte: n(x.h) }));
-    const cabinets = (w.cabinets ?? []).filter((x) => n(x.w) > 0).map((x) => ({ breedte: n(x.w), hoogte: n(x.h) }));
-    const hasMuur = walls.length > 0 || plaf.length > 0;
-    const hasWood = doors > 0 || windows.length > 0 || plinth > 0 || radiators.length > 0 || cabinets.length > 0;
-    if (!hasMuur && !hasWood) continue;
-
-    const kleuren = colorsFor(r).map((a) => {
-      const c = NAME_TO_COLOR.get((a.color ?? "").trim().toLowerCase());
-      return { vlak: a.surface ?? "", naam: a.color ?? "", kleur_id: c?.id ?? null, hex: c?.hex ?? null };
-    });
-
-    ruimtes.push({
-      naam: r.label,
-      type: [hasMuur ? "muur" : "", hasWood ? "lak" : ""].filter(Boolean),
-      ondergrond: { muren: hasMuur ? (m.wall_substrate ?? "bestaand") : null, houtwerk: hasWood ? (m.wood_substrate ?? "gelakt") : null },
-      wandvlakken: walls,
-      plafondvlakken: plaf,
-      houtwerk: { deuren: doors, raamkozijnen: windows, plinten_m: plinth, radiatoren: radiators, kasten: cabinets },
-      voorbehandeling: { voorstrijk: hasMuur && m.wall_substrate === "nieuw", primer: hasWood && m.wood_substrate === "kaal" },
-      renovlies: false,
-      lagen: n(m.coats) || 2,
-      kleuren,
-    });
+    const objecten: Record<string, unknown>[] = [];
+    if (n(w.doors) > 0) objecten.push({ soort: "deur", n: n(w.doors) });
+    for (const x of w.windows ?? []) if (n(x.w) > 0 || n(x.h) > 0) objecten.push({ soort: "raam", b: n(x.w), h: n(x.h) });
+    if (n(w.plinths_m) > 0) objecten.push({ soort: "plint", m: n(w.plinths_m) });
+    for (const x of w.radiators ?? []) if (n(x.w) > 0) objecten.push({ soort: "radiator", b: n(x.w), h: n(x.h) });
+    for (const x of w.cabinets ?? []) if (n(x.w) > 0) objecten.push({ soort: "kast", b: n(x.w), h: n(x.h) });
+    if (objecten.length) {
+      surfaces.push({
+        naam: `${r.label} houtwerk`,
+        type: "lak",
+        ondergrond: m.wood_substrate === "kaal" ? "kaal" : "gelakt",
+        lagen,
+        renovlies: false,
+        voorbehandeling: m.primer ?? m.wood_substrate === "kaal",
+        vlakken: [{ soort: "lak", objecten, kleurId: 0, kleurNaam: (m.wood_color ?? "").trim() || dHout }],
+      });
+    }
   }
 
   return {
+    titel: `Kleuradvies ${full || "klant"}`,
+    klant: { voornaam: voornaam ?? "", achternaam: rest.join(" "), email: row.contact_email ?? "", telefoon: opts.phone ?? "", straat: "", postcode: "", plaats: "" },
+    project: { surfaces },
+    tools_in_mandje: opts.toolsInCart ?? true,
+    notitie: opts.notes ?? "",
+    bron: "kleuradvies-dashboard",
     intake_id: row.id,
-    booking_id: row.booking_id ?? null,
-    klant: { naam: row.contact_name ?? null, email: row.contact_email ?? null },
-    ruimtes,
   };
 }

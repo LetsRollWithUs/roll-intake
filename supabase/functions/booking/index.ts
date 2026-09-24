@@ -24,7 +24,7 @@ const WOO_KEY = Deno.env.get("WOO_KEY")!;
 const WOO_SECRET = Deno.env.get("WOO_SECRET")!;
 const WEBHOOK_SECRET = Deno.env.get("WOO_WEBHOOK_SECRET")!;
 // Offerte-tool (WP-plugin) endpoint dat een offerte-record maakt uit de ruimtedata.
-const OFFERTE_API_URL = Deno.env.get("OFFERTE_API_URL") ?? "";
+const OFFERTE_API_URL = Deno.env.get("OFFERTE_API_URL") || "https://roll.nl/wp-json/roll-advies/v1/offerte";
 const OFFERTE_API_KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 const PRODUCT_ID = 14753; // online kleuradvies
 const wooAuth = "Basic " + btoa(`${WOO_KEY}:${WOO_SECRET}`);
@@ -297,8 +297,8 @@ Deno.serve(async (req) => {
       return j({ ok: r.ok, detail: r.detail });
     }
 
-    // Offerte genereren: gestructureerde ruimtedata -> offerte-tool (WP), die maakt de
-    // offerte-record met live WooCommerce-prijzen en geeft een offerte-URL terug.
+    // Offerte genereren: ruimtedata -> offerte-tool (roll-advies/v1/offerte). De tool maakt het
+    // offerte-record met live WooCommerce-prijzen en geeft nummer + editor-URL terug.
     if (action === "offerte_create") {
       if (!body.intake_id) return j({ ok: false, skipped: "geen intake_id" });
       const caller = createClient(SB_URL, SB_ANON, {
@@ -313,35 +313,37 @@ Deno.serve(async (req) => {
         .eq("id", body.intake_id)
         .maybeSingle();
       if (!it) return j({ ok: false, skipped: "geen intake" });
-      const payload = buildOfferPayload(it as any);
-      if (payload.ruimtes.length === 0) return j({ ok: false, skipped: "geen ruimtes met maten" });
+      const bid = (it as any).booking_id ?? body.booking_id ?? null;
+      const { data: bk } = bid ? await admin.from("bookings").select("customer_name,customer_phone").eq("id", bid).maybeSingle() : { data: null };
+      const toolsInCart = body.tools_in_cart !== false;
+      const payload = buildOfferPayload(it as any, { phone: (bk as any)?.customer_phone ?? "", name: (bk as any)?.customer_name ?? "", toolsInCart, notes: typeof body.notes === "string" ? body.notes : "" });
+      if (payload.project.surfaces.length === 0) return j({ ok: false, skipped: "geen ruimtes met maten" });
+      // Zonder sleutel staat de koppeling uit (het endpoint geeft dan 503).
+      if (!OFFERTE_API_KEY) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", payload });
 
-      // Endpoint nog niet gekoppeld: geef de payload terug zodat het dashboard toont dat alles klaarstaat.
-      if (!OFFERTE_API_URL) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", payload });
-
-      let offerUrl: string | null = null;
+      let data: any = {};
       try {
         const resp = await fetch(OFFERTE_API_URL, {
           method: "POST",
-          headers: { "content-type": "application/json", ...(OFFERTE_API_KEY ? { "x-api-key": OFFERTE_API_KEY } : {}) },
+          headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY },
           body: JSON.stringify(payload),
         });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) return j({ ok: false, error: `offerte-tool gaf ${resp.status}`, detail: data }, 502);
-        offerUrl = data.offer_url ?? data.offerte_url ?? data.url ?? null;
+        data = await resp.json().catch(() => ({}));
+        if (resp.status === 503) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld" });
+        if (!resp.ok || !data?.ok) return j({ ok: false, error: `offerte-tool gaf ${resp.status}`, detail: data });
       } catch (e) {
-        return j({ ok: false, error: "offerte-tool niet bereikbaar", detail: String(e) }, 502);
+        return j({ ok: false, error: "offerte-tool niet bereikbaar", detail: String(e) });
       }
-
-      if (offerUrl) {
-        const { data: u } = await caller.auth.getUser();
-        await admin.from("intake").update({ advisor_offer_url: offerUrl }).eq("id", body.intake_id);
-        await admin.from("advice_sends").insert({
-          intake_id: body.intake_id, booking_id: (it as any).booking_id ?? body.booking_id ?? null, route: "offerte",
-          subject: "Offerte aangemaakt", body: offerUrl, sent_to: (it as any).contact_email, sent_by: u?.user?.email ?? null, sent_at: new Date().toISOString(),
-        });
-      }
-      return j({ ok: true, offer_url: offerUrl });
+      const editUrl: string | null = data.editUrl ?? null;
+      const meta = { tools_in_cart: toolsInCart, id: data.id ?? null, nummer: data.nummer ?? null, edit_url: editUrl, at: new Date().toISOString() };
+      const { data: u } = await caller.auth.getUser();
+      await admin.from("intake").update({ advisor_offer_url: editUrl, offer_meta: meta }).eq("id", body.intake_id);
+      await admin.from("advice_sends").insert({
+        intake_id: body.intake_id, booking_id: bid, route: "offerte",
+        subject: `Offerte ${data.nummer ?? ""} aangemaakt`.trim(), body: `${editUrl ?? ""}\nRuimtes: ${data.ruimtes ?? payload.project.surfaces.length} · tools ${toolsInCart ? "in het mandje" : "los in de mail"}`,
+        sent_to: (it as any).contact_email, sent_by: u?.user?.email ?? null, sent_at: meta.at,
+      });
+      return j({ ok: true, offer_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null });
     }
 
     // Aankopen van een klant ophalen uit WooCommerce (op e-mail). Alleen adviseurs.

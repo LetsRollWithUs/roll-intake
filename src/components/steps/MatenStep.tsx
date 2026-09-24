@@ -64,6 +64,14 @@ export function MatenStep({ rooms, setRooms }: Props) {
                     <option value="nieuw">Nieuw stucwerk of gipsplaat</option>
                   </select>
                 </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>Staat van de muren</span>
+                  <select className="rd-input" value={m.wall_condition ?? "glad"} onChange={(e) => patch(r.id, (x) => ({ ...x, wall_condition: e.target.value as RoomMeasure["wall_condition"] }))} style={{ height: 46 }}>
+                    <option value="glad">Glad</option>
+                    <option value="oneffen">Oneffen</option>
+                    <option value="scheuren">Scheuren, of het behang gaat eraf</option>
+                  </select>
+                </label>
               </div>
             )}
 

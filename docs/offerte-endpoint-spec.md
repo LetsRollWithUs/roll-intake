@@ -1,85 +1,35 @@
-# Offerte-koppeling: contract voor de offerte-tool (WP-plugin)
+# Offerte-koppeling dashboard → offerte-tool
 
-Het dashboard (intake.roll.nl) levert de gestructureerde ruimtedata; de offerte-tool
-maakt daar een offerte-record van met **live WooCommerce-prijzen** en geeft een offerte-URL
-terug. De tool verzorgt daarna de klantmail met "alles in winkelmandje" en "bekijk/pas aan".
+Contract volgens de dev-briefing van 24 sep 2026 (roll-verfcalculator v1.40.0).
 
-## Wat het dashboard doet
+## Aanroep
 
-Bij "Genereer offerte" roept de edge-functie `booking` (action `offerte_create`) dit endpoint aan:
+- **Endpoint:** `POST https://roll.nl/wp-json/roll-advies/v1/offerte` (te overschrijven met Supabase-secret `OFFERTE_API_URL`)
+- **Auth:** header `X-Roll-Advies-Key`, waarde uit Supabase-secret `OFFERTE_API_KEY`
+- **Aan de WP-kant:** dezelfde sleutel in `define('ROLL_ADVIES_KEY', '...')` (wp-config) of wp-optie `roll_advies_api_key`. Zonder sleutel geeft het endpoint 503 en maakt het dashboard automatisch een Roll-taak aan.
+- **Aanroeper:** edge-functie `booking`, action `offerte_create` (alleen adviseurs). De payload wordt gebouwd in `supabase/functions/_shared/offerte.ts`.
 
-- **Method:** POST
-- **URL:** waarde van de Supabase-secret `OFFERTE_API_URL` (nog te zetten)
-- **Auth:** header `x-api-key: <OFFERTE_API_KEY>` (optioneel; alleen als de secret gezet is)
-- **Body:** JSON, zie hieronder
-- **Verwacht antwoord:** `200` met JSON die een offerte-URL bevat in `offer_url` (of `offerte_url` / `url`)
-
-Zolang `OFFERTE_API_URL` niet gezet is, stuurt het dashboard niets en toont het dat de
-ruimtedata klaarstaat. Zet de twee secrets om live te gaan:
+Koppeling aanzetten, met dezelfde sleutel als in wp-config:
 
 ```bash
-npx supabase secrets set OFFERTE_API_URL="https://roll.nl/wp-json/roll/v1/offerte" --project-ref lsboujprrvhntgbvlvyu
-npx supabase secrets set OFFERTE_API_KEY="<geheim>" --project-ref lsboujprrvhntgbvlvyu
+npx supabase secrets set OFFERTE_API_KEY="<sleutel>" --project-ref lsboujprrvhntgbvlvyu
 ```
 
-## Request-body (voorbeeld)
+## Wat het dashboard stuurt
 
-```json
-{
-  "intake_id": "uuid",
-  "booking_id": "uuid of null",
-  "klant": { "naam": "Fleur", "email": "fleur@example.com" },
-  "ruimtes": [
-    {
-      "naam": "Woonkamer",
-      "type": ["muur", "lak"],
-      "ondergrond": { "muren": "nieuw", "houtwerk": "kaal" },
-      "wandvlakken": [{ "breedte": 10, "hoogte": 2.6 }],
-      "plafondvlakken": [{ "lengte": 4, "breedte": 5 }],
-      "houtwerk": {
-        "deuren": 2,
-        "raamkozijnen": [{ "breedte": 1.2, "hoogte": 1.4 }],
-        "plinten_m": 12,
-        "radiatoren": [],
-        "kasten": []
-      },
-      "voorbehandeling": { "voorstrijk": true, "primer": true },
-      "renovlies": false,
-      "lagen": 2,
-      "kleuren": [
-        { "vlak": "muren", "naam": "Zen Den", "kleur_id": "zen-den", "hex": "#E1DED8" },
-        { "vlak": "deuren", "naam": "Shut Eye", "kleur_id": "shut-eye", "hex": "#3F3F3E" }
-      ]
-    }
-  ]
-}
-```
+- `titel`, `klant` (naam, e-mail, telefoon uit de boeking; adres leeg, dat vraagt de intake niet)
+- `project.surfaces`: per intake-ruimte
+  - een `muur`-surface met de muurvlakken (`breedte`, `hoogte`, `kleurNaam`) en het plafond (`delen` met `breedte`, `diepte`)
+  - een `lak`-surface (`"<ruimte> houtwerk"`) met `objecten`: `deur {n}`, `raam {b,h}`, `plint {m}`, `radiator {b,h}`, `kast {b,h}`
+- `ondergrond`, `lagen`, `renovlies` (expliciet) en `voorbehandeling` (voorstrijk bij muur, primer bij lak) per surface, volgens de keuze van de styliste of afgeleid uit de ondergrond en de staat van de muren
+- **Extra velden** (de tool negeert ze tot ze ondersteund worden): `tools_in_mandje` (boolean), `notitie`, `bron: "kleuradvies-dashboard"` en `intake_id`
 
-### Veldbetekenis
+## Wat het dashboard terugverwacht
 
-- `type`: `"muur"` als er wand-/plafondvlakken zijn, `"lak"` als er houtwerk is.
-- `ondergrond.muren`: `"bestaand"` of `"nieuw"` (nieuw stucwerk/gipsplaat → voorstrijk).
-- `ondergrond.houtwerk`: `"gelakt"` of `"kaal"` (kaal → primer). `null` als n.v.t.
-- `voorbehandeling`: afgeleid uit de ondergrond; `voorstrijk`/`primer` als boolean.
-- `renovlies`: staat nu altijd `false` (nog niet in gebruik).
-- Maten in meters; `plinten_m` in strekkende meter.
-- `kleuren[].kleur_id`: Roll-kleur-id (voor de Ark-configurator / prijs per kleur). `null`
-  als de opgegeven kleurnaam geen Roll-kleur is.
+`{ ok, id, nummer, editUrl, ruimtes }`. Het dashboard bewaart `editUrl` als offerte-link en `nummer`/`id` in `intake.offer_meta`.
 
-## Wat de tool moet doen (samenvatting)
+## Open punten voor de offerte-tool
 
-1. Maak een offerte-record uit de payload (hergebruik `schoon_project/opslaan`), met de
-   dezelfde rekenkern als de offerte-tool, zodat de uitkomst identiek is.
-2. Prijs alles live uit WooCommerce (muurverf/lak per kleur via de Ark-configurator;
-   voorstrijk 8156 → varianten 10945 = 2,5 L / 10946 = 10 L; primer 8165 = 0,75 L).
-3. Geef `offer_url` terug.
-4. Verstuur de klant de HTML-mail met de producten en twee knoppen:
-   - **Alles in winkelmandje** → roept de bestaande mand-vulling aan en redirect naar `/winkelmandje`.
-   - **Bekijk of pas aan** → opent de offerte-pagina.
-
-## Rekenconstanten (referentie, gelijk aan `src/lib/verfcalc.ts`)
-
-- Muurverf: 8,0 m²/L · Lak: 0,09 L/m² · Voorstrijk: 6,8 m²/L · Primer: 10,7 m²/L
-- Lagen standaard 2 · marge 1,10 · kamerhoogte standaard 2,6 m
-- Houtwerk-m²: deur met kozijn 2,5 · raamkozijn 2×(b+h)×0,25 · plint m×0,10 ·
-  radiator b×h×2 · kast b×h + 2×(0,6×h) + b×0,6
+1. **kleurId:** we sturen `0` plus de kleurnaam. Welke ID verwacht de tool (Ark-kleur-ID of WooCommerce-ID)? Dan sturen we die mee.
+2. **Radiator, kast en trap:** kloppen de objectvelden `{soort:"radiator", b, h}` en `{soort:"kast", b, h}`? Trap vraagt het dashboard nog niet uit.
+3. **Tools-vlag:** kan de tool `tools_in_mandje` uitlezen voor het mandje en het mailblok?
