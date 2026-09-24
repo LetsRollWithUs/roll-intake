@@ -7,12 +7,13 @@ const n = (v: unknown) => { const x = typeof v === "number" ? v : parseFloat(Str
 const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
 const isWoodS = (s: string) => /kozijn|deur|houtwerk|plint|lak|trap/i.test(s);
 const isCeilS = (s: string) => /plafond/i.test(s);
+const TRAP_M2 = 6; // standaard vaste trap, gelijk aan src/lib/verfcalc.ts
 
 interface Vlak2 { w?: number; h?: number; l?: number; b?: number; color?: string }
 interface Measure {
   walls?: Vlak2[];
   ceilings?: Vlak2[];
-  woodwork?: { doors?: number; windows?: Vlak2[]; plinths_m?: number; radiators?: Vlak2[]; cabinets?: Vlak2[] };
+  woodwork?: { doors?: number; windows?: Vlak2[]; plinths_m?: number; radiators?: Vlak2[]; cabinets?: Vlak2[]; stairs?: number };
   wall_substrate?: string;
   wood_substrate?: string;
   wall_condition?: string;
@@ -94,6 +95,8 @@ export function buildOfferPayload(row: {
     if (n(w.plinths_m) > 0) objecten.push({ soort: "plint", m: n(w.plinths_m) });
     for (const x of w.radiators ?? []) if (n(x.w) > 0) objecten.push({ soort: "radiator", b: n(x.w), h: n(x.h) });
     for (const x of w.cabinets ?? []) if (n(x.w) > 0) objecten.push({ soort: "kast", b: n(x.w), h: n(x.h) });
+    // De tool kent geen trap-object: een standaard trap gaat als vrij oppervlak van 6 m² (6 x 1) mee.
+    for (let i = 0; i < Math.round(n(w.stairs)); i++) objecten.push({ soort: "vrij", b: TRAP_M2, h: 1 });
     if (objecten.length) {
       surfaces.push({
         naam: `${r.label} houtwerk`,

@@ -20,7 +20,7 @@ npx supabase secrets set OFFERTE_API_KEY="<sleutel>" --project-ref lsboujprrvhnt
 - `titel`, `klant` (naam, e-mail, telefoon uit de boeking; adres leeg, dat vraagt de intake niet)
 - `project.surfaces`: per intake-ruimte
   - een `muur`-surface met de muurvlakken (`breedte`, `hoogte`, `kleurNaam`) en het plafond (`delen` met `breedte`, `diepte`)
-  - een `lak`-surface (`"<ruimte> houtwerk"`) met `objecten`: `deur {n}`, `raam {b,h}`, `plint {m}`, `radiator {b,h}`, `kast {b,h}`
+  - een `lak`-surface (`"<ruimte> houtwerk"`) met `objecten`: `deur {n}`, `raam {b,h}`, `plint {m}`, `radiator {b,h}`, `kast {b,h}`, en per standaard trap `vrij {b:6,h:1}` (6 m²: 13 treden van 80 cm, stootborden en trapbomen)
 - `ondergrond`, `lagen`, `renovlies` (expliciet) en `voorbehandeling` (voorstrijk bij muur, primer bij lak) per surface, volgens de keuze van de styliste of afgeleid uit de ondergrond en de staat van de muren
 - **Extra velden** (de tool negeert ze tot ze ondersteund worden): `tools_in_mandje` (boolean), `notitie`, `bron: "kleuradvies-dashboard"` en `intake_id`
 
@@ -28,8 +28,10 @@ npx supabase secrets set OFFERTE_API_KEY="<sleutel>" --project-ref lsboujprrvhnt
 
 `{ ok, id, nummer, editUrl, ruimtes }`. Het dashboard bewaart `editUrl` als offerte-link en `nummer`/`id` in `intake.offer_meta`.
 
-## Open punten voor de offerte-tool
+## Afspraken met de offerte-tool (24 sep 2026)
 
-1. **kleurId:** we sturen `0` plus de kleurnaam. Welke ID verwacht de tool (Ark-kleur-ID of WooCommerce-ID)? Dan sturen we die mee.
-2. **Radiator, kast en trap:** kloppen de objectvelden `{soort:"radiator", b, h}` en `{soort:"kast", b, h}`? Trap vraagt het dashboard nog niet uit.
-3. **Tools-vlag:** kan de tool `tools_in_mandje` uitlezen voor het mandje en het mailblok?
+1. **kleurId:** dit is het WooCommerce product-ID van het kleurproduct. Het endpoint zet `kleurNaam` zelf om naar `kleurId` (op naam, hoofdletterongevoelig, en op slug). Het dashboard blijft `kleurId: 0` en `kleurNaam` sturen.
+2. **Radiator en kast** kloppen. De tool kent geen trap: een standaard trap gaat mee als `vrij` 6 × 1 (6 m²).
+3. **Extra velden:** `tools_in_mandje`, `notitie`, `bron` en `intake_id` worden opgeslagen. De tools-vlag stuurt de mandvulling en het toolsblok in de mail; de notitie is zichtbaar in de editor. Dat bouwt de developer van de offerte-tool nog.
+4. **Adres:** is niet nodig. De klant vult het in bij het afrekenen.
+5. **Offertemail:** nog niet besloten wie hem verstuurt (de offerte-tool of Klaviyo). Dit bespreken we eerst.

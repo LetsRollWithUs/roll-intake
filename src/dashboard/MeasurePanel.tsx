@@ -5,7 +5,7 @@ import type { DbRoom, IntakeRow, OfferMeta } from "./types";
 import { buildTaskPayload, RollTaskStatus, type RollTask } from "./RollHelpForm";
 import { TrashIcon, iconBtn } from "./icons";
 import {
-  calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, needsVoorstrijk, needsPrimer, needsRenovlies,
+  calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, TRAP_M2, needsVoorstrijk, needsPrimer, needsRenovlies,
   type RoomMeasure, type MaterialLine,
 } from "@/lib/verfcalc";
 
@@ -231,6 +231,10 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                   {numField("deuren met kozijn", m.woodwork.doors, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, doors: n } }), "1", 120)}
                   {numField("plinten (m)", m.woodwork.plinths_m, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, plinths_m: n } }), "12")}
+                  <label style={{ display: "flex", flexDirection: "column", gap: 3 }} title={`Standaard vaste trap: 13 treden van 80 cm met stootborden en trapbomen, ca. ${TRAP_M2} m² lakwerk (zonder leuning)`}>
+                    <span style={{ fontSize: 11, opacity: 0.6 }}>trappen (standaard, {TRAP_M2} m²)</span>
+                    <input className="rd-input" inputMode="numeric" value={m.woodwork.stairs || ""} placeholder="0" onChange={(e) => setRoom(r.id, { woodwork: { ...m.woodwork, stairs: parseInt(e.target.value, 10) || 0 } })} style={{ height: 36, width: 84 }} />
+                  </label>
                   {colorField(m.wood_color, d.hout, (v) => setRoom(r.id, { wood_color: v }))}
                 </div>
                 {(["windows", "radiators", "cabinets"] as const).map((k) => (
