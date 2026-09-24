@@ -15,6 +15,9 @@ export const MARGE_NORMAAL = 1.1;
 export const MARGE_ZONDER_VOORBEHANDELING = 1.15; // nieuw stucwerk zonder voorstrijk
 export const RENOVLIES_SNIJVERLIES = 1.1; // 10%
 export const LIJM_M2_PER_L = 4.8; // 5 L dekt 24-30 m²; we rekenen voorzichtig met de ondergrens
+// Standaard vaste trap (lakwerk): 13 treden van 80 cm, aantrede 22 cm, optrede 20 cm, twee trapbomen.
+// Treden 2,3 + stootborden 2,1 + trapbomen 1,9 = ca. 6 m², zonder leuning en spijlen.
+export const TRAP_M2 = 6;
 
 // Verpakkingen. Muurverf/lak hebben geen vaste blikmaat (per kleur uit de configurator): liters.
 export const VOORSTRIJK_BLIKKEN = [2.5, 10] as const; // 2,5 L (17 m²) en 10 L (68 m²)
@@ -42,6 +45,7 @@ export interface RoomMeasure {
     plinths_m: number; // plinten (strekkende meter)
     radiators: Object2D[]; // optioneel
     cabinets: Object2D[]; // optioneel
+    stairs?: number; // standaard trappen (elk TRAP_M2)
   };
   wall_substrate: MuurOndergrond;
   wood_substrate: HoutOndergrond;
@@ -87,6 +91,7 @@ export function woodworkArea(m: RoomMeasure): number {
   a += num(w.plinths_m) * 0.1; // plint
   a += w.radiators.reduce((s, r) => s + num(r.w) * num(r.h) * 2, 0); // radiator (voor + achter)
   a += w.cabinets.reduce((s, k) => s + (num(k.w) * num(k.h) + 2 * (0.6 * num(k.h)) + num(k.w) * 0.6), 0); // kast
+  a += num(w.stairs) * TRAP_M2; // standaard trap
   return a;
 }
 
@@ -151,6 +156,7 @@ export function summarizeMeasure(m: RoomMeasure): string[] {
   if (rad) wood.push(`${rad} radiator${rad === 1 ? "" : "en"}`);
   const kast = w.cabinets.filter((r) => num(r.w) > 0).length;
   if (kast) wood.push(`${kast} kast${kast === 1 ? "" : "en"}`);
+  if (num(w.stairs) > 0) wood.push(`${num(w.stairs)} trap${num(w.stairs) === 1 ? "" : "pen"} (standaard, ca. ${TRAP_M2} m² per trap)`);
   if (wood.length) out.push(`Houtwerk: ${wood.join(", ")}${m.wood_substrate === "kaal" ? " · kaal hout/metaal" : ""}`);
   return out;
 }
