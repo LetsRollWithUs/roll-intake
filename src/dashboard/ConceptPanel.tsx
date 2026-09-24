@@ -1,25 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { rollColors } from "@/data/roll-colors";
-import { formatDate } from "./ui";
 import { photoPath } from "./Photos";
 import { buildAdvicePrompt, type PromptPhotos } from "./advicePrompt";
-import type { AdviceConcept, IntakeRow } from "./types";
+import type { IntakeRow } from "./types";
 
-// Conceptvoorbereiding (fase 5): ondersteuning op basis van de intake, uitsluitend met kleuren uit de
-// Roll-collectie. De styliste neemt over, past aan of verwerpt; het wordt nooit vanzelf advies of klantmail.
-const hexOf = new Map(rollColors.map((c) => [c.id, c.hex]));
-
-interface Props {
-  intake: IntakeRow;
-  onConcept: (concept: AdviceConcept, at: string) => void;
-  onAdopt: (concept: AdviceConcept) => void;
-}
-
-export function ConceptPanel({ intake, onConcept, onAdopt }: Props) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const concept = intake.advice_concept;
+// Adviesprompt: alle intake-input, foto-links en de Roll-collectie in één prompt voor Claude of ChatGPT.
+// Een hulpmiddel voor de eerste gedachtegang; het echte advies maakt de styliste zelf.
+export function ConceptPanel({ intake }: { intake: IntakeRow }) {
   const [photos, setPhotos] = useState<PromptPhotos>({ rooms: {}, samples: {}, inspiration: [] });
   const [copied, setCopied] = useState<string | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -56,25 +43,12 @@ export function ConceptPanel({ intake, onConcept, onAdopt }: Props) {
     setTimeout(() => setCopied(null), 4000);
   };
 
-  const generate = async (force: boolean) => {
-    setBusy(true); setErr(null);
-    const { data, error } = await supabase.functions.invoke("advies-concept", { body: { intake_id: intake.id, force } });
-    setBusy(false);
-    let d = data as { ok?: boolean; concept?: AdviceConcept; at?: string; error?: string } | null;
-    // Bij een foutstatus zit de reden in de response-body (error.context).
-    if (error && !d) { try { d = await (error as { context?: Response }).context?.json(); } catch { /* geen body */ } }
-    if (error || !d?.ok || !d.concept) { setErr(d?.error || "Concept maken lukte niet. Probeer het opnieuw."); return; }
-    onConcept(d.concept, d.at ?? new Date().toISOString());
-  };
-
-  const List = ({ items }: { items: string[] }) => items.length === 0 ? <span style={{ opacity: 0.5 }}>geen</span> : (
-    <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 3 }}>{items.map((s, i) => <li key={i}>{s}</li>)}</ul>
-  );
-
   return (
     <div style={{ marginTop: 14, border: "1.5px dashed var(--rd-lavender-mid, #BBB1CB)", borderRadius: 14, padding: "12px 14px" }}>
-      <div className="rd-kicker rd-kicker-pink">Advies voorbereiden met AI</div>
-      <div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 2 }}>Alle intake-input, de foto's en de volledige Roll-collectie met technische kenmerken in één prompt. Jij beoordeelt; niets gaat vanzelf naar de klant.</div>
+      <div className="rd-kicker rd-kicker-pink">Eerste gedachtegang met AI</div>
+      <div style={{ fontSize: 12.5, opacity: 0.75, marginTop: 2, lineHeight: 1.5 }}>
+        Kopieer de prompt en plak hem in Claude of ChatGPT. Daarin staan de intake, de foto's en de hele Roll-collectie met technische kenmerken.
+      </div>
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
         <button className="rd-btn rd-btn-primary" onClick={copyPrompt} style={{ width: "auto", padding: "0 20px" }}>Kopieer adviesprompt</button>
@@ -82,62 +56,13 @@ export function ConceptPanel({ intake, onConcept, onAdopt }: Props) {
         {copied && <span style={{ fontSize: 13, fontWeight: 600, color: "var(--rd-aubergine)" }}>{copied}</span>}
       </div>
       <div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 6 }}>
-        Plak de prompt in Claude of ChatGPT. {photoCount > 0 ? `Er staan ${photoCount} foto-links in (7 dagen geldig); sleep de foto's voor het beste resultaat ook in de chat.` : "Er zijn geen foto's bij deze intake."}
+        {photoCount > 0 ? `Er staan ${photoCount} foto-links in (7 dagen geldig). Sleep de foto's voor het beste resultaat ook in de chat.` : "Er zijn geen foto's bij deze intake."}
       </div>
       {showPrompt && <textarea className="rd-input" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} style={{ marginTop: 8, height: 220, fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12, lineHeight: 1.45, paddingTop: 10 }} />}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--rd-line)", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12.5, opacity: 0.7 }}>Of laat het dashboard zelf een concept maken:</span>
-        {concept && intake.advice_concept_at && <span style={{ fontSize: 12, opacity: 0.6 }}>{formatDate(intake.advice_concept_at)}</span>}
-        <button className="rd-plan-chip" onClick={() => generate(!!concept)} disabled={busy}>
-          {busy ? "Bezig..." : concept ? "Opnieuw maken" : "Concept maken"}
-        </button>
+      <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10, background: "var(--rd-grey-light)", fontSize: 12.5, lineHeight: 1.5 }}>
+        <strong>Let op:</strong> de waarde zit in jouw persoonlijke advies, waarin je zelf kijkt naar de ruimte, het licht en de wensen van de klant. Gebruik de uitkomst als eerste gedachtegang, niet als advies.
       </div>
-      {err && <p style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14, margin: "10px 0 0" }}>{err}</p>}
-
-      {concept && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12, fontSize: 14 }}>
-          <div><strong>Samenvatting.</strong> {concept.samenvatting}</div>
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-            <div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--rd-pink-dark)", marginBottom: 4 }}>Ontbreekt</div>
-              <List items={concept.ontbreekt} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", opacity: 0.6, marginBottom: 4 }}>Vragen voor het gesprek</div>
-              <List items={concept.vragen} />
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", opacity: 0.6, marginBottom: 6 }}>Kleurrichtingen</div>
-            <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-              {concept.richtingen.map((r, i) => (
-                <div key={i} className="rd-card-white" style={{ padding: 12, border: "1px solid var(--rd-line)" }}>
-                  <div style={{ fontWeight: 800, marginBottom: 6 }}>{r.titel}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {r.kleuren.map((k) => (
-                      <div key={k.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
-                        <span style={{ width: 18, height: 18, borderRadius: 6, background: hexOf.get(k.id) ?? "#ccc", border: "1px solid rgba(0,0,0,.12)", flex: "none" }} />
-                        <strong>{k.naam}</strong><span style={{ opacity: 0.7 }}>{k.toepassing}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 13, marginTop: 8 }}>{r.waarom}</div>
-                  {r.gebaseerd_op && <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>Gebaseerd op: {r.gebaseerd_op}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", opacity: 0.6, marginBottom: 4 }}>Let op bij samples</div>
-            <List items={concept.samples_aandacht} />
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button className="rd-btn rd-btn-outline" onClick={() => onAdopt(concept)} style={{ width: "auto", padding: "0 18px" }}>Overnemen in advies</button>
-            <span style={{ fontSize: 12.5, opacity: 0.65 }}>Zet de kleurrichtingen als voorstel in het sample-advies; daar pas je alles aan.</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
