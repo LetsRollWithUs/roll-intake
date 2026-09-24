@@ -92,7 +92,11 @@ export interface IntakeRow {
   room_measures: Record<string, import("@/lib/verfcalc").RoomMeasure> | null;
   // Uitkomst van de sample-check-in (stap 4).
   sample_checkin: SampleCheckin | null;
+  // Offerte uit de offerte-tool + keuze of de aanbevolen tools in het mandje gaan.
+  offer_meta: OfferMeta | null;
 }
+
+export interface OfferMeta { tools_in_cart: boolean; id?: number; nummer?: string; edit_url?: string; at?: string }
 
 export type CheckinOutcome = "keuze_gemaakt" | "meer_samples" | "nog_twijfel" | "later_schilderen" | "geen_reactie";
 export interface SampleCheckin {

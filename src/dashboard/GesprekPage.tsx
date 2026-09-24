@@ -462,7 +462,7 @@ export function GesprekPage() {
                 colorsByRoom={colorsByRoom}
                 task={task}
                 onSaved={(next) => setIntake({ ...intake, room_measures: next })}
-                onOffer={(url) => setIntake({ ...intake, advisor_offer_url: url })}
+                onOffer={(url, meta) => setIntake({ ...intake, advisor_offer_url: url, offer_meta: meta })}
                 onTask={(t) => setTask(t)}
               />
             </div>

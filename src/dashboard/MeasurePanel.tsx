@@ -1,19 +1,44 @@
 import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { DbRoom, IntakeRow } from "./types";
+import { rollColors } from "@/data/roll-colors";
+import type { DbRoom, IntakeRow, OfferMeta } from "./types";
 import { buildTaskPayload, RollTaskStatus, type RollTask } from "./RollHelpForm";
+import { TrashIcon, iconBtn } from "./icons";
 import {
-  calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE,
-  type RoomMeasure, type BlikCombo, type MaterialLine,
+  calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, needsVoorstrijk, needsPrimer, needsRenovlies,
+  type RoomMeasure, type MaterialLine,
 } from "@/lib/verfcalc";
 
-// Welke meetblokken bij een ruimte horen, afgeleid van de gekozen oppervlakken in de intake.
+// Maten & offerte (styliste): ruimtes komen voor-ingevuld uit de intake. De styliste past maten aan,
+// kiest de kleur per vlak, zet voorstrijk/primer/renovlies aan of uit en maakt de offerte.
+// Het dashboard toont m² en aantallen; blikken per kleur en prijzen komen uit de offerte-tool.
+
 const showWalls = (r: DbRoom) => (r.surfaces ?? []).includes("muren");
 const showCeiling = (r: DbRoom) => (r.surfaces ?? []).includes("plafond");
 const showWood = (r: DbRoom) => (r.surfaces ?? []).some((s) => ["kozijnen", "deuren", "houtwerk"].includes(s));
+const isWoodS = (s: string) => /kozijn|deur|houtwerk|plint|lak|trap/i.test(s);
+const isCeilS = (s: string) => /plafond/i.test(s);
+const HEX = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c.hex]));
+const hexOf = (n?: string) => HEX.get((n ?? "").trim().toLowerCase());
+const g = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
 
-const fmtBlik = (b: BlikCombo[]) => b.length ? b.map((x) => `${x.count}× ${String(x.size).replace(".", ",")} L`).join(" + ") : null;
-const nEUR = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+type ColorEntry = { surface: string; color: string; hex?: string };
+// Standaardkleuren per vlak uit het verf-advies: muren, plafond en houtwerk.
+function defaultsFor(list: ColorEntry[]) {
+  return {
+    muur: list.find((c) => !isWoodS(c.surface) && !isCeilS(c.surface))?.color ?? "",
+    plafond: list.find((c) => isCeilS(c.surface))?.color ?? "",
+    hout: list.find((c) => isWoodS(c.surface))?.color ?? "",
+  };
+}
+function withDefaults(m: RoomMeasure, d: ReturnType<typeof defaultsFor>): RoomMeasure {
+  return {
+    ...m,
+    walls: m.walls.map((w) => ({ ...w, color: (w.color ?? "").trim() || d.muur || undefined })),
+    ceiling_color: (m.ceiling_color ?? "").trim() || d.plafond || undefined,
+    wood_color: (m.wood_color ?? "").trim() || d.hout || undefined,
+  };
+}
 
 interface Props {
   intake: IntakeRow;
@@ -22,10 +47,10 @@ interface Props {
   rooms: DbRoom[];
   value: Record<string, RoomMeasure> | null;
   offerUrl: string | null;
-  colorsByRoom: Record<string, { surface: string; color: string; hex?: string }[]>; // gekozen kleuren uit het verf-advies
+  colorsByRoom: Record<string, ColorEntry[]>;
   task: RollTask | null;
   onSaved: (next: Record<string, RoomMeasure>) => void;
-  onOffer: (url: string) => void;
+  onOffer: (url: string, meta: OfferMeta) => void;
   onTask: (t: RollTask) => void;
 }
 
@@ -34,31 +59,33 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
   const measured = rooms.filter((r) => showWalls(r) || showCeiling(r) || showWood(r));
   const [map, setMap] = useState<Record<string, RoomMeasure>>(() => {
     const m: Record<string, RoomMeasure> = {};
-    for (const r of measured) m[r.id] = value?.[r.id] ?? emptyMeasure();
+    for (const r of measured) m[r.id] = value?.[r.id] ?? { ...emptyMeasure(), walls: showWalls(r) ? [{ w: 0, h: STANDAARD_HOOGTE }] : [] };
     return m;
   });
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [offering, setOffering] = useState(false);
-  const [offerMsg, setOfferMsg] = useState<string | null>(null);
+  const [toolsInCart, setToolsInCart] = useState<boolean>(intake.offer_meta?.tools_in_cart ?? true);
   const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [offerMsg, setOfferMsg] = useState<string | null>(null);
 
   const setRoom = (id: string, p: Partial<RoomMeasure>) => setMap((m) => ({ ...m, [id]: { ...m[id], ...p } }));
-  const project = useMemo(() => calcProject(measured.map((r) => map[r.id])), [map, measured]);
+  const defaults = useMemo(() => Object.fromEntries(measured.map((r) => [r.id, defaultsFor(colorsByRoom[r.id] ?? [])])), [measured, colorsByRoom]);
+  // Met de standaardkleuren ingevuld: zo rekent en bewaart het dashboard.
+  const effective = useMemo(() => Object.fromEntries(measured.map((r) => [r.id, withDefaults(map[r.id], defaults[r.id])])) as Record<string, RoomMeasure>, [map, defaults, measured]);
+  const project = useMemo(() => calcProject(measured.map((r) => effective[r.id])), [effective, measured]);
 
-  const save = async () => {
-    setSaving(true);
-    const { error } = await supabase.from("intake").update({ room_measures: map }).eq("id", intakeId);
-    setSaving(false);
-    if (error) { setMsg("Opslaan mislukte."); return; }
-    onSaved(map); setMsg("Maten opgeslagen ✓"); setTimeout(() => setMsg(null), 2500);
+  const persist = async () => {
+    const { error } = await supabase.from("intake").update({ room_measures: effective }).eq("id", intakeId);
+    if (!error) onSaved(effective);
+    return !error;
   };
+  const save = async () => { setSaving(true); const ok = await persist(); setSaving(false); setMsg(ok ? "Opgeslagen ✓" : "Opslaan mislukte."); setTimeout(() => setMsg(null), 2500); };
 
-  // Aanvraag bij Roll (offerte of contact), met gegevens uit het verf-advies en de maten.
-  const createRollTask = async (type: RollTask["type"]) => {
+  const createRollTask = async (type: RollTask["type"], note: string) => {
     const { data: u } = await supabase.auth.getUser();
     const due = new Date(); due.setDate(due.getDate() + 3);
-    const payload = buildTaskPayload({ ...intake, room_measures: map }, notes.trim());
+    const payload = buildTaskPayload({ ...intake, room_measures: effective }, note);
     const { data, error } = await supabase.from("roll_tasks").insert({
       type, booking_id: bookingId, intake_id: intakeId, stylist_id: stylistId,
       requested_by: u?.user?.email ?? null, due_date: due.toISOString().slice(0, 10), payload,
@@ -68,158 +95,183 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
     return true;
   };
 
-  // Eén actie: offerte via de offerte-tool; is die (nog) niet bereikbaar, dan maakt Roll de offerte.
+  // "Maak offerte": de offerte-tool maakt de offerte (prijzen live). Staat de koppeling nog uit,
+  // dan gaat de aanvraag als taak naar Roll, zodat er niets blijft liggen.
   const makeOffer = async () => {
-    setOffering(true); setOfferMsg(null);
-    const { error: se } = await supabase.from("intake").update({ room_measures: map }).eq("id", intakeId);
-    if (se) { setOffering(false); setOfferMsg("Opslaan van de maten mislukte."); return; }
-    onSaved(map);
-    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId } });
-    const d = data as { ok?: boolean; offer_url?: string | null; skipped?: string } | null;
-    if (d?.ok && d.offer_url) { setOffering(false); onOffer(d.offer_url); setOfferMsg("Offerte gemaakt ✓"); return; }
-    if (d?.skipped === "geen ruimtes met maten") { setOffering(false); setOfferMsg("Vul eerst de maten in, of laat Roll contact opnemen met de klant."); return; }
-    const ok = await createRollTask("offerte");
-    setOffering(false);
-    setOfferMsg(ok ? "Roll maakt de offerte en stuurt die naar de klant." : "Aanvragen lukte niet. Probeer het opnieuw.");
+    setBusy(true); setOfferMsg(null);
+    if (!(await persist())) { setBusy(false); setOfferMsg("Opslaan van de maten mislukte."); return; }
+    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId, tools_in_cart: toolsInCart, notes: notes.trim() } });
+    const d = data as { ok?: boolean; offer_url?: string | null; nummer?: string; id?: number; skipped?: string; error?: string } | null;
+    if (d?.ok && d.offer_url) {
+      setBusy(false);
+      onOffer(d.offer_url, { tools_in_cart: toolsInCart, id: d.id, nummer: d.nummer, edit_url: d.offer_url, at: new Date().toISOString() });
+      setOfferMsg(`Offerte ${d.nummer ?? ""} is aangemaakt ✓`);
+      return;
+    }
+    if (d?.skipped === "geen ruimtes met maten") { setBusy(false); setOfferMsg("Vul eerst de maten in, of laat Roll meekijken."); return; }
+    const ok = await createRollTask("offerte", [notes.trim(), toolsInCart ? "Tools mee in het mandje." : "Tools los in de mail (niet in het mandje)."].filter(Boolean).join(" "));
+    setBusy(false);
+    const reason = d?.skipped === "offerte-tool endpoint niet gekoppeld" ? "De koppeling met de offerte-tool staat nog uit" : `De offerte-tool gaf een fout${d?.error ? ` (${d.error})` : ""}`;
+    setOfferMsg(ok ? `${reason}; Roll maakt de offerte en stuurt die naar de klant.` : "Aanvragen lukte niet. Probeer het opnieuw.");
   };
-  const askContact = async () => {
-    setOffering(true); setOfferMsg(null);
-    const ok = await createRollTask("contact");
-    setOffering(false);
-    setOfferMsg(ok ? "Roll neemt contact op met de klant." : "Aanvragen lukte niet. Probeer het opnieuw.");
+  const askRoll = async () => {
+    setBusy(true); setOfferMsg(null);
+    await persist();
+    const ok = await createRollTask("contact", ["Te groot of hele huis: Roll stelt de offerte samen met de klant.", notes.trim()].filter(Boolean).join(" "));
+    setBusy(false);
+    setOfferMsg(ok ? "Roll neemt contact op met de klant en stelt de offerte samen op." : "Aanvragen lukte niet. Probeer het opnieuw.");
   };
 
-  if (measured.length === 0) return <p className="rd-sub" style={{ margin: 0 }}>Geen ruimtes met te verven oppervlakken in de intake. Voeg oppervlakken toe bij Voorbereiding.</p>;
+  if (measured.length === 0) return <p className="rd-sub" style={{ margin: 0 }}>Geen ruimtes met te verven oppervlakken in de intake.</p>;
 
-  const numField = (label: string, val: number, on: (n: number) => void, ph = "", w = 90) => (
+  const numField = (label: string, val: number, on: (n: number) => void, ph = "", w = 84) => (
     <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <span style={{ fontSize: 11, opacity: 0.6 }}>{label}</span>
       <input className="rd-input" inputMode="decimal" value={val || ""} placeholder={ph}
         onChange={(e) => on(parseFloat(e.target.value.replace(",", ".")) || 0)} style={{ height: 36, width: w }} />
     </label>
   );
-
+  const colorField = (val: string | undefined, placeholder: string, on: (v: string) => void) => {
+    const shown = (val ?? "").trim() || placeholder;
+    return (
+      <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 150px", minWidth: 140 }}>
+        <span style={{ fontSize: 11, opacity: 0.6 }}>kleur</span>
+        <span style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 9, top: 10, width: 16, height: 16, borderRadius: 5, background: hexOf(shown) ?? "transparent", border: hexOf(shown) ? "1px solid rgba(0,0,0,.15)" : "1px dashed rgba(0,0,0,.25)" }} />
+          <input className="rd-input" list="mp-colors" value={val ?? ""} placeholder={placeholder || "Kleur kiezen"} onChange={(e) => on(e.target.value)} style={{ height: 36, paddingLeft: 32, width: "100%" }} />
+        </span>
+      </label>
+    );
+  };
+  const fmtPack = (m: MaterialLine) => m.blikken.length
+    ? m.blikken.map((b) => (m.packUnit === "m" ? `${b.count}× rol ${g(b.size)} m` : `${b.count}× ${g(b.size)} L`)).join(" + ")
+    : `${g(m.amount)} ${m.unit}`;
   const matLine = (m: MaterialLine) => (
-    <div key={m.key} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "3px 0" }}>
-      <span>{m.label}{m.note ? <span style={{ opacity: 0.55 }}> · {m.note}</span> : ""}</span>
-      <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmtBlik(m.blikken) ?? `${nEUR(m.liters)} L`}</span>
+    <div key={`${m.key}-${m.color ?? ""}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "3px 0" }}>
+      <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {m.color && <span style={{ width: 12, height: 12, borderRadius: 4, background: hexOf(m.color) ?? "#eee", border: "1px solid rgba(0,0,0,.12)" }} />}
+        {m.label}{m.blikken.length ? <span style={{ opacity: 0.55 }}> · {g(m.amount)} {m.unit}</span> : ""}
+      </span>
+      <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{m.key === "muurverf" ? `${g(m.amount)} L` : fmtPack(m)}</span>
     </div>
   );
+  const toggle = (label: string, on: boolean, auto: boolean, set: (v: boolean) => void, hint: string) => (
+    <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, padding: "5px 10px", borderRadius: 99, border: `1px solid ${on ? "var(--rd-aubergine)" : "var(--rd-line)"}`, background: on ? "var(--rd-grey-light)" : "transparent", cursor: "pointer" }} title={hint}>
+      <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} />
+      {label}{auto && <span style={{ fontSize: 11, opacity: 0.55 }}>(auto)</span>}
+    </label>
+  );
+  const sectionLabel = (t: string) => <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.6, marginBottom: 4 }}>{t}</div>;
+  const extraName = { windows: "Raamkozijn", radiators: "Radiator", cabinets: "Kast" } as const;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>De maten komen uit de intake; stel bij waar nodig (een schatting is prima). m² en materialen rekenen live mee.</p>
+      <datalist id="mp-colors">{rollColors.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+      <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>De maten komen uit de intake; stel bij waar nodig (een schatting is prima). De kleuren staan al goed vanuit het verf-advies; zet per vlak een andere kleur voor bijvoorbeeld een accentwand.</p>
 
       {measured.map((r) => {
         const m = map[r.id];
-        const calc = calcRoom(m);
+        const d = defaults[r.id];
+        const calc = calcRoom(effective[r.id]);
         return (
-          <div key={r.id} className="rd-card-white" style={{ padding: 14, background: "var(--rd-offwhite)", border: "1px solid var(--rd-line)" }}>
+          <div key={r.id} className="rd-card-white" style={{ padding: 14, background: "var(--rd-offwhite)", border: "1px solid var(--rd-line)", display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               <strong style={{ fontSize: 15 }}>{r.label}</strong>
-              <span style={{ fontSize: 12, opacity: 0.65 }}>
-                {calc.wall_m2 > 0 && `wand ${nEUR(calc.wall_m2)} m² · `}
-                {calc.ceiling_m2 > 0 && `plafond ${nEUR(calc.ceiling_m2)} m² · `}
-                {calc.woodwork_m2 > 0 && `houtwerk ${nEUR(calc.woodwork_m2)} m²`}
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-              {(colorsByRoom[r.id] ?? []).length === 0
-                ? <span style={{ fontSize: 12.5, opacity: 0.6 }}>Nog geen kleur gekozen in het verf-advies</span>
-                : colorsByRoom[r.id].map((c, i) => (
-                  <span key={i} className="rd-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: 4, background: c.hex ?? "#eee", border: "1px solid rgba(0,0,0,.12)" }} />
-                    {c.color}{c.surface ? ` · ${c.surface}` : ""}
-                  </span>
-                ))}
+              <span style={{ fontSize: 12, opacity: 0.65 }}>{[calc.wall_m2 > 0 && `wand ${g(calc.wall_m2)} m²`, calc.ceiling_m2 > 0 && `plafond ${g(calc.ceiling_m2)} m²`, calc.woodwork_m2 > 0 && `houtwerk ${g(calc.woodwork_m2)} m²`].filter(Boolean).join(" · ")}</span>
             </div>
 
-            {/* MUREN */}
             {showWalls(r) && (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.6, marginBottom: 4 }}>Muren</div>
+              <div>
+                {sectionLabel("Muren")}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {m.walls.map((w, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                      {numField("breedte (m)", w.w, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, w: n } : x) }), "bijv. 11")}
-                      <span style={{ paddingBottom: 8 }}>×</span>
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                      {numField("breedte (m)", w.w, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, w: n } : x) }), "11")}
                       {numField("hoogte (m)", w.h, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, h: n } : x) }), "2,6")}
-                      <button className="rd-textlink" onClick={() => setRoom(r.id, { walls: m.walls.filter((_, j) => j !== i) })} style={{ paddingBottom: 6, opacity: 0.6 }}>✕</button>
+                      {colorField(w.color, d.muur, (v) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, color: v } : x) }))}
+                      <button onClick={() => setRoom(r.id, { walls: m.walls.filter((_, j) => j !== i) })} aria-label="Muurvlak verwijderen" title="Verwijderen" style={iconBtn}><TrashIcon /></button>
                     </div>
                   ))}
-                  <button className="rd-textlink" onClick={() => setRoom(r.id, { walls: [...m.walls, { w: 0, h: STANDAARD_HOOGTE }] })} style={{ alignSelf: "flex-start" }}>+ Muurvlak (breedte × hoogte)</button>
-                  <span style={{ fontSize: 12, opacity: 0.55 }}>Tel de breedtes van de te verven muren op, bijv. 4 + 3 + 4 = 11 m. Hoogte standaard 2,6 m.</span>
+                  <button className="rd-textlink" onClick={() => setRoom(r.id, { walls: [...m.walls, { w: 0, h: STANDAARD_HOOGTE }] })} style={{ alignSelf: "flex-start", fontSize: 13 }}>+ Muurvlak (bijv. accentwand)</button>
                 </div>
-                {showWalls(r) && (
-                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginTop: 8 }}>
-                    <span style={{ opacity: 0.6 }}>Ondergrond muren:</span>
-                    <select className="rd-input" value={m.wall_substrate} onChange={(e) => setRoom(r.id, { wall_substrate: e.target.value as RoomMeasure["wall_substrate"] })} style={{ height: 34, width: 220 }}>
-                      <option value="bestaand">Bestaande verflaag</option>
-                      <option value="nieuw">Nieuw stucwerk / gipsplaat (voorstrijk)</option>
-                    </select>
-                  </label>
-                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                  <select className="rd-input" value={m.wall_substrate} onChange={(e) => setRoom(r.id, { wall_substrate: e.target.value as RoomMeasure["wall_substrate"] })} style={{ height: 34, width: 230, fontSize: 13 }}>
+                    <option value="bestaand">Bestaande verflaag</option>
+                    <option value="nieuw">Nieuw stucwerk / gipsplaat</option>
+                  </select>
+                  <select className="rd-input" value={m.wall_condition ?? "glad"} onChange={(e) => setRoom(r.id, { wall_condition: e.target.value as RoomMeasure["wall_condition"] })} style={{ height: 34, width: 230, fontSize: 13 }}>
+                    <option value="glad">Muren glad</option>
+                    <option value="oneffen">Muren oneffen</option>
+                    <option value="scheuren">Scheuren / behang eraf</option>
+                  </select>
+                </div>
               </div>
             )}
 
-            {/* PLAFOND */}
             {showCeiling(r) && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.6, marginBottom: 4 }}>Plafond</div>
+              <div>
+                {sectionLabel("Plafond")}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {m.ceilings.map((c, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
                       {numField("lengte (m)", c.l, (n) => setRoom(r.id, { ceilings: m.ceilings.map((x, j) => j === i ? { ...x, l: n } : x) }), "5")}
-                      <span style={{ paddingBottom: 8 }}>×</span>
                       {numField("breedte (m)", c.b, (n) => setRoom(r.id, { ceilings: m.ceilings.map((x, j) => j === i ? { ...x, b: n } : x) }), "4")}
-                      <button className="rd-textlink" onClick={() => setRoom(r.id, { ceilings: m.ceilings.filter((_, j) => j !== i) })} style={{ paddingBottom: 6, opacity: 0.6 }}>✕</button>
+                      <button onClick={() => setRoom(r.id, { ceilings: m.ceilings.filter((_, j) => j !== i) })} aria-label="Plafondvlak verwijderen" title="Verwijderen" style={iconBtn}><TrashIcon /></button>
                     </div>
                   ))}
-                  <button className="rd-textlink" onClick={() => setRoom(r.id, { ceilings: [...m.ceilings, { l: 0, b: 0 }] })} style={{ alignSelf: "flex-start" }}>+ Plafondvlak (lengte × breedte)</button>
-                  <span style={{ fontSize: 12, opacity: 0.55 }}>Bij een L-vorm voeg je meerdere vlakken toe.</span>
+                  <button className="rd-textlink" onClick={() => setRoom(r.id, { ceilings: [...m.ceilings, { l: 0, b: 0 }] })} style={{ alignSelf: "flex-start", fontSize: 13 }}>+ Plafondvlak (bij L-vorm meerdere)</button>
+                  {m.ceilings.length > 0 && <div style={{ maxWidth: 320 }}>{colorField(m.ceiling_color, d.plafond, (v) => setRoom(r.id, { ceiling_color: v }))}</div>}
                 </div>
               </div>
             )}
 
-            {/* HOUTWERK */}
             {showWood(r) && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.6, marginBottom: 4 }}>Houtwerk</div>
-                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-                  {numField("deuren (met kozijn)", m.woodwork.doors, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, doors: n } }), "1", 130)}
-                  {numField("plinten (m)", m.woodwork.plinths_m, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, plinths_m: n } }), "12", 90)}
+              <div>
+                {sectionLabel("Houtwerk")}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  {numField("deuren met kozijn", m.woodwork.doors, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, doors: n } }), "1", 120)}
+                  {numField("plinten (m)", m.woodwork.plinths_m, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, plinths_m: n } }), "12")}
+                  {colorField(m.wood_color, d.hout, (v) => setRoom(r.id, { wood_color: v }))}
                 </div>
-                <div style={{ marginTop: 8 }}>
-                  <span style={{ fontSize: 12, opacity: 0.6 }}>Raamkozijnen (breedte × hoogte)</span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                    {m.woodwork.windows.map((wd, i) => (
-                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                        {numField("breedte (m)", wd.w, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, windows: m.woodwork.windows.map((x, j) => j === i ? { ...x, w: n } : x) } }), "1,2")}
-                        <span style={{ paddingBottom: 8 }}>×</span>
-                        {numField("hoogte (m)", wd.h, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, windows: m.woodwork.windows.map((x, j) => j === i ? { ...x, h: n } : x) } }), "1,4")}
-                        <button className="rd-textlink" onClick={() => setRoom(r.id, { woodwork: { ...m.woodwork, windows: m.woodwork.windows.filter((_, j) => j !== i) } })} style={{ paddingBottom: 6, opacity: 0.6 }}>✕</button>
-                      </div>
-                    ))}
-                    <button className="rd-textlink" onClick={() => setRoom(r.id, { woodwork: { ...m.woodwork, windows: [...m.woodwork.windows, { w: 0, h: 0 }] } })} style={{ alignSelf: "flex-start" }}>+ Raamkozijn</button>
-                  </div>
+                {(["windows", "radiators", "cabinets"] as const).map((k) => (
+                  m.woodwork[k].length > 0 && (
+                    <div key={k} style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                      {m.woodwork[k].map((o, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                          <span style={{ fontSize: 12.5, width: 84, paddingBottom: 9 }}>{extraName[k]}</span>
+                          {numField("breedte (m)", o.w, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].map((x, j) => j === i ? { ...x, w: n } : x) } }), "1,2")}
+                          {numField("hoogte (m)", o.h, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].map((x, j) => j === i ? { ...x, h: n } : x) } }), "1,4")}
+                          <button onClick={() => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].filter((_, j) => j !== i) } })} aria-label={`${extraName[k]} verwijderen`} title="Verwijderen" style={iconBtn}><TrashIcon /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ))}
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+                  {(["windows", "radiators", "cabinets"] as const).map((k) => (
+                    <button key={k} className="rd-textlink" style={{ fontSize: 13 }} onClick={() => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: [...m.woodwork[k], { w: 0, h: 0 }] } })}>+ {extraName[k]}</button>
+                  ))}
                 </div>
-                <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginTop: 8 }}>
-                  <span style={{ opacity: 0.6 }}>Ondergrond houtwerk:</span>
-                  <select className="rd-input" value={m.wood_substrate} onChange={(e) => setRoom(r.id, { wood_substrate: e.target.value as RoomMeasure["wood_substrate"] })} style={{ height: 34, width: 220 }}>
-                    <option value="gelakt">Al gelakt</option>
-                    <option value="kaal">Kaal hout of metaal (primer)</option>
-                  </select>
-                </label>
+                <select className="rd-input" value={m.wood_substrate} onChange={(e) => setRoom(r.id, { wood_substrate: e.target.value as RoomMeasure["wood_substrate"] })} style={{ height: 34, width: 230, fontSize: 13, marginTop: 8 }}>
+                  <option value="gelakt">Houtwerk al gelakt</option>
+                  <option value="kaal">Kaal hout of metaal</option>
+                </select>
               </div>
             )}
 
-            {/* Aantal lagen + materialen */}
-            <div style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-              {numField("lagen", m.coats, (n) => setRoom(r.id, { coats: n || 2 }), "2", 70)}
+            {/* Voorbehandeling en lagen */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {(showWalls(r) || showCeiling(r)) && toggle("Voorstrijk", needsVoorstrijk(m), m.voorstrijk === undefined, (v) => setRoom(r.id, { voorstrijk: v }), "Standaard aan bij nieuw stucwerk of gipsplaat")}
+              {showWood(r) && toggle("Primer", needsPrimer(m), m.primer === undefined, (v) => setRoom(r.id, { primer: v }), "Standaard aan bij kaal hout of metaal")}
+              {showWalls(r) && toggle("Renovlies", needsRenovlies(m), m.renovlies === undefined, (v) => setRoom(r.id, { renovlies: v }), "Standaard aan bij oneffen muren, scheuren of als het behang eraf gaat")}
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                lagen <input className="rd-input" inputMode="numeric" value={m.coats || ""} onChange={(e) => setRoom(r.id, { coats: parseInt(e.target.value, 10) || 2 })} style={{ height: 32, width: 52 }} />
+              </label>
             </div>
+
             {calc.materials.length > 0 && (
-              <div style={{ marginTop: 10, padding: "8px 12px", background: "var(--rd-grey-light)", borderRadius: 10 }}>
-                <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Materialen (schatting)</div>
+              <div style={{ padding: "8px 12px", background: "var(--rd-grey-light)", borderRadius: 10 }}>
+                <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Materialen</div>
                 {calc.materials.map(matLine)}
               </div>
             )}
@@ -230,35 +282,39 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
       {/* Projecttotaal */}
       <div className="rd-card-white" style={{ padding: 14, border: "1.5px solid var(--rd-aubergine)" }}>
         <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>Totaal project</div>
-        <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 6 }}>
-          Wand {nEUR(project.wall_m2)} m² · plafond {nEUR(project.ceiling_m2)} m² · houtwerk {nEUR(project.woodwork_m2)} m²
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}><span>Muurverf</span><span style={{ fontWeight: 700 }}>{nEUR(project.muurverf_liters)} L · blik en prijs per kleur (Ark)</span></div>
-        {project.lak && matLine(project.lak)}
-        {project.voorstrijk && matLine(project.voorstrijk)}
-        {project.primer && matLine(project.primer)}
-        <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Voorstrijk en primer worden op de opgetelde m² berekend, zodat je niet per ruimte te veel inkoopt. Prijzen komen straks live uit de webshop.</p>
+        <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 6 }}>Wand {g(project.wall_m2)} m² · plafond {g(project.ceiling_m2)} m² · houtwerk {g(project.woodwork_m2)} m²</div>
+        {project.paint.map(matLine)}
+        {[project.voorstrijk, project.primer, project.renovlies, project.lijm].filter((x): x is MaterialLine => !!x).map(matLine)}
+        <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 12 }}>Verf is gebundeld per kleur; voorstrijk, primer, renovlies en lijm op de opgetelde m². Blikken per kleur en prijzen maakt de offerte-tool.</p>
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button className="rd-btn rd-btn-outline" onClick={save} disabled={saving} style={{ width: "auto", padding: "0 20px" }}>{saving ? "Opslaan..." : "Maten opslaan"}</button>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <button className="rd-btn rd-btn-outline" onClick={save} disabled={saving} style={{ width: "auto", padding: "0 20px" }}>{saving ? "Opslaan..." : "Opslaan"}</button>
         {msg && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>{msg}</span>}
       </div>
 
-      {/* Offerte: één actie. Via de offerte-tool, of anders maakt Roll hem. */}
+      {/* Offerte */}
       <div style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         <div className="rd-kicker rd-kicker-pink">Offerte</div>
         {offerUrl && (
-          <div style={{ fontSize: 14 }}>Offerte klaar: <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{offerUrl}</a></div>
+          <div style={{ fontSize: 14 }}>
+            Offerte{intake.offer_meta?.nummer ? ` ${intake.offer_meta.nummer}` : ""} is aangemaakt. <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Openen in de offerte-tool</a>
+            <span style={{ fontSize: 12, opacity: 0.6 }}> (voor Roll-collega's)</span>
+          </div>
         )}
-        {task ? <RollTaskStatus task={task} /> : !offerUrl && (
+        {task && <RollTaskStatus task={task} />}
+        {!offerUrl && !task && (
           <>
-            <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>Roll rekent de prijzen live uit de webshop en stuurt de klant de offerte met "alles in winkelmandje". De kleuren en maten hierboven gaan automatisch mee.</p>
-            <input className="rd-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Toelichting voor Roll (optioneel), bijv. klant wil graag de 10 L-blikken" style={{ height: 38, fontSize: 13 }} />
+            <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5, cursor: "pointer" }}>
+              <input type="checkbox" checked={toolsInCart} onChange={(e) => setToolsInCart(e.target.checked)} style={{ marginTop: 3 }} />
+              <span><strong>Aanbevolen tools meenemen in het winkelmandje</strong><br /><span style={{ fontSize: 12.5, opacity: 0.7 }}>{toolsInCart ? "Rollers, kwasten en tape gaan mee met \"Alles in winkelmandje\"." : "De tools staan los in de mail onder \"Vergeet je tools niet\", niet in het mandje."}</span></span>
+            </label>
+            <input className="rd-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Toelichting voor Roll (optioneel)" style={{ height: 38, fontSize: 13 }} />
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <button className="rd-btn rd-btn-primary" onClick={makeOffer} disabled={offering} style={{ width: "auto", padding: "0 22px" }}>{offering ? "Bezig..." : "Maak offerte"}</button>
-              <button className="rd-textlink" onClick={askContact} disabled={offering}>Liever dat Roll contact opneemt met de klant</button>
+              <button className="rd-btn rd-btn-primary" onClick={makeOffer} disabled={busy} style={{ width: "auto", padding: "0 22px" }}>{busy ? "Bezig..." : "Maak offerte"}</button>
+              <button className="rd-textlink" onClick={askRoll} disabled={busy}>Te groot of hele huis? Laat Roll meekijken</button>
             </div>
+            <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De offerte-tool rekent de prijzen live uit de webshop. De klant krijgt een mail met de producten en "Alles in winkelmandje".</p>
           </>
         )}
         {offerMsg && <span style={{ color: "var(--rd-aubergine)", fontWeight: 600, fontSize: 13 }}>{offerMsg}</span>}
