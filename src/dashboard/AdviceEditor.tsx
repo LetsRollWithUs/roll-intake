@@ -5,7 +5,8 @@ import { rollColors } from "@/data/roll-colors";
 import { SURFACES } from "@/data/intake-options";
 import { SampleComposer } from "./SampleComposer";
 import { roomIdFor } from "./roomMatch";
-import type { AdviceRoom, AdvicePhase } from "./types";
+import { TrashIcon, iconBtn } from "./icons";
+import type { AdviceRoom, AdvicePhase, AdviceProduct } from "./types";
 
 const colorByName = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
 const SURF_LABEL: Record<string, string> = Object.fromEntries(SURFACES.map((s) => [s.key, s.label]));
@@ -86,7 +87,12 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
 
   const set = (p: Partial<AdvicePhase>) => setAdvice((a) => ({ ...a, ...p }));
   const setRoom = (i: number, p: Partial<AdviceRoom>) => setAdvice((a) => ({ ...a, rooms: a.rooms.map((r, idx) => (idx === i ? { ...r, ...p } : r)) }));
-  const addRoom = () => setAdvice((a) => ({ ...a, rooms: [...a.rooms, emptyRoom()] }));
+  const addRoom = () => setAdvice((a) => {
+    // Bij samples: nieuwe regel in dezelfde ruimte als de laatste, voor een extra testkleur.
+    const last = a.rooms[a.rooms.length - 1];
+    const row = isSample && last ? { ...emptyRoom(last.room, last.surface), room_id: last.room_id } : emptyRoom();
+    return { ...a, rooms: [...a.rooms, row] };
+  });
   const delRoom = (i: number) => setAdvice((a) => ({ ...a, rooms: a.rooms.filter((_, idx) => idx !== i) }));
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 2500); };
 
@@ -95,6 +101,15 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
     for (const r of advice.rooms) { const c = colorByName.get((r.color ?? "").trim().toLowerCase()); if (c && !seen.has(c.id)) seen.set(c.id, { id: c.id, name: c.name, hex: c.hex }); }
     return [...seen.values()];
   }, [advice.rooms]);
+  // Sample-producten volgen de kleuren in de rijen (standaard sticker); bundels blijven staan.
+  const syncedProducts = useMemo<AdviceProduct[]>(() => {
+    if (!isSample) return advice.products;
+    const kindOf = new Map(advice.products.filter((p) => p.kind !== "pack").map((p) => [p.ref, p.kind]));
+    return [
+      ...candidates.map((c) => ({ kind: kindOf.get(c.id) ?? "sticker", ref: c.id, name: c.name }) as AdviceProduct),
+      ...advice.products.filter((p) => p.kind === "pack"),
+    ];
+  }, [advice.products, candidates, isSample]);
 
   const outcome = isSample ? "samples_needed" : advice.route === "zelf" ? "color_chosen" : "followup_needed";
   const persist = async () => {
@@ -102,7 +117,7 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
     const rooms = advice.rooms
       .filter((r) => r.room.trim() || r.color.trim())
       .map((r) => ({ ...r, status: (isSample ? "voorgesteld" : "definitief") as AdviceRoom["status"], product: isWood(r.surface) ? "Lak" : "Muurverf" }));
-    const clean = { ...advice, rooms };
+    const clean = { ...advice, rooms, products: syncedProducts };
     const patch: Record<string, unknown> = {
       [`advice_${phase}`]: clean,
       followup_route: clean.route,
@@ -156,28 +171,28 @@ export function AdviceEditor({ intakeId, phase, value, bookingId, customerName, 
       {/* Kleuren per ruimte */}
       <div>
         <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 2 }}>{isSample ? "Kleuren om te testen" : "Definitieve kleuren"}</div>
-        <p className="rd-sub" style={{ margin: "0 0 10px", fontSize: 13 }}>{isSample ? "Per ruimte de kleuren die de klant thuis test." : "Per ruimte en oppervlak de gekozen kleur."}</p>
+        <p className="rd-sub" style={{ margin: "0 0 10px", fontSize: 13 }}>{isSample ? "Per ruimte de kleuren die de klant thuis test. Meerdere kleuren voor één ruimte? Voeg een regel toe." : "Per ruimte en oppervlak de gekozen kleur."}</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {advice.rooms.map((r, i) => {
             const c = colorByName.get((r.color ?? "").trim().toLowerCase());
             return (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(110px,1fr) minmax(110px,1fr) minmax(140px,1.2fr) auto", gap: 8, alignItems: "center", padding: "8px 10px", borderRadius: 12, background: "var(--rd-offwhite)", border: "1px solid var(--rd-line)" }}>
+              <div key={i} style={{ display: "grid", gridTemplateColumns: isSample ? "minmax(120px,1fr) minmax(160px,1.4fr) auto" : "minmax(110px,1fr) minmax(110px,1fr) minmax(140px,1.2fr) auto", gap: 8, alignItems: "center", padding: "8px 10px", borderRadius: 12, background: "var(--rd-offwhite)", border: "1px solid var(--rd-line)" }}>
                 <input className="rd-input" list={`advice-rooms-${phase}`} value={r.room} onChange={(e) => setRoom(i, { room: e.target.value, room_id: roomIdFor(e.target.value, roomSeeds) ?? r.room_id })} placeholder="Ruimte" aria-label="Ruimte" style={{ height: 38 }} />
-                <input className="rd-input" value={r.surface} onChange={(e) => setRoom(i, { surface: e.target.value })} placeholder="Oppervlak" aria-label="Oppervlak" style={{ height: 38 }} />
+                {!isSample && <input className="rd-input" value={r.surface} onChange={(e) => setRoom(i, { surface: e.target.value })} placeholder="Oppervlak" aria-label="Oppervlak" style={{ height: 38 }} />}
                 <div style={{ position: "relative" }}>
                   {c && <span style={{ position: "absolute", left: 10, top: 11, width: 16, height: 16, borderRadius: 5, background: c.hex, border: "1px solid rgba(0,0,0,.15)" }} />}
                   <input className="rd-input" list="advice-roll-colors" value={r.color} onChange={(e) => setRoom(i, { color: e.target.value })} placeholder="Kleur" aria-label="Kleur" style={{ height: 38, paddingLeft: c ? 32 : undefined }} />
                 </div>
-                <button className="rd-textlink" onClick={() => delRoom(i)} aria-label="Regel verwijderen" style={{ opacity: 0.55, minHeight: 38 }}>✕</button>
-                <input className="rd-input" value={r.motivation} onChange={(e) => setRoom(i, { motivation: e.target.value })} placeholder="Waarom deze kleur hier werkt (optioneel, komt in de mail)" aria-label="Toelichting" style={{ height: 34, gridColumn: "1 / -1", fontSize: 13 }} />
+                <button onClick={() => delRoom(i)} aria-label="Regel verwijderen" title="Verwijderen" style={iconBtn}><TrashIcon /></button>
+                {!isSample && <input className="rd-input" value={r.motivation} onChange={(e) => setRoom(i, { motivation: e.target.value })} placeholder="Waarom deze kleur hier werkt (optioneel, komt in de mail)" aria-label="Toelichting" style={{ height: 34, gridColumn: "1 / -1", fontSize: 13 }} />}
               </div>
             );
           })}
-          <button className="rd-textlink" onClick={addRoom} style={{ minHeight: 34, alignSelf: "flex-start" }}>+ Ruimte of oppervlak</button>
+          <button className="rd-textlink" onClick={addRoom} style={{ minHeight: 34, alignSelf: "flex-start" }}>{isSample ? "+ Kleur toevoegen" : "+ Ruimte of oppervlak"}</button>
         </div>
       </div>
 
-      {isSample && <SampleComposer value={advice.products} onChange={(p) => set({ products: p })} suggested={candidates} />}
+      {isSample && <SampleComposer colors={candidates} value={syncedProducts} onChange={(p) => set({ products: p })} />}
 
       {!isSample && (
         <div>

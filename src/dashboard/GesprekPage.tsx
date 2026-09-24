@@ -16,7 +16,7 @@ import { MeasurePanel } from "./MeasurePanel";
 import { Photos } from "./Photos";
 import { SampleCheckin } from "./SampleCheckin";
 import type { OrdersResp } from "./CustomerPurchases";
-import type { IntakeRow, AdviceConcept, AdvicePhase } from "./types";
+import type { IntakeRow } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
 const HEX_BY_NAME = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c.hex]));
@@ -117,27 +117,6 @@ export function GesprekPage() {
   const [orders, setOrders] = useState<OrdersResp | null | undefined>(undefined); // undefined = nog aan het laden
   const [adoptVersion, setAdoptVersion] = useState(0); // remount van de advies-editor na "Overnemen in advies"
   const [loading, setLoading] = useState(true);
-
-  // Concept overnemen: kleurrichtingen worden VOORGESTELDE regels in het SAMPLE-advies; de styliste past aan.
-  const adoptConcept = async (c: AdviceConcept) => {
-    if (!intake) return;
-    const existing = intake.advice_sample;
-    const rooms = c.richtingen.flatMap((r) => r.kleuren.map((k) => ({
-      room: r.titel, surface: k.toepassing, color: k.naam, status: "voorgesteld" as const, product: "Muurverf", m2: "", liters: "", motivation: r.waarom,
-    })));
-    const next: AdvicePhase = {
-      answer: existing?.answer?.trim() ? existing.answer : c.samenvatting,
-      rooms: (existing?.rooms?.filter((r) => r.room.trim() || r.color.trim()) ?? []).concat(rooms),
-      sample_instruction: existing?.sample_instruction ?? "",
-      next_step: existing?.next_step ?? "",
-      internal: existing?.internal ?? "",
-      plan: existing?.plan ?? { what: "", who: "", when: "" },
-      route: "samples",
-      products: existing?.products ?? [],
-    };
-    const { error } = await supabase.from("intake").update({ advice_sample: next }).eq("id", intake.id);
-    if (!error) { setIntake({ ...intake, advice_sample: next }); setAdoptVersion((v) => v + 1); const el = document.getElementById("sample") as HTMLDetailsElement | null; if (el) el.open = true; el?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-  };
 
   const loadTasks = async (bid: string) => {
     const { data } = await supabase.from("followup_tasks").select("id,action,owner,due_date,kind,outcome,note,done_at,created_at").eq("booking_id", bid).order("created_at", { ascending: true });
@@ -400,11 +379,7 @@ export function GesprekPage() {
           </div>
         )}
         {intake && (
-          <ConceptPanel
-            intake={intake}
-            onConcept={(c, at) => setIntake({ ...intake, advice_concept: c, advice_concept_at: at })}
-            onAdopt={adoptConcept}
-          />
+          <ConceptPanel intake={intake} />
         )}
         <div style={{ marginTop: 12 }}>
           <CustomerPurchases email={email} title="Eerdere samples & aankopen (WooCommerce)" onData={setOrders} />
@@ -413,6 +388,10 @@ export function GesprekPage() {
 
       {/* 2 SAMPLE-ADVIES (stap 3) */}
       <Panel id="sample" title="Sample-advies" hint="kleuren om thuis te testen" open={steps[2].state === "active"}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 12px", borderRadius: 10, background: "var(--rd-grey-light)", fontSize: 13, lineHeight: 1.45, marginBottom: 14 }}>
+          <span style={{ flex: "1 1 320px" }}>Deze stap is voor klanten die nog geen samples hebben gekozen. Hij is niet verplicht: is duidelijk wat bij de klant past, dan kan die direct verf kopen.</span>
+          <button className="rd-textlink" onClick={() => goToStep("verf")} style={{ fontWeight: 700, flex: "none" }}>Direct naar verf-advies →</button>
+        </div>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen. Vraag de klant de intake in te vullen.</p>
         ) : (
