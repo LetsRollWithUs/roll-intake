@@ -115,6 +115,25 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
         sub: t.owner ? `Eigenaar ${t.owner} · ${t.status}` : "Nog geen eigenaar", to: "/beheer/taken",
       });
     }
+    // Intakes zonder afspraak (organische route): de klant verwacht dat Roll contact opneemt om in te plannen.
+    // Weg zodra de intake aan een boeking hangt, of als hij in de intake-detail is afgerond of afgewezen.
+    const { data: loose } = await supabase.from("intake").select("id,created_at,contact_name,contact_email")
+      .eq("status", "verzonden").is("booking_id", null).not("advisor_status", "in", "(afgerond,afgewezen)")
+      .order("created_at", { ascending: false }).limit(20);
+    const looseRows = (loose as any[]) ?? [];
+    if (looseRows.length) {
+      const { data: linked } = await supabase.from("bookings").select("intake_id").in("intake_id", looseRows.map((i) => i.id));
+      const linkedIds = new Set(((linked as any[]) ?? []).map((b) => b.intake_id));
+      for (const i of looseRows) {
+        if (linkedIds.has(i.id)) continue;
+        out.push({
+          id: `intake-${i.id}`, kind: "plan",
+          title: `Intake zonder afspraak: plan het gesprek in met ${i.contact_name || i.contact_email || "de klant"}`,
+          sub: `Ingevuld op ${fmtD(i.created_at)}${i.contact_email ? ` · ${i.contact_email}` : ""}`,
+          to: `/beheer/${i.id}`,
+        });
+      }
+    }
     const { data: al } = await supabase.from("system_alerts").select("id,message").is("acknowledged_at", null).order("created_at", { ascending: false }).limit(20);
     for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/beheer/meldingen" });
   }
