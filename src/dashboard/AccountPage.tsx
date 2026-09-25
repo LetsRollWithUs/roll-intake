@@ -16,7 +16,8 @@ export function AccountPage() {
       const { data: u } = await supabase.auth.getUser();
       const mail = u?.user?.email ?? "";
       setEmail(mail);
-      setIsAdmin(mail.toLowerCase().endsWith("@roll.nl"));
+      const { data: adm } = await supabase.rpc("is_admin");
+      setIsAdmin(adm === true);
       const { data: st } = await supabase.rpc("current_stylist");
       // discount_code apart ophalen (RPC geeft die niet terug).
       const mine = ((st as Me[]) ?? [])[0] ?? null;

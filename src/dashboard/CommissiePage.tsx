@@ -16,7 +16,6 @@ interface Row {
   created_at: string;
   stylists: { name: string } | null;
 }
-interface StylistRow { id: string; name: string; discount_code: string | null; active: boolean; commission_rate: number | null }
 
 const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(n || 0);
 const monthLabel = (iso: string) =>
@@ -37,16 +36,9 @@ const routeLabel = (r: string) => (r === "code" ? "Eigen klant (code)" : "Via Ro
 
 export function CommissiePage() {
   const [rows, setRows] = useState<Row[]>([]);
-  const [stylists, setStylists] = useState<StylistRow[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("open");
-  const [codeDraft, setCodeDraft] = useState<Record<string, string>>({});
-  const [rateDraft, setRateDraft] = useState<Record<string, string>>({});
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 2000); };
-
   const load = async () => {
     const { data } = await supabase
       .from("commissions")
@@ -59,13 +51,6 @@ export function CommissiePage() {
     (async () => {
       const { data: adm } = await supabase.rpc("is_admin");
       setIsAdmin(adm === true);
-      if (adm === true) {
-        const { data: st } = await supabase.from("stylists").select("id,name,discount_code,active,commission_rate").order("name");
-        const list = (st as StylistRow[]) ?? [];
-        setStylists(list);
-        setCodeDraft(Object.fromEntries(list.map((s) => [s.id, s.discount_code ?? ""])));
-        setRateDraft(Object.fromEntries(list.map((s) => [s.id, s.commission_rate != null ? String(Math.round(s.commission_rate * 1000) / 10).replace(".", ",") : ""])));
-      }
       await load();
       setLoading(false);
     })();
@@ -74,17 +59,6 @@ export function CommissiePage() {
   const setStatus = async (id: string, status: string) => {
     await supabase.from("commissions").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
-  };
-  const saveCode = async (id: string) => {
-    const code = (codeDraft[id] ?? "").trim() || null;
-    // Percentage: leeg = standaard; anders 0 tot 100 (komma of punt).
-    const raw = (rateDraft[id] ?? "").trim().replace(",", ".");
-    const pct = raw === "" ? null : Number(raw);
-    if (pct !== null && (!Number.isFinite(pct) || pct < 0 || pct > 100)) { flash("Vul een percentage tussen 0 en 100 in, of laat het leeg voor de standaard."); return; }
-    const commission_rate = pct === null ? null : Math.round(pct * 10) / 1000;
-    const { error } = await supabase.from("stylists").update({ discount_code: code, commission_rate }).eq("id", id);
-    flash(error ? "Niet opgeslagen (bestaat de code al?)" : "Opgeslagen ✓");
-    if (!error) setStylists((prev) => prev.map((s) => (s.id === id ? { ...s, discount_code: code, commission_rate } : s)));
   };
 
   const visible = useMemo(() => {
@@ -134,7 +108,6 @@ export function CommissiePage() {
       <p className="rd-sub" style={{ marginTop: 0 }}>
         Verfcommissie per toegeschreven bestelling (standaard 10%, per styliste in te stellen). {isAdmin ? "Beheer de codes, keur goed en markeer uitbetaald." : "Je eigen toegeschreven verforders en commissie."}
       </p>
-      {msg && <p style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>{msg}</p>}
 
       {/* Totalen */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "14px 0 18px" }}>
@@ -177,41 +150,10 @@ export function CommissiePage() {
         </div>
       )}
 
-      {/* Codes per styliste (alleen beheerder) */}
       {isAdmin && (
-        <div className="rd-card-white" style={{ marginBottom: 18 }}>
-          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>Per styliste: kortingscode en commissie</div>
-          <p className="rd-sub" style={{ marginTop: 0 }}>
-            De code is voor de eigen-klant-route: maak in WooCommerce een coupon met exact dezelfde code; hier leggen we de koppeling code → styliste vast. Het percentage geldt voor nieuwe toeschrijvingen; leeg = standaard 10%.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {stylists.filter((s) => s.active).map((s) => (
-              <div key={s.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ minWidth: 120, fontWeight: 600, fontSize: 14 }}>{s.name}</span>
-                <input
-                  className="rd-input"
-                  value={codeDraft[s.id] ?? ""}
-                  onChange={(e) => setCodeDraft((d) => ({ ...d, [s.id]: e.target.value.toUpperCase() }))}
-                  placeholder="Bijv. ANNA10"
-                  style={{ flex: "1 1 160px", minWidth: 0, textTransform: "uppercase" }}
-                />
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                  <input
-                    className="rd-input"
-                    inputMode="decimal"
-                    value={rateDraft[s.id] ?? ""}
-                    onChange={(e) => setRateDraft((d) => ({ ...d, [s.id]: e.target.value }))}
-                    placeholder="10"
-                    aria-label={`Commissiepercentage ${s.name}`}
-                    style={{ width: 70, textAlign: "right" }}
-                  />
-                  % commissie
-                </label>
-                <button className="rd-plan-chip" onClick={() => saveCode(s.id)}>Opslaan</button>
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="rd-sub" style={{ margin: "0 0 14px", fontSize: 13 }}>
+          Commissiepercentages, kortingscodes en samenwerkingsafspraken beheer je per medewerker onder <Link to="/beheer/adviseurs" className="rd-textlink">Team</Link>.
+        </p>
       )}
 
       {/* Filter */}

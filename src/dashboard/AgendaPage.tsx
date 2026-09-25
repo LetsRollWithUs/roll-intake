@@ -335,7 +335,7 @@ export function AgendaPage() {
             </button>
           </div>
           <p className="rd-sub" style={{ marginTop: 8 }}>
-            Let op: geef een stylist ook dashboard-toegang via <Link to="/beheer/adviseurs" className="rd-textlink">Adviseurs</Link> zodat ze kan inloggen.
+            Let op: geef een stylist ook dashboard-toegang via <Link to="/beheer/adviseurs" className="rd-textlink">Team</Link> zodat ze kan inloggen.
           </p>
         </div>
       )}

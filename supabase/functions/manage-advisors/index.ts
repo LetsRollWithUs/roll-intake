@@ -1,6 +1,6 @@
 // Beheer van adviseur-accounts vanuit het dashboard.
-// Alleen aanroepbaar door een ingelogde beheerder: een @roll.nl-adres dat op de
-// allowlist staat. Gebruikt de service-role (server-side) voor auth-acties.
+// Alleen aanroepbaar door een ingelogde beheerder (advisors.role = 'beheerder').
+// Gebruikt de service-role (server-side) voor auth-acties.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors = {
@@ -43,9 +43,8 @@ Deno.serve(async (req) => {
     });
     const { data: userRes } = await caller.auth.getUser();
     const callerEmail = (userRes?.user?.email ?? "").toLowerCase();
-    const { data: isAdv } = await caller.rpc("is_advisor");
-    const isAdmin = isAdv === true && callerEmail.endsWith("@roll.nl");
-    if (!isAdmin) return json({ error: "Alleen @roll.nl-beheerders mogen adviseurs beheren." }, 403);
+    const { data: isAdm } = await caller.rpc("is_admin");
+    if (isAdm !== true) return json({ error: "Alleen beheerders mogen het team beheren." }, 403);
 
     const admin = createClient(url, service, { auth: { persistSession: false } });
     const { action, email, name, password } = await req.json();
