@@ -9,6 +9,7 @@ import { confirmPaid, createCreditFromOrder } from "../_shared/confirm.ts";
 import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, PACK_PRODUCT_IDS, PRICE, colorNameToId, multiAddUrl, sampleImage, SHOP_BASE } from "../_shared/roll-products.ts";
 import { ROLL_COLORS } from "../_shared/roll-collection.ts";
 import { buildOfferPayload } from "../_shared/offerte.ts";
+import { turnstileGate, TURNSTILE_BLOCKED_MSG } from "../_shared/turnstile.ts";
 const HEX_BY_ID = new Map(ROLL_COLORS.map((c: any) => [c.id, c.hex]));
 
 const cors = {
@@ -42,6 +43,7 @@ Deno.serve(async (req) => {
 
     if (action === "checkout") {
       const { service_key, start, name, email, phone, coupon } = body;
+      if (!(await turnstileGate(admin, req, body.turnstile_token, "booking_checkout"))) return j({ error: TURNSTILE_BLOCKED_MSG }, 403);
       const { data: hold, error } = await admin.rpc("hold_slot", {
         p_service_key: service_key,
         p_start: start,

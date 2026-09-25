@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { getTurnstileToken, preloadTurnstile } from "@/lib/turnstile";
 import { lockDocument } from "@/lib/lock-document";
 import {
   Calendar, TimePicker, type Slot,
@@ -53,6 +54,7 @@ export function BookFlow() {
   };
 
   useEffect(() => {
+    preloadTurnstile();
     if (preType) loadSlots(preType);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -74,8 +76,9 @@ export function BookFlow() {
   const confirm = async () => {
     setBusy(true);
     setErr(null);
+    const turnstile_token = await getTurnstileToken("booking_checkout");
     const { data, error } = await supabase.functions.invoke("booking", {
-      body: { action: "checkout", service_key: service, start: slot, name, email, phone, coupon: coupon || undefined },
+      body: { action: "checkout", service_key: service, start: slot, name, email, phone, coupon: coupon || undefined, turnstile_token },
     });
     setBusy(false);
     if (error || !data?.pay_url) {
@@ -88,7 +91,7 @@ export function BookFlow() {
       } catch {
         /* geen json-body */
       }
-      if (serverMsg && /geduld|e-mailadres|boekbaar/i.test(serverMsg)) {
+      if (serverMsg && /geduld|e-mailadres|boekbaar|controleren/i.test(serverMsg)) {
         setErr(serverMsg);
         return;
       }
