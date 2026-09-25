@@ -74,8 +74,8 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
   else if (codeStylist) { stylist = codeStylist; route = "code"; }
   else return { skipped: "geen toeschrijving" };
 
-  // Percentage van de styliste zelf (ingesteld door beheer), anders de standaard.
-  const { data: sr } = await admin.from("stylists").select("commission_rate").eq("id", stylist).maybeSingle();
+  // Percentage uit de samenwerkingsafspraken van de styliste (ingesteld door beheer), anders de standaard.
+  const { data: sr } = await admin.from("stylist_agreements").select("commission_rate").eq("stylist_id", stylist).maybeSingle();
   const rate = sr?.commission_rate != null ? Number(sr.commission_rate) : RATE;
   const amount = Math.round(verf * rate * 100) / 100;
 

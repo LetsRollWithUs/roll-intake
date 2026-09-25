@@ -62,6 +62,7 @@ export function Dashboard() {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [isAdvisor, setIsAdvisor] = useState<boolean | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [stylistName, setStylistName] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,9 +77,9 @@ export function Dashboard() {
   useEffect(() => {
     if (!session) return;
     supabase.rpc("is_advisor").then(({ data }) => setIsAdvisor(data === true));
+    // Beheerder is een rol (advisors.role), niet het e-maildomein.
+    supabase.rpc("is_admin").then(({ data }) => setIsAdmin(data === true));
   }, [session]);
-
-  const isAdmin = !!session && (session.user.email ?? "").toLowerCase().endsWith("@roll.nl");
 
   // Belletje: aantal openstaande acties (styliste: eigen; beheerder: alles incl. systeemmeldingen).
   useEffect(() => {
@@ -141,7 +142,7 @@ export function Dashboard() {
                         <Link to="/beheer/intakes">Alle intakes</Link>
                         <Link to="/beheer/boekingen">Boekingen</Link>
                         <Link to="/beheer/cadeaucodes">Cadeaucodes</Link>
-                        <Link to="/beheer/adviseurs">Adviseurs</Link>
+                        <Link to="/beheer/adviseurs">Team &amp; afspraken</Link>
                         <Link to="/beheer/meldingen">Systeemmeldingen</Link>
                       </>
                     )}
