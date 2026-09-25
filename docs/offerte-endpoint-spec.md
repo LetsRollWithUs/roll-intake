@@ -26,7 +26,7 @@ npx supabase secrets set OFFERTE_API_KEY="<sleutel>" --project-ref lsboujprrvhnt
 
 ## Wat het dashboard terugverwacht
 
-`{ ok, id, nummer, editUrl, ruimtes }`. Het dashboard bewaart `editUrl` als offerte-link en `nummer`/`id` in `intake.offer_meta`.
+`{ ok, id, nummer, editUrl, ruimtes, kleurenOnbekend, klantUrl?, mandUrl? }` (v1.41.0). Het dashboard bewaart alles in `intake.offer_meta`. `editUrl` is de editor voor Roll en gaat nooit naar de klant. `klantUrl` (zodra de offerte-tool die meestuurt) wordt `intake.advisor_offer_url`, de link in de opvolgmail voor verf; tot dan plakt Roll de klantlink handmatig. `kleurenOnbekend` toont het dashboard aan de styliste, die kiest die kleuren zelf in de editor.
 
 ## Afspraken met de offerte-tool (24 sep 2026)
 
