@@ -96,11 +96,11 @@ export function KanbanPage() {
       const list = (data as unknown as Card[]) ?? [];
       const ids = list.map((c) => c.intake_id).filter((x): x is string => !!x);
       if (ids.length) {
-        const { data: its } = await supabase.from("intake").select("id,advisor_offer_url,planning,painter,has_samples,rooms").in("id", ids);
+        const { data: its } = await supabase.from("intake").select("id,advisor_offer_url,offer_meta,planning,painter,has_samples,rooms").in("id", ids);
         const byId = new Map(((its as any[]) ?? []).map((i) => [i.id, i]));
         for (const c of list) {
           const i = c.intake_id ? byId.get(c.intake_id) : null;
-          c.offerte = !!i?.advisor_offer_url;
+          c.offerte = !!i?.advisor_offer_url || !!i?.offer_meta?.edit_url;
           c.planning = i?.planning ?? null;
           c.painter = i?.painter ?? null;
           c.rooms = i?.rooms ?? null;

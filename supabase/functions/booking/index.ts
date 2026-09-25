@@ -336,16 +336,20 @@ Deno.serve(async (req) => {
       } catch (e) {
         return j({ ok: false, error: "offerte-tool niet bereikbaar", detail: String(e) });
       }
+      // editUrl = de editor (voor Roll). De klant krijgt klantUrl zodra de offerte-tool die meestuurt;
+      // tot dan blijft advisor_offer_url (de link in de opvolgmail) ongemoeid.
       const editUrl: string | null = data.editUrl ?? null;
-      const meta = { tools_in_cart: toolsInCart, id: data.id ?? null, nummer: data.nummer ?? null, edit_url: editUrl, at: new Date().toISOString() };
+      const klantUrl: string | null = data.klantUrl ?? null;
+      const onbekend: string[] = Array.isArray(data.kleurenOnbekend) ? data.kleurenOnbekend.map(String).slice(0, 20) : [];
+      const meta = { tools_in_cart: toolsInCart, id: data.id ?? null, nummer: data.nummer ?? null, edit_url: editUrl, klant_url: klantUrl, mand_url: data.mandUrl ?? null, kleuren_onbekend: onbekend, at: new Date().toISOString() };
       const { data: u } = await caller.auth.getUser();
-      await admin.from("intake").update({ advisor_offer_url: editUrl, offer_meta: meta }).eq("id", body.intake_id);
+      await admin.from("intake").update(klantUrl ? { advisor_offer_url: klantUrl, offer_meta: meta } : { offer_meta: meta }).eq("id", body.intake_id);
       await admin.from("advice_sends").insert({
         intake_id: body.intake_id, booking_id: bid, route: "offerte",
-        subject: `Offerte ${data.nummer ?? ""} aangemaakt`.trim(), body: `${editUrl ?? ""}\nRuimtes: ${data.ruimtes ?? payload.project.surfaces.length} · tools ${toolsInCart ? "in het mandje" : "los in de mail"}`,
+        subject: `Offerte ${data.nummer ?? ""} aangemaakt`.trim(), body: `${editUrl ?? ""}\nRuimtes: ${data.ruimtes ?? payload.project.surfaces.length} · tools ${toolsInCart ? "in het mandje" : "los in de mail"}${onbekend.length ? `\nKleuren niet herkend: ${onbekend.join(", ")}` : ""}`,
         sent_to: (it as any).contact_email, sent_by: u?.user?.email ?? null, sent_at: meta.at,
       });
-      return j({ ok: true, offer_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null });
+      return j({ ok: true, offer_url: klantUrl, edit_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null, kleuren_onbekend: onbekend });
     }
 
     // Aankopen van een klant ophalen uit WooCommerce (op e-mail). Alleen adviseurs.

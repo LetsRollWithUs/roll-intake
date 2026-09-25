@@ -68,6 +68,9 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [offerMsg, setOfferMsg] = useState<string | null>(null);
+  const editUrl = intake.offer_meta?.edit_url ?? null;
+  const unknownColors = intake.offer_meta?.kleuren_onbekend ?? [];
+  const offerMade = !!editUrl || !!offerUrl;
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState(offerUrl ?? "");
   const [linkErr, setLinkErr] = useState<string | null>(null);
@@ -118,10 +121,10 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
     setBusy(true); setOfferMsg(null);
     if (!(await persist())) { setBusy(false); setOfferMsg("Opslaan van de maten mislukte."); return; }
     const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId, tools_in_cart: toolsInCart, notes: notes.trim() } });
-    const d = data as { ok?: boolean; offer_url?: string | null; nummer?: string; id?: number; skipped?: string; error?: string } | null;
-    if (d?.ok && d.offer_url) {
+    const d = data as { ok?: boolean; offer_url?: string | null; edit_url?: string | null; nummer?: string; id?: number; kleuren_onbekend?: string[]; skipped?: string; error?: string } | null;
+    if (d?.ok && (d.edit_url || d.offer_url)) {
       setBusy(false);
-      onOffer(d.offer_url, { tools_in_cart: toolsInCart, id: d.id, nummer: d.nummer, edit_url: d.offer_url, at: new Date().toISOString() });
+      onOffer(d.offer_url || offerUrl || "", { tools_in_cart: toolsInCart, id: d.id, nummer: d.nummer, edit_url: d.edit_url ?? null, klant_url: d.offer_url ?? null, kleuren_onbekend: d.kleuren_onbekend ?? [], at: new Date().toISOString() });
       setOfferMsg(`Offerte ${d.nummer ?? ""} is aangemaakt ✓`);
       return;
     }
@@ -317,14 +320,26 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
       {/* Offerte */}
       <div style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         <div className="rd-kicker rd-kicker-pink">Offerte</div>
-        {offerUrl && (
+        {editUrl && (
           <div style={{ fontSize: 14 }}>
-            Offerte{intake.offer_meta?.nummer ? ` ${intake.offer_meta.nummer}` : ""} is aangemaakt. <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Openen in de offerte-tool</a>
+            Offerte{intake.offer_meta?.nummer ? ` ${intake.offer_meta.nummer}` : ""} is aangemaakt. <a href={editUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Openen in de offerte-tool</a>
             <span style={{ fontSize: 12, opacity: 0.6 }}> (voor Roll-collega's)</span>
           </div>
         )}
+        {unknownColors.length > 0 && (
+          <div style={{ fontSize: 13.5, background: "var(--rd-lavender)", borderRadius: 10, padding: "10px 12px" }}>
+            <strong>Kies deze kleur{unknownColors.length > 1 ? "en" : ""} zelf in de offerte-editor:</strong> {unknownColors.join(", ")}
+            <div style={{ fontSize: 12.5, opacity: 0.75, marginTop: 2 }}>De offerte-tool herkende {unknownColors.length > 1 ? "ze" : "deze"} niet bij de 81 Roll-kleuren, bijvoorbeeld een kleurmatch of een andere schrijfwijze.</div>
+          </div>
+        )}
+        {offerUrl && (
+          <div style={{ fontSize: 14 }}>
+            Link voor de klant: <a href={offerUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{offerUrl}</a>
+            <div style={{ fontSize: 12, opacity: 0.6 }}>Deze link staat in de opvolgmail voor verf.</div>
+          </div>
+        )}
         {task && <RollTaskStatus task={task} />}
-        {!offerUrl && !task && (
+        {!offerMade && !task && (
           <>
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5, cursor: "pointer" }}>
               <input type="checkbox" checked={toolsInCart} onChange={(e) => setToolsInCart(e.target.checked)} style={{ marginTop: 3 }} />
@@ -351,7 +366,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
           </div>
         ) : (
           <button className="rd-textlink" style={{ alignSelf: "flex-start" }} onClick={() => { setLinkDraft(offerUrl ?? ""); setLinkOpen(true); }}>
-            {offerUrl ? "Andere offertelink plakken" : "Offerte al gemaakt via roll.nl/offerte? Plak de link"}
+            {offerUrl ? "Andere klantlink plakken" : editUrl ? "Plak de klantlink (betaallink) voor de opvolgmail" : "Offerte al gemaakt via roll.nl/offerte? Plak de link"}
           </button>
         )}
       </div>

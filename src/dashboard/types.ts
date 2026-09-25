@@ -96,7 +96,7 @@ export interface IntakeRow {
   offer_meta: OfferMeta | null;
 }
 
-export interface OfferMeta { tools_in_cart: boolean; id?: number; nummer?: string; edit_url?: string; at?: string }
+export interface OfferMeta { tools_in_cart: boolean; id?: number | null; nummer?: string | null; edit_url?: string | null; klant_url?: string | null; mand_url?: string | null; kleuren_onbekend?: string[]; at?: string }
 
 export type CheckinOutcome = "keuze_gemaakt" | "meer_samples" | "nog_twijfel" | "later_schilderen" | "geen_reactie";
 export interface SampleCheckin {
