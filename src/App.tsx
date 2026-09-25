@@ -305,24 +305,28 @@ export function App() {
   }
 
   // ── Verzonden ────────────────────────────────────────────────────────────
+  // Drie situaties: er staat al een afspraak, er is betaald maar nog niet ingepland, of nog niets.
   if (screen === "done") {
+    const hasAppt = !!effectiveBookingId && !!apptLabel;
+    const paidNotPlanned = !hasAppt && !!emailStatus && !emailStatus.checking && emailStatus.hasCredit && !emailStatus.creditScheduled;
+    const newIntake = () => { reset(); clearIntakeSession(); setScreen("intro"); };
     return (
       <Shell
         step={0}
         total={TOTAL}
         title="Dankjewel, je intake is binnen"
-        sub="Je kleuradviseur bereidt het gesprek nu voor met jouw ruimtes, kleuren en inspiratie."
+        sub={hasAppt ? "Je kleuradviseur bereidt het gesprek nu voor met jouw ruimtes, kleuren en inspiratie." : "Je kleuradviseur kan zich hiermee goed voorbereiden op jouw ruimtes, kleuren en inspiratie."}
         footer={
-          <button
-            className="rd-btn rd-btn-outline rd-btn-lg"
-            onClick={() => {
-              reset();
-              clearIntakeSession();
-              setScreen("intro");
-            }}
-          >
-            Nieuwe intake starten
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {!hasAppt && !paidNotPlanned && (
+              <a className="rd-btn rd-btn-primary rd-btn-lg" href="/boek" style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                Plan je kleuradvies
+              </a>
+            )}
+            <button className="rd-textlink" onClick={newIntake} style={{ minHeight: 40, alignSelf: "center", opacity: 0.7 }}>
+              Nieuwe intake starten
+            </button>
+          </div>
         }
       >
         <div className="rd-card-white" style={{ textAlign: "center", padding: "26px 18px" }}>
@@ -330,9 +334,23 @@ export function App() {
             ✓
           </div>
           <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>Goed gedaan!</p>
-          <p className="rd-sub" style={{ marginTop: 6 }}>
-            We nemen contact op om je 30 minuten kleuradvies in te plannen.
-          </p>
+          {hasAppt ? (
+            <>
+              <p className="rd-sub" style={{ marginTop: 6 }}>Je afspraak staat op</p>
+              <p style={{ margin: "4px 0 0", fontWeight: 800, fontSize: 18, textTransform: "capitalize" }}>{apptLabel}</p>
+              <p className="rd-sub" style={{ marginTop: 10 }}>
+                De link naar het videogesprek staat in je bevestigingsmail. Komt het toch niet uit? Via die mail kun je de afspraak zelf verzetten.
+              </p>
+            </>
+          ) : paidNotPlanned ? (
+            <p className="rd-sub" style={{ marginTop: 6 }}>
+              Je kleuradvies staat al voor je klaar. Kies een moment via de link in je bevestigingsmail, dan koppelen we je intake automatisch aan je afspraak.
+            </p>
+          ) : (
+            <p className="rd-sub" style={{ marginTop: 6 }}>
+              Kies nu zelf een moment voor je online kleuradvies van 30 minuten. Gebruik bij het boeken hetzelfde e-mailadres, dan koppelen we je intake automatisch aan je afspraak.
+            </p>
+          )}
         </div>
       </Shell>
     );
