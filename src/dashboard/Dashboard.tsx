@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Routes, Route, NavLink, Link } from "react-router-dom";
+import { Routes, Route, NavLink, Link, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { Login } from "./Login";
+import { NewPassword } from "./NewPassword";
 import { IntakeList } from "./IntakeList";
 import { IntakeDetail } from "./IntakeDetail";
 import { AdvisorsAdmin } from "./AdvisorsAdmin";
@@ -59,7 +60,11 @@ const CalendarIcon = () => (
 );
 
 export function Dashboard() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
+  // Resetlink uit "Wachtwoord vergeten": eerst een nieuw wachtwoord laten kiezen.
+  const [recovery, setRecovery] = useState(() => location.pathname.endsWith("/nieuw-wachtwoord"));
   const [ready, setReady] = useState(false);
   const [isAdvisor, setIsAdvisor] = useState<boolean | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -70,7 +75,11 @@ export function Dashboard() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { setSession(s); setIsAdvisor(null); });
+    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
+      setSession(s);
+      setIsAdvisor(null);
+      if (e === "PASSWORD_RECOVERY") setRecovery(true);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -160,6 +169,7 @@ export function Dashboard() {
   );
 
   if (!ready) return null;
+  if (recovery) return <NewPassword session={session} onDone={() => { setRecovery(false); navigate("/beheer", { replace: true }); }} />;
   if (!session) return <Login />;
   if (isAdvisor === null) return shell(<p className="rd-sub">Toegang controleren...</p>, false);
   if (!isAdvisor)

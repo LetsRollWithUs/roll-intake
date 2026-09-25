@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { RESET_REDIRECT } from "./Login";
 
 interface Me { id: string; name: string; email: string; meet_url: string | null; discount_code?: string | null }
 
@@ -32,7 +33,7 @@ export function AccountPage() {
 
   const resetPassword = async () => {
     setMsg(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/beheer` });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: RESET_REDIRECT() });
     setMsg(error ? "Versturen mislukte, probeer later opnieuw." : "We hebben je een link gestuurd om je wachtwoord opnieuw in te stellen.");
   };
 
