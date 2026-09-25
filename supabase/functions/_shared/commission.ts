@@ -43,7 +43,8 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
     }
   }
 
-  // Route 'advies': recente bevestigde afspraak op hetzelfde e-mailadres binnen het venster.
+  // Route 'advies': recente bevestigde afspraak, of een handmatig in de flow gezette klant ('manual',
+  // gerekend vanaf het moment van in de flow zetten), op hetzelfde e-mailadres binnen het venster.
   let adviesStylist: string | null = null;
   let adviesBookingId: string | null = null;
   if (email) {
@@ -53,7 +54,7 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
       .from("bookings")
       .select("id,stylist_id,start_at")
       .ilike("customer_email", email)
-      .eq("status", "confirmed")
+      .in("status", ["confirmed", "manual"])
       .gte("start_at", since)
       .lte("start_at", new Date(orderMs).toISOString())
       .order("start_at", { ascending: false })
@@ -113,7 +114,7 @@ export async function flagSamplesOrdered(admin: any, order: any) {
     .from("bookings")
     .select("id")
     .ilike("customer_email", email)
-    .eq("status", "confirmed")
+    .in("status", ["confirmed", "manual"])
     .gte("start_at", since)
     .lte("start_at", new Date(orderMs).toISOString())
     .order("start_at", { ascending: false })
