@@ -68,6 +68,23 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [offerMsg, setOfferMsg] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkDraft, setLinkDraft] = useState(offerUrl ?? "");
+  const [linkErr, setLinkErr] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+
+  // Offerte handmatig gemaakt via roll.nl/offerte: link plakken, dan gebruikt de opvolgmail die.
+  const saveLink = async () => {
+    const url = linkDraft.trim();
+    setLinkErr(null);
+    if (url && !/^https:\/\/\S+$/i.test(url)) { setLinkErr("Plak een volledige link die begint met https://"); return; }
+    setLinkBusy(true);
+    const { error } = await supabase.from("intake").update({ advisor_offer_url: url || null }).eq("id", intakeId);
+    setLinkBusy(false);
+    if (error) { setLinkErr("Opslaan lukte niet. Probeer het nog eens."); return; }
+    onOffer(url, intake.offer_meta ?? { tools_in_cart: toolsInCart });
+    setLinkOpen(false);
+  };
 
   const setRoom = (id: string, p: Partial<RoomMeasure>) => setMap((m) => ({ ...m, [id]: { ...m[id], ...p } }));
   const defaults = useMemo(() => Object.fromEntries(measured.map((r) => [r.id, defaultsFor(colorsByRoom[r.id] ?? [])])), [measured, colorsByRoom]);
@@ -322,6 +339,21 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
           </>
         )}
         {offerMsg && <span style={{ color: "var(--rd-aubergine)", fontWeight: 600, fontSize: 13 }}>{offerMsg}</span>}
+        {linkOpen ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input className="rd-input" type="url" value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="https://roll.nl/offerte/..." autoFocus style={{ height: 38, fontSize: 13, flex: "1 1 240px" }} />
+              <button className="rd-btn rd-btn-outline" onClick={saveLink} disabled={linkBusy} style={{ width: "auto", padding: "0 18px", height: 38 }}>{linkBusy ? "Opslaan..." : "Link opslaan"}</button>
+              <button className="rd-textlink" onClick={() => { setLinkOpen(false); setLinkDraft(offerUrl ?? ""); setLinkErr(null); }}>Annuleren</button>
+            </div>
+            <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De opvolgmail voor verf stuurt de klant naar deze link. Laat leeg om de link weg te halen; de klant gaat dan naar de prijsopgave-pagina.</p>
+            {linkErr && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 13 }}>{linkErr}</span>}
+          </div>
+        ) : (
+          <button className="rd-textlink" style={{ alignSelf: "flex-start" }} onClick={() => { setLinkDraft(offerUrl ?? ""); setLinkOpen(true); }}>
+            {offerUrl ? "Andere offertelink plakken" : "Offerte al gemaakt via roll.nl/offerte? Plak de link"}
+          </button>
+        )}
       </div>
     </div>
   );
