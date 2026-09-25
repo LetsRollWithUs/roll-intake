@@ -35,7 +35,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
   let q = supabase
     .from("bookings")
     .select("id,start_at,status,customer_name,intake_id,kanban_stage,samples_besteld,opgevolgd_at,expected_purchase_at,stylist_id, stylists(name)")
-    .in("status", ["confirmed", "paid_unplaced"]);
+    .in("status", ["confirmed", "paid_unplaced", "manual"]);
   if (opts.stylistId) q = q.eq("stylist_id", opts.stylistId);
   const { data } = await q;
   const rows = (data as any[]) ?? [];
@@ -61,7 +61,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
       out.push({ id: `plan-${r.id}`, kind: "plan", title: `${name} heeft betaald maar staat nog niet ingepland`, sub: "Plaats de afspraak via Boekingen" + who(r), to: "/beheer/boekingen" });
       continue;
     }
-    if (dayKey(r.start_at) === today && new Date(r.start_at).getTime() > nowMs - 3600e3) {
+    if (r.status !== "manual" && dayKey(r.start_at) === today && new Date(r.start_at).getTime() > nowMs - 3600e3) {
       out.push({ id: `vandaag-${r.id}`, kind: "vandaag", title: `${timeFmt.format(new Date(r.start_at))} gesprek met ${name}`, sub: (r.intake_id ? "Intake staat klaar" : "Intake nog niet ingevuld") + who(r), to: gesprek });
     }
     if (!open || !past) continue;

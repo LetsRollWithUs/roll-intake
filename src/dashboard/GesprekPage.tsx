@@ -10,6 +10,7 @@ import { AdviceEditor } from "./AdviceEditor";
 import type { RollTask } from "./RollHelpForm";
 import { sameRoom } from "./roomMatch";
 import { rollColors } from "@/data/roll-colors";
+import { bookLinkMail } from "./bookingLink";
 import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
 import { ConceptPanel } from "./ConceptPanel";
 import { MeasurePanel } from "./MeasurePanel";
@@ -228,7 +229,7 @@ export function GesprekPage() {
   const checkinDone = !!ci && ci.outcome !== "geen_reactie" && !moreSamples;
   type St = "done" | "active" | "attention" | "skip" | "todo";
   const steps: { n: number; label: string; state: St; to?: string }[] = [
-    { n: 1, label: "Afspraak", state: b.status === "paid_unplaced" ? "attention" : past ? "done" : "active", to: "top" },
+    { n: 1, label: "Afspraak", state: b.status === "manual" ? "skip" : b.status === "paid_unplaced" ? "attention" : past ? "done" : "active", to: "top" },
     { n: 2, label: "Intake", state: intake ? "done" : past ? "attention" : "active", to: "voorbereiding" },
     // Verder in het traject betekent dat eerdere stappen klaar of niet van toepassing zijn.
     { n: 3, label: "Sample-advies", state: moreSamples && !newRound ? "active" : sentRoutes.has("samples") ? "done" : (sampleSkipped || verfAdviceDone || boughtVerf) ? "skip" : (intake && past) ? "active" : "todo", to: "sample" },
@@ -280,8 +281,18 @@ export function GesprekPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", borderTop: "1px solid var(--rd-line)" }}>
           <div style={{ padding: "12px 18px", borderRight: "1px solid var(--rd-line)" }}>
             <div className="rd-kicker" style={{ opacity: 0.55, fontSize: 11 }}>Afspraak</div>
-            <div style={{ fontWeight: 700, textTransform: "capitalize" }}>{fmtDay(b.start_at)}</div>
-            <div style={{ fontSize: 14 }}>{fmtTime(b.start_at)}{b.end_at ? ` tot ${fmtTime(b.end_at)}` : ""} · {b.stylists?.name ?? "—"}{past ? " · geweest" : ""}</div>
+            {b.status === "manual" ? (
+              <>
+                <div style={{ fontWeight: 700 }}>Geen afspraak · niet betaald</div>
+                <div style={{ fontSize: 14 }}>In de flow gezet {formatDate(b.created_at)} · {b.stylists?.name ?? "nog geen styliste"}</div>
+                {email && <a href={bookLinkMail(b.customer_name, email)} className="rd-btn rd-btn-outline" style={{ textDecoration: "none", padding: "8px 14px", marginTop: 8, display: "inline-block" }}>Stuur boekingslink</a>}
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, textTransform: "capitalize" }}>{fmtDay(b.start_at)}</div>
+                <div style={{ fontSize: 14 }}>{fmtTime(b.start_at)}{b.end_at ? ` tot ${fmtTime(b.end_at)}` : ""} · {b.stylists?.name ?? "—"}{past ? " · geweest" : ""}</div>
+              </>
+            )}
             {meet && !past && <a href={meet} target="_blank" rel="noreferrer" className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 14px", marginTop: 8, display: "inline-block" }}>Start videogesprek</a>}
             {b.status === "paid_unplaced" && <span className="rd-chip" style={{ background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700, marginTop: 8, display: "inline-block" }}>Nog inplannen</span>}
           </div>
