@@ -74,13 +74,16 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
   else if (codeStylist) { stylist = codeStylist; route = "code"; }
   else return { skipped: "geen toeschrijving" };
 
-  const amount = Math.round(verf * RATE * 100) / 100;
+  // Percentage van de styliste zelf (ingesteld door beheer), anders de standaard.
+  const { data: sr } = await admin.from("stylists").select("commission_rate").eq("id", stylist).maybeSingle();
+  const rate = sr?.commission_rate != null ? Number(sr.commission_rate) : RATE;
+  const amount = Math.round(verf * rate * 100) / 100;
 
   // Bestaat er al een regel voor deze order? Niet overschrijven zodra 'ie verder is dan te_controleren.
   const { data: existing } = await admin.from("commissions").select("id,status").eq("woo_order_id", wooId).maybeSingle();
   const row = {
     woo_order_id: wooId, stylist_id: stylist, route, customer_email: email || null,
-    verf_excl: Math.round(verf * 100) / 100, rate: RATE, amount,
+    verf_excl: Math.round(verf * 100) / 100, rate, amount,
     order_total: Number(order.total ?? 0), currency: order.currency ?? "EUR",
     conflict, updated_at: new Date().toISOString(),
   };
