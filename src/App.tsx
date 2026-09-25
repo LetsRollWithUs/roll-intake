@@ -15,6 +15,7 @@ import { PlanningStep } from "@/components/steps/PlanningStep";
 import { supabase } from "@/lib/supabase";
 import { useIntake, loadScreen, saveScreen, clearIntakeSession } from "@/lib/store";
 import { submitIntake, saveConceptLead } from "@/lib/submit";
+import { preloadTurnstile } from "@/lib/turnstile";
 import { lockDocument } from "@/lib/lock-document";
 import type { Room } from "@/lib/types";
 
@@ -250,6 +251,7 @@ export function App() {
   if (screen === "contact") {
     const canGo = state.contactName.trim() !== "" && emailOk;
     const goFromContact = () => {
+      preloadTurnstile();
       saveConceptLead(state).catch(() => {});
       setScreen("rooms");
     };
@@ -423,8 +425,12 @@ export function App() {
     try {
       await submitIntake(state, { bookingId: effectiveBookingId, mode });
       setScreen("done");
-    } catch {
-      setSubmitError("Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.");
+    } catch (e) {
+      setSubmitError(
+        e instanceof Error && e.message === "turnstile"
+          ? "We konden je aanvraag niet controleren. Ververs de pagina en probeer het opnieuw; je antwoorden blijven bewaard."
+          : "Versturen lukte niet. Controleer je internetverbinding en probeer het nog eens.",
+      );
     } finally {
       setSubmitting(false);
     }
