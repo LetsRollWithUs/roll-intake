@@ -15,6 +15,7 @@ import { FollowupTasks, type FollowupTask } from "./FollowupTasks";
 import { ConceptPanel } from "./ConceptPanel";
 import { MeasurePanel } from "./MeasurePanel";
 import { Photos } from "./Photos";
+import { AddPhotos } from "./AddPhotos";
 import { SampleCheckin } from "./SampleCheckin";
 import type { OrdersResp } from "./CustomerPurchases";
 import type { IntakeRow } from "./types";
@@ -363,6 +364,7 @@ export function GesprekPage() {
                       {r.otherChanges && ` · verandert: ${r.otherChangesNote || "ja"}`}
                     </div>
                     <Photos photos={r.photos} size={112} />
+                    <AddPhotos intake={intake} room={r} onDone={setIntake} />
                   </div>
                 ))}
                 {rooms.length === 0 && <span style={{ opacity: 0.5 }}>geen ruimtes</span>}
