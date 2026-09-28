@@ -11,7 +11,7 @@ interface Line { ruimte?: string; oppervlak?: string; soort?: string; product?: 
 interface Tool { product?: string; aantal?: number; totaal?: number; inMandje?: boolean }
 export interface Offer {
   id: number | null; nummer: string | null; klantUrl: string | null; mandUrl: string | null; editUrl: string | null;
-  kleurenOnbekend: string[]; regels: Line[]; tools: Tool[];
+  kleurenOnbekend: string[]; waarschuwingen?: string[]; regels: Line[]; tools: Tool[];
   subtotaal: number | null; korting: { label: string; bedrag: number } | null; extra: { label: string; bedrag: number }[];
   verzending: number | null; totaal: number | null;
 }
@@ -122,6 +122,14 @@ export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, per
           {blocked && (
             <div style={{ fontSize: 13.5, background: "var(--rd-lavender)", borderRadius: 10, padding: "10px 12px" }}>
               <strong>Deze kleur{offer.kleurenOnbekend.length > 1 ? "en herkent" : " herkent"} de offerte-tool niet:</strong> {offer.kleurenOnbekend.join(", ")}. Laat Roll het voorstel afmaken.
+            </div>
+          )}
+
+          {(offer.waarschuwingen?.length ?? 0) > 0 && (
+            <div style={{ fontSize: 13, border: "1px solid var(--rd-line)", borderRadius: 10, padding: "8px 12px" }}>
+              <strong>Let op:</strong>
+              <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>{offer.waarschuwingen!.map((w, i) => <li key={i}>{w}</li>)}</ul>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>Klopt iets niet of twijfel je? Laat Roll meekijken.</span>
             </div>
           )}
 
