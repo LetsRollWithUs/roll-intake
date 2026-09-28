@@ -109,6 +109,7 @@ export function App() {
   const [photoIdx, setPhotoIdx] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [failedPhotos, setFailedPhotos] = useState(0);
   const [apptStart, setApptStart] = useState<string | null>(null);
   // Gekoppelde boeking als het e-mailadres al een afspraak blijkt te hebben (organische route).
   const [coupledBookingId, setCoupledBookingId] = useState<string | null>(null);
@@ -353,6 +354,11 @@ export function App() {
               Kies nu zelf een moment voor je online kleuradvies van 30 minuten. Gebruik bij het boeken hetzelfde e-mailadres, dan koppelen we je intake automatisch aan je afspraak.
             </p>
           )}
+          {failedPhotos > 0 && (
+            <p className="rd-sub" style={{ marginTop: 12, fontSize: 13.5 }}>
+              {failedPhotos === 1 ? "Eén foto kwam niet goed door." : `${failedPhotos} foto's kwamen niet goed door.`} Je kleuradviseur ziet dat en vraagt ze zo nodig nog bij je op.
+            </p>
+          )}
         </div>
       </Shell>
     );
@@ -423,7 +429,8 @@ export function App() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitIntake(state, { bookingId: effectiveBookingId, mode });
+      const res = await submitIntake(state, { bookingId: effectiveBookingId, mode });
+      setFailedPhotos(res.failedPhotos);
       setScreen("done");
     } catch (e) {
       setSubmitError(
