@@ -35,7 +35,8 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
   let q = supabase
     .from("bookings")
     .select("id,start_at,status,customer_name,intake_id,kanban_stage,samples_besteld,opgevolgd_at,expected_purchase_at,stylist_id, stylists(name)")
-    .in("status", ["confirmed", "paid_unplaced", "manual"]);
+    .in("status", ["confirmed", "paid_unplaced", "manual"])
+    .is("archived_at", null);
   if (opts.stylistId) q = q.eq("stylist_id", opts.stylistId);
   const { data } = await q;
   const rows = (data as any[]) ?? [];
@@ -117,7 +118,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     }
     // Intakes zonder afspraak (organische route): de klant verwacht dat Roll contact opneemt om in te plannen.
     // Weg zodra de intake aan een boeking hangt, of als hij in de intake-detail is afgerond of afgewezen.
-    const { data: loose } = await supabase.from("intake").select("id,created_at,contact_name,contact_email")
+    const { data: loose } = await supabase.from("intake").select("id,created_at,contact_name,contact_email").is("archived_at", null)
       .eq("status", "verzonden").is("booking_id", null).not("advisor_status", "in", "(afgerond,afgewezen)")
       .order("created_at", { ascending: false }).limit(20);
     const looseRows = (loose as any[]) ?? [];

@@ -22,6 +22,7 @@ interface Card {
   upsell_value: number | null;
   expected_purchase_at: string | null;
   toolkit_offered_at: string | null;
+  archived_at: string | null;
   stylists: { name: string } | null;
   services: { key: string } | null;
   // uit de intake
@@ -41,6 +42,7 @@ interface Loose {
   rooms: { surfaces?: string[] }[] | null;
   planning: string | null;
   painter: string | null;
+  archived_at: string | null;
   mail: { kind: "afspraak" | "tegoed" | "niets"; bookingId?: string; startAt?: string; linkable?: boolean; token?: string };
 }
 
@@ -90,7 +92,7 @@ export function KanbanPage() {
       }
       const { data } = await supabase
         .from("bookings")
-        .select("id,start_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at, stylists(name), services(key)")
+        .select("id,start_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at,archived_at, stylists(name), services(key)")
         .in("status", ["confirmed", "paid_unplaced", "manual"])
         .order("start_at", { ascending: true });
       const list = (data as unknown as Card[]) ?? [];
@@ -112,7 +114,7 @@ export function KanbanPage() {
 
       // Beheer: losse intakes (ingevuld, geen afspraak) met de status per e-mailadres.
       if (adm === true) {
-        const { data: li } = await supabase.from("intake").select("id,created_at,contact_name,contact_email,rooms,planning,painter")
+        const { data: li } = await supabase.from("intake").select("id,created_at,contact_name,contact_email,rooms,planning,painter,archived_at")
           .eq("status", "verzonden").is("booking_id", null).not("advisor_status", "in", "(afgerond,afgewezen)")
           .order("created_at", { ascending: false }).limit(50);
         const rows = (li as any[]) ?? [];
@@ -161,10 +163,34 @@ export function KanbanPage() {
     await supabase.rpc("kanban_update", { p_booking_id: id, p_patch: { kanban_stage: stage } });
   };
 
+  // Archief: met de hand gearchiveerd, of automatisch (afgerond en ouder dan 30 dagen).
+  const autoArchived = (c: Card) => isFinal(c.kanban_stage) && new Date(c.start_at).getTime() < archiveCutoff;
+  const inArchive = (c: Card) => !!c.archived_at || autoArchived(c);
+  const archiveCard = async (c: Card, archive: boolean) => {
+    const { error } = await supabase.rpc("dossier_archive", { p_booking_id: c.id, p_intake_id: null, p_archive: archive });
+    if (error) { window.alert("Dat lukte niet: " + error.message); return; }
+    setCards((prev) => prev.map((x) => (x.id === c.id ? { ...x, archived_at: archive ? new Date().toISOString() : null } : x)));
+  };
+  const archiveLoose = async (l: Loose, archive: boolean) => {
+    const { error } = await supabase.rpc("dossier_archive", { p_booking_id: null, p_intake_id: l.id, p_archive: archive });
+    if (error) { window.alert("Dat lukte niet: " + error.message); return; }
+    setLoose((prev) => prev.map((x) => (x.id === l.id ? { ...x, archived_at: archive ? new Date().toISOString() : null } : x)));
+  };
+  const deleteDossier = async (label: string, body: { booking_id?: string; intake_id?: string }) => {
+    if (!window.confirm(`${label} definitief verwijderen? De afspraak, intake, foto's, taken en verzendhistorie worden gewist. Dit kan niet ongedaan worden. Offertes in roll.nl/offerte en bestellingen blijven bestaan.`)) return;
+    const { data, error } = await supabase.functions.invoke("booking", { body: { action: "dossier_delete", ...body } });
+    if (error || !(data as { ok?: boolean } | null)?.ok) { window.alert("Verwijderen lukte niet."); return; }
+    setReloadKey((k) => k + 1);
+  };
+
   const visible = useMemo(
-    () => (isAdmin && filter !== "all" ? cards.filter((c) => c.stylist_id === filter) : cards),
+    () => (isAdmin && filter !== "all" ? cards.filter((c) => c.stylist_id === filter) : cards).filter((c) => !inArchive(c)),
     [cards, isAdmin, filter],
   );
+
+  const archivedCards = (isAdmin && filter !== "all" ? cards.filter((c) => c.stylist_id === filter) : cards).filter(inArchive);
+  const archivedLoose = loose.filter((l) => !!l.archived_at);
+  const openLoose = loose.filter((l) => !l.archived_at);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
 
@@ -230,9 +256,22 @@ export function KanbanPage() {
           {c.status === "manual" && <Badge tone="warn">niet betaald · geen afspraak</Badge>}
         </div>
 
-        <select className="rd-input" value={c.kanban_stage} onChange={(e) => move(c.id, e.target.value)} aria-label="Fase" style={{ marginTop: 10, height: 32, width: "100%", fontSize: 12, padding: "2px 8px", opacity: 0.85 }}>
-          {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
-        </select>
+        {!showArchive && (
+          <select className="rd-input" value={c.kanban_stage} onChange={(e) => move(c.id, e.target.value)} aria-label="Fase" style={{ marginTop: 10, height: 32, width: "100%", fontSize: 12, padding: "2px 8px", opacity: 0.85 }}>
+            {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
+          </select>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8, alignItems: "center" }}>
+          {showArchive ? (
+            <>
+              {c.archived_at ? <button className="rd-textlink" style={{ fontSize: 12.5 }} onClick={() => archiveCard(c, false)}>Terugzetten</button>
+                : <span style={{ fontSize: 11.5, opacity: 0.6 }}>Automatisch: afgerond, ouder dan {ARCHIVE_DAYS} dagen</span>}
+              {isAdmin && <button className="rd-textlink" style={{ fontSize: 12.5, color: "var(--rd-pink-dark)" }} onClick={() => deleteDossier(name, { booking_id: c.id })}>Verwijderen</button>}
+            </>
+          ) : (
+            <button className="rd-textlink" style={{ fontSize: 12.5, opacity: 0.7 }} onClick={() => archiveCard(c, true)}>Archiveren</button>
+          )}
+        </div>
       </div>
     );
   };
@@ -285,10 +324,22 @@ export function KanbanPage() {
               {stylists.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
             </select>
           )}
-          <select className="rd-input" value="" onChange={(e) => e.target.value && toFlow(l.id, e.target.value)} aria-label="In de flow zetten" style={{ height: 32, fontSize: 12, padding: "2px 8px", opacity: 0.85 }}>
-            <option value="">Zet in de flow…</option>
-            {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
-          </select>
+          {!showArchive && (
+            <select className="rd-input" value="" onChange={(e) => e.target.value && toFlow(l.id, e.target.value)} aria-label="In de flow zetten" style={{ height: 32, fontSize: 12, padding: "2px 8px", opacity: 0.85 }}>
+              <option value="">Zet in de flow…</option>
+              {COLS.map((col) => <option key={col.key} value={col.key}>{col.label}</option>)}
+            </select>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+            {showArchive ? (
+              <>
+                <button className="rd-textlink" style={{ fontSize: 12.5 }} onClick={() => archiveLoose(l, false)}>Terugzetten</button>
+                <button className="rd-textlink" style={{ fontSize: 12.5, color: "var(--rd-pink-dark)" }} onClick={() => deleteDossier(name, { intake_id: l.id })}>Verwijderen</button>
+              </>
+            ) : (
+              <button className="rd-textlink" style={{ fontSize: 12.5, opacity: 0.7 }} onClick={() => archiveLoose(l, true)}>Archiveren</button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -301,31 +352,46 @@ export function KanbanPage() {
           <h1 className="rd-h2" style={{ margin: "2px 0 2px" }}>Adviesgesprekken</h1>
           <p className="rd-sub" style={{ marginTop: 0 }}>Sleep een kaartje naar een andere fase, of gebruik het keuzemenu. Klik op een kaartje voor het klantdossier.</p>
         </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className={`rd-plan-chip${showArchive ? " is-on" : ""}`} onClick={() => setShowArchive((v) => !v)}>
+          {showArchive ? "Terug naar het bord" : `Archief (${archivedCards.length + (isAdmin ? archivedLoose.length : 0)})`}
+        </button>
         {isAdmin && stylists.length > 0 && (
           <select className="rd-input" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ height: 38, flex: "0 0 auto" }}>
             <option value="all">Alle stylisten</option>
             {stylists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 14, marginTop: 14 }} className="rd-hide-scroll">
+      {showArchive && (
+        <div style={{ marginTop: 14 }}>
+          <p className="rd-sub" style={{ marginTop: 0 }}>Gearchiveerde kaarten. Zet een kaart terug op het bord{isAdmin ? ", of verwijder het dossier definitief" : ""}.</p>
+          {archivedCards.length + (isAdmin ? archivedLoose.length : 0) === 0 ? <p className="rd-sub">Het archief is leeg.</p> : (
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+              {archivedCards.map(card)}
+              {isAdmin && archivedLoose.map(looseCard)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!showArchive && <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 14, marginTop: 14 }} className="rd-hide-scroll">
         {isAdmin && (
           <div style={{ flex: "0 0 272px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8, padding: 8, borderRadius: 18, minHeight: 200, background: "transparent", border: "1.5px dashed var(--rd-line)" }}>
             <div style={{ padding: "4px 6px 2px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="rd-kicker rd-kicker-pink">Intake, geen afspraak</span>
-                <span style={{ fontSize: 12, fontWeight: 800, background: "#fff", borderRadius: 99, padding: "1px 8px", opacity: 0.8 }}>{loose.length}</span>
+                <span style={{ fontSize: 12, fontWeight: 800, background: "#fff", borderRadius: 99, padding: "1px 8px", opacity: 0.8 }}>{openLoose.length}</span>
               </div>
               <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 2, lineHeight: 1.4 }}>Sleep naar een fase om de klant toch in de flow te zetten.</div>
             </div>
-            {loose.length === 0 ? <div style={{ fontSize: 12, opacity: 0.45, padding: "10px 6px" }}>Geen losse intakes</div> : loose.map(looseCard)}
+            {openLoose.length === 0 ? <div style={{ fontSize: 12, opacity: 0.45, padding: "10px 6px" }}>Geen losse intakes</div> : openLoose.map(looseCard)}
           </div>
         )}
         {COLS.map((col) => {
-          const all = visible.filter((c) => c.kanban_stage === col.key);
-          const items = isFinal(col.key) && !showArchive ? all.filter((c) => new Date(c.start_at).getTime() >= archiveCutoff) : all;
-          const archived = all.length - items.length;
+          const items = visible.filter((c) => c.kanban_stage === col.key);
           const isOver = over === col.key;
           return (
             <div
@@ -339,19 +405,13 @@ export function KanbanPage() {
                 <span className="rd-kicker rd-kicker-pink">{col.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 800, background: "#fff", borderRadius: 99, padding: "1px 8px", opacity: 0.8 }}>{items.length}</span>
               </div>
-              {items.length === 0 && archived === 0 ? (
+              {items.length === 0 ? (
                 <div style={{ fontSize: 12, opacity: 0.45, padding: "10px 6px" }}>Sleep hierheen</div>
               ) : items.map(card)}
-              {isFinal(col.key) && archived > 0 && (
-                <button className="rd-textlink" onClick={() => setShowArchive(true)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>+ {archived} in archief (ouder dan {ARCHIVE_DAYS} dagen)</button>
-              )}
-              {isFinal(col.key) && showArchive && all.length > 0 && (
-                <button className="rd-textlink" onClick={() => setShowArchive(false)} style={{ fontSize: 12, alignSelf: "center", opacity: 0.7 }}>Archief verbergen</button>
-              )}
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
