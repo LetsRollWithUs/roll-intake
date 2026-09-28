@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { KlantDemo } from "./dashboard/klant/Demo";
 import "./index.css";
 import "./styles/redesign.css";
 import { App } from "./App";
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
+        {import.meta.env.DEV && <Route path="/klant-demo" element={<KlantDemo />} />}
         <Route path="/beheer/*" element={<Dashboard />} />
         <Route path="/boek" element={<BookFlow />} />
         <Route path="/boek/klaar" element={<BookDone />} />

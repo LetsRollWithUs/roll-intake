@@ -19,6 +19,7 @@ import { KanbanPage } from "./KanbanPage";
 import { KlantDossier } from "./KlantDossier";
 import { GesprekPage } from "./GesprekPage";
 import { TakenPage } from "./TakenPage";
+import { KlantKaart } from "./klant/KlantKaart";
 import { NotificationsPage } from "./NotificationsPage";
 import { loadNotifications } from "./notifications";
 
@@ -190,7 +191,8 @@ export function Dashboard() {
       <Route path="start" element={<StylistHome />} />
       <Route path="gesprekken" element={<KanbanPage />} />
       <Route path="klant/:bookingId" element={<KlantDossier />} />
-      <Route path="gesprek/:bookingId" element={<GesprekPage />} />
+      <Route path="gesprek/:bookingId" element={<KlantKaart />} />
+      <Route path="gesprek-oud/:bookingId" element={<GesprekPage />} />
       <Route path="taken" element={<TakenPage />} />
       <Route path="commissie" element={<CommissiePage />} />
       <Route path="notificaties" element={<NotificationsPage />} />
