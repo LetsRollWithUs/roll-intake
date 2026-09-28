@@ -55,6 +55,25 @@ export function TakenPage() {
     await load();
   };
 
+  // Voorstel versturen vanuit de taak (na het belletje): concept maken als dat er nog niet is,
+  // dan vers ophalen en de klantmail starten. Aanpassingen in roll.nl/offerte gaan mee.
+  const [sendMsg, setSendMsg] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState<string | null>(null);
+  const sendVoorstel = async (t: Row) => {
+    if (!t.intake_id) return;
+    setSending(t.id); setSendMsg({ ...sendMsg, [t.id]: "" });
+    const { data: it } = await supabase.from("intake").select("offer_meta").eq("id", t.intake_id).maybeSingle();
+    if (!(it as { offer_meta?: { id?: number } } | null)?.offer_meta?.id) {
+      const { data: c } = await supabase.functions.invoke("booking", { body: { action: "voorstel_concept", intake_id: t.intake_id, booking_id: t.booking_id } });
+      if (!(c as { ok?: boolean } | null)?.ok) { setSending(null); setSendMsg({ ...sendMsg, [t.id]: "Het voorstel kon niet worden samengesteld. Staat de koppeling met de offerte-tool aan?" }); return; }
+    }
+    const { data } = await supabase.functions.invoke("booking", { body: { action: "voorstel_versturen", intake_id: t.intake_id, booking_id: t.booking_id, task_id: t.id } });
+    const d = data as { ok?: boolean; skipped?: string; kleuren_onbekend?: string[]; error?: string } | null;
+    setSending(null);
+    setSendMsg({ ...sendMsg, [t.id]: d?.ok ? "Verstuurd: de klant krijgt het bestelvoorstel per mail." : d?.skipped === "kleuren onbekend" ? `Kies eerst deze kleuren in de offerte-editor: ${(d.kleuren_onbekend ?? []).join(", ")}.` : `Versturen lukte niet${d?.error ? ` (${d.error})` : ""}.` });
+    if (d?.ok) await load();
+  };
+
   const visible = useMemo(() => (filter === "open" ? rows.filter((t) => t.status !== "afgerond") : rows), [rows, filter]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
@@ -62,7 +81,7 @@ export function TakenPage() {
   return (
     <div style={{ maxWidth: 900 }}>
       <h1 className="rd-h2" style={{ margin: "2px 0 2px" }}>Roll-taken</h1>
-      <p className="rd-sub" style={{ marginTop: 0 }}>Offertes en contactverzoeken van stylisten. Geef ze een eigenaar en opvolgdatum en werk de status bij.</p>
+      <p className="rd-sub" style={{ marginTop: 0 }}>Voorstellen, contactverzoeken, maatwerk en nazorg. Pak een taak op met "ik", bel de klant en verstuur het voorstel met de knop; aanpassingen in roll.nl/offerte gaan mee.</p>
       <div style={{ display: "flex", gap: 8, margin: "12px 0 14px" }}>
         <button className={`rd-plan-chip${filter === "open" ? " is-on" : ""}`} onClick={() => setFilter("open")}>Open ({rows.filter((t) => t.status !== "afgerond").length})</button>
         <button className={`rd-plan-chip${filter === "alles" ? " is-on" : ""}`} onClick={() => setFilter("alles")}>Alles</button>
@@ -106,7 +125,11 @@ export function TakenPage() {
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button className="rd-plan-chip" onClick={() => save(t)}>Opslaan</button>
                   {NEXT[t.status] && <button className="rd-plan-chip is-on" onClick={() => save(t, { status: NEXT[t.status]! } as Partial<Row>)}>{NEXT_LABEL[t.status]}</button>}
+                  {t.intake_id && t.type !== "nazorg" && t.status !== "verstuurd" && t.status !== "afgerond" && (
+                    <button className="rd-plan-chip is-on" onClick={() => sendVoorstel(t)} disabled={sending === t.id}>{sending === t.id ? "Versturen..." : "Verstuur voorstel naar klant"}</button>
+                  )}
                 </div>
+                {sendMsg[t.id] && <div style={{ fontSize: 13, fontWeight: 600, marginTop: 6 }}>{sendMsg[t.id]}</div>}
               </div>
             );
           })}

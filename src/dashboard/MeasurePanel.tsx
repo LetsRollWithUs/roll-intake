@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { rollColors } from "@/data/roll-colors";
 import type { DbRoom, IntakeRow, OfferMeta } from "./types";
-import { buildTaskPayload, RollTaskStatus, type RollTask } from "./RollHelpForm";
+import { buildTaskPayload, type RollTask } from "./RollHelpForm";
+import { VoorstelPanel } from "./VoorstelPanel";
 import { TrashIcon, iconBtn } from "./icons";
 import {
   calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, TRAP_M2, needsVoorstrijk, needsPrimer, needsRenovlies,
@@ -51,10 +52,11 @@ interface Props {
   task: RollTask | null;
   onSaved: (next: Record<string, RoomMeasure>) => void;
   onOffer: (url: string, meta: OfferMeta) => void;
+  onIntake: (patch: Partial<IntakeRow>) => void;
   onTask: (t: RollTask) => void;
 }
 
-export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offerUrl, colorsByRoom, task, onSaved, onOffer, onTask }: Props) {
+export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offerUrl, colorsByRoom, task, onSaved, onOffer, onIntake, onTask }: Props) {
   const intakeId = intake.id;
   const measured = rooms.filter((r) => showWalls(r) || showCeiling(r) || showWood(r));
   const [map, setMap] = useState<Record<string, RoomMeasure>>(() => {
@@ -65,12 +67,8 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
   const [toolsInCart, setToolsInCart] = useState<boolean>(intake.offer_meta?.tools_in_cart ?? true);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [offerMsg, setOfferMsg] = useState<string | null>(null);
   const editUrl = intake.offer_meta?.edit_url ?? null;
-  const unknownColors = intake.offer_meta?.kleuren_onbekend ?? [];
-  const offerMade = !!editUrl || !!offerUrl;
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState(offerUrl ?? "");
   const [linkErr, setLinkErr] = useState<string | null>(null);
@@ -115,32 +113,6 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
     return true;
   };
 
-  // "Maak offerte": de offerte-tool maakt de offerte (prijzen live). Staat de koppeling nog uit,
-  // dan gaat de aanvraag als taak naar Roll, zodat er niets blijft liggen.
-  const makeOffer = async () => {
-    setBusy(true); setOfferMsg(null);
-    if (!(await persist())) { setBusy(false); setOfferMsg("Opslaan van de maten mislukte."); return; }
-    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_create", intake_id: intakeId, booking_id: bookingId, tools_in_cart: toolsInCart, notes: notes.trim() } });
-    const d = data as { ok?: boolean; offer_url?: string | null; edit_url?: string | null; nummer?: string; id?: number; kleuren_onbekend?: string[]; skipped?: string; error?: string } | null;
-    if (d?.ok && (d.edit_url || d.offer_url)) {
-      setBusy(false);
-      onOffer(d.offer_url || offerUrl || "", { tools_in_cart: toolsInCart, id: d.id, nummer: d.nummer, edit_url: d.edit_url ?? null, klant_url: d.offer_url ?? null, kleuren_onbekend: d.kleuren_onbekend ?? [], at: new Date().toISOString() });
-      setOfferMsg(`Offerte ${d.nummer ?? ""} is aangemaakt ✓`);
-      return;
-    }
-    if (d?.skipped === "geen ruimtes met maten") { setBusy(false); setOfferMsg("Vul eerst de maten in, of laat Roll meekijken."); return; }
-    const ok = await createRollTask("offerte", [notes.trim(), toolsInCart ? "Tools mee in het mandje." : "Tools los in de mail (niet in het mandje)."].filter(Boolean).join(" "));
-    setBusy(false);
-    const reason = d?.skipped === "offerte-tool endpoint niet gekoppeld" ? "De koppeling met de offerte-tool staat nog uit" : `De offerte-tool gaf een fout${d?.error ? ` (${d.error})` : ""}`;
-    setOfferMsg(ok ? `${reason}; Roll maakt de offerte en stuurt die naar de klant.` : "Aanvragen lukte niet. Probeer het opnieuw.");
-  };
-  const askRoll = async () => {
-    setBusy(true); setOfferMsg(null);
-    await persist();
-    const ok = await createRollTask("contact", ["Te groot of hele huis: Roll stelt de offerte samen met de klant.", notes.trim()].filter(Boolean).join(" "));
-    setBusy(false);
-    setOfferMsg(ok ? "Roll neemt contact op met de klant en stelt de offerte samen op." : "Aanvragen lukte niet. Probeer het opnieuw.");
-  };
 
   if (measured.length === 0) return <p className="rd-sub" style={{ margin: 0 }}>Geen ruimtes met te verven oppervlakken in de intake.</p>;
 
@@ -319,17 +291,11 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
 
       {/* Offerte */}
       <div style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-        <div className="rd-kicker rd-kicker-pink">Offerte</div>
+        <div className="rd-kicker rd-kicker-pink">Bestelvoorstel</div>
         {editUrl && (
           <div style={{ fontSize: 14 }}>
             Offerte{intake.offer_meta?.nummer ? ` ${intake.offer_meta.nummer}` : ""} is aangemaakt. <a href={editUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Openen in de offerte-tool</a>
             <span style={{ fontSize: 12, opacity: 0.6 }}> (voor Roll-collega's)</span>
-          </div>
-        )}
-        {unknownColors.length > 0 && (
-          <div style={{ fontSize: 13.5, background: "var(--rd-lavender)", borderRadius: 10, padding: "10px 12px" }}>
-            <strong>Kies deze kleur{unknownColors.length > 1 ? "en" : ""} zelf in de offerte-editor:</strong> {unknownColors.join(", ")}
-            <div style={{ fontSize: 12.5, opacity: 0.75, marginTop: 2 }}>De offerte-tool herkende {unknownColors.length > 1 ? "ze" : "deze"} niet bij de 81 Roll-kleuren, bijvoorbeeld een kleurmatch of een andere schrijfwijze.</div>
           </div>
         )}
         {offerUrl && (
@@ -338,22 +304,17 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
             <div style={{ fontSize: 12, opacity: 0.6 }}>Deze link staat in de opvolgmail voor verf.</div>
           </div>
         )}
-        {task && <RollTaskStatus task={task} />}
-        {!offerMade && !task && (
+        <VoorstelPanel intake={intake} bookingId={bookingId} task={task} toolsInCart={toolsInCart} notes={notes} persist={persist} createRollTask={createRollTask} onIntake={onIntake} />
+        {!intake.offer_status && !task && (
           <>
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5, cursor: "pointer" }}>
               <input type="checkbox" checked={toolsInCart} onChange={(e) => setToolsInCart(e.target.checked)} style={{ marginTop: 3 }} />
               <span><strong>Aanbevolen tools meenemen in het winkelmandje</strong><br /><span style={{ fontSize: 12.5, opacity: 0.7 }}>{toolsInCart ? "Rollers, kwasten en tape gaan mee met \"Alles in winkelmandje\"." : "De tools staan los in de mail onder \"Vergeet je tools niet\", niet in het mandje."}</span></span>
             </label>
             <input className="rd-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Toelichting voor Roll (optioneel)" style={{ height: 38, fontSize: 13 }} />
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <button className="rd-btn rd-btn-primary" onClick={makeOffer} disabled={busy} style={{ width: "auto", padding: "0 22px" }}>{busy ? "Bezig..." : "Maak offerte"}</button>
-              <button className="rd-textlink" onClick={askRoll} disabled={busy}>Te groot of hele huis? Laat Roll meekijken</button>
-            </div>
-            <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De offerte-tool rekent de prijzen live uit de webshop. De klant krijgt een mail met de producten en "Alles in winkelmandje".</p>
+            <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De offerte-tool rekent de prijzen live uit de webshop. Heeft de klant samples gekocht, dan komt de Sample korting (10%) er automatisch bij.</p>
           </>
         )}
-        {offerMsg && <span style={{ color: "var(--rd-aubergine)", fontWeight: 600, fontSize: 13 }}>{offerMsg}</span>}
         {linkOpen ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

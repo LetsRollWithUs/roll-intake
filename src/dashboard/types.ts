@@ -94,6 +94,9 @@ export interface IntakeRow {
   sample_checkin: SampleCheckin | null;
   // Offerte uit de offerte-tool + keuze of de aanbevolen tools in het mandje gaan.
   offer_meta: OfferMeta | null;
+  offer_status?: 'concept' | 'verstuurd' | 'besteld' | null;
+  offer_sent_at?: string | null;
+  offer_total?: number | null;
 }
 
 export interface OfferMeta { tools_in_cart: boolean; id?: number | null; nummer?: string | null; edit_url?: string | null; klant_url?: string | null; mand_url?: string | null; kleuren_onbekend?: string[]; at?: string }

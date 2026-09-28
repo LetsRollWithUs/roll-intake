@@ -111,7 +111,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
       const late = t.due_date && t.due_date < todayStr;
       out.push({
         id: `roll-${t.id}`, kind: "roll",
-        title: `${t.type === "offerte" ? "Offerte" : "Contact"} gevraagd voor ${t.bookings?.customer_name || "klant"}${late ? " (te laat)" : ""}`,
+        title: `${({ offerte: "Voorstel", contact: "Contact", maatwerk: "Maatwerk", nazorg: "Nazorg" } as Record<string, string>)[t.type] ?? "Taak"} voor ${t.bookings?.customer_name || "klant"}${late ? " (te laat)" : ""}`,
         sub: t.owner ? `Eigenaar ${t.owner} · ${t.status}` : "Nog geen eigenaar", to: "/beheer/taken",
       });
     }
