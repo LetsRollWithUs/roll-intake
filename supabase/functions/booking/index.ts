@@ -356,6 +356,50 @@ Deno.serve(async (req) => {
       return j({ ok: true, offer_url: klantUrl, edit_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null, kleuren_onbekend: onbekend });
     }
 
+    // Dossier definitief verwijderen (alleen beheerders): afspraak, intake, taken, verzendlog en foto's.
+    // Offertes in roll.nl/offerte en bestellingen in WooCommerce blijven bestaan.
+    if (action === "dossier_delete") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: isAdm } = await caller.rpc("is_admin");
+      if (isAdm !== true) return j({ error: "Geen toegang" }, 403);
+      const bid: string | null = body.booking_id ?? null;
+      let iid: string | null = body.intake_id ?? null;
+      if (bid) {
+        const { data: b } = await admin.from("bookings").select("id,intake_id").eq("id", bid).maybeSingle();
+        if (!b) return j({ error: "afspraak niet gevonden" }, 404);
+        iid = iid ?? (b as any).intake_id ?? null;
+      }
+      if (!bid && !iid) return j({ error: "niets om te verwijderen" }, 400);
+      // Foto's: alles onder de map van de intake (rooms/<id>/, samples/, inspiration/).
+      let removed = 0;
+      if (iid) {
+        const bucket = admin.storage.from("intake-photos");
+        const walk = async (prefix: string): Promise<string[]> => {
+          const { data } = await bucket.list(prefix, { limit: 1000 });
+          const out: string[] = [];
+          for (const f of data ?? []) {
+            const path = `${prefix}/${f.name}`;
+            if (f.id) out.push(path); else out.push(...(await walk(path)));
+          }
+          return out;
+        };
+        const files = await walk(iid);
+        if (files.length) { const { data: del } = await bucket.remove(files); removed = del?.length ?? 0; }
+      }
+      if (bid) {
+        await admin.from("bookings").update({ intake_id: null }).eq("id", bid);
+        await admin.from("advice_credits").update({ booking_id: null }).eq("booking_id", bid);
+      }
+      if (iid) {
+        await admin.from("intake").update({ booking_id: null }).eq("id", iid);
+        await admin.from("bookings").update({ intake_id: null }).eq("intake_id", iid);
+        await admin.from("roll_tasks").delete().eq("intake_id", iid);
+      }
+      if (bid) { const { error } = await admin.from("bookings").delete().eq("id", bid); if (error) return j({ error: error.message }, 500); }
+      if (iid) { const { error } = await admin.from("intake").delete().eq("id", iid); if (error) return j({ error: error.message }, 500); }
+      return j({ ok: true, photos_removed: removed });
+    }
+
     // Bestelvoorstel, stap 1: concept in de offerte-tool aanmaken of bijwerken, met Sample korting
     // en kenmerk (styliste/intake). Geeft de offerte terug voor het controlescherm.
     if (action === "voorstel_concept") {
