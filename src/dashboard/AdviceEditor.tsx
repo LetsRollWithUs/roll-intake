@@ -27,7 +27,7 @@ const DEFAULT_SAMPLE_INSTRUCTION =
 
 const VERF_ROUTES: { key: "zelf" | "roll"; label: string; hint: string }[] = [
   { key: "zelf", label: "Klant bestelt zelf", hint: "De mail linkt per kleur naar de kleurpagina op roll.nl." },
-  { key: "roll", label: "Roll maakt een offerte", hint: "Maak de offerte hieronder bij Maten & offerte." },
+  { key: "roll", label: "Bestelvoorstel met winkelmandje", hint: "Stel het voorstel hieronder samen bij Maten & bestelvoorstel en verstuur het met één klik." },
 ];
 
 export function buildMail(opts: { customerName: string; stylistName: string; phase: AdvicePhase }): { subject: string; body: string } {
@@ -50,7 +50,7 @@ export function buildMail(opts: { customerName: string; stylistName: string; pha
   } else if (a.route === "zelf") {
     lines.push("Je bestelt de verf via de kleurpagina's in deze mail. Twijfel je over de hoeveelheid? Gebruik de prijsopgave of stuur me een berichtje.");
   } else {
-    lines.push("Roll maakt een offerte voor je op basis van je ruimtes. Je hoort binnenkort van ons.");
+    lines.push("Je krijgt vandaag nog een aparte mail met je bestelvoorstel: alle producten met de juiste hoeveelheden, klaar in je winkelmandje.");
   }
   if (a.next_step?.trim()) { lines.push(""); lines.push(a.next_step.trim()); }
   lines.push("", "Veel plezier met kiezen!", opts.stylistName ? `${opts.stylistName}, kleuradviseur bij Roll` : "Team Roll");

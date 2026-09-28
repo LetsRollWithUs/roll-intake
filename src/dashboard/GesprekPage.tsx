@@ -463,7 +463,7 @@ export function GesprekPage() {
               onSent={() => { reloadSends(); loadTasks(b.id); }}
             />
             <div id="opmeten" style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--rd-line)" }}>
-              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & offerte</div>
+              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & bestelvoorstel</div>
               <MeasurePanel
                 key={`measure:${intake.id}`}
                 intake={intake}

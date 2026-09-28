@@ -415,12 +415,20 @@ Deno.serve(async (req) => {
       const { data: bk } = bid ? await admin.from("bookings").select("customer_name,stylist_id, stylists(name,email)").eq("id", bid).maybeSingle() : { data: null };
       const stylistName = (bk as any)?.stylists?.name ?? null;
       const klantUrl = offer.klantUrl ?? row.offer_meta?.klant_url ?? null;
+      // Bedragen als Nederlandse tekst voor de mail (Klaviyo kent geen komma-notatie).
+      const fmt = (v: number | null | undefined) => (v == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(v));
+      const withFmt = <T extends { totaal?: number }>(xs: T[]) => xs.map((x) => ({ ...x, totaal_fmt: fmt(x.totaal ?? null) }));
       const props = {
         stap: "offerte_verstuurd",
         intake_id: row.id, booking_id: bid, stylist_name: stylistName,
+        afzender: stylistName ? `${stylistName} van Roll` : "Roll",
         offerte_nummer: offer.nummer, klant_url: klantUrl, mand_url: offer.mandUrl ?? row.offer_meta?.mand_url ?? null,
-        regels: offer.regels, tools: offer.tools.filter((t) => t.inMandje !== false), tools_los: offer.tools.filter((t) => t.inMandje === false),
-        subtotaal: offer.subtotaal, korting: offer.korting, extra: offer.extra, verzending: offer.verzending, totaal: offer.totaal,
+        regels: withFmt(offer.regels), tools: withFmt(offer.tools.filter((t) => t.inMandje !== false)), tools_los: withFmt(offer.tools.filter((t) => t.inMandje === false)),
+        subtotaal: offer.subtotaal, subtotaal_fmt: fmt(offer.subtotaal),
+        korting: offer.korting ? { ...offer.korting, bedrag_fmt: fmt(offer.korting.bedrag) } : null,
+        extra: offer.extra.map((e) => ({ ...e, bedrag_fmt: e.bedrag ? fmt(e.bedrag) : null })),
+        verzending: offer.verzending, verzending_fmt: offer.verzending ? fmt(offer.verzending) : "gratis",
+        totaal: offer.totaal, totaal_fmt: fmt(offer.totaal),
         kleuren: [...new Map(offer.regels.filter((l) => l.kleurNaam).map((l) => [l.kleurNaam, { naam: l.kleurNaam, hex: l.kleurHex ?? null }])).values()],
         whatsapp: ROLL_WHATSAPP,
       };
