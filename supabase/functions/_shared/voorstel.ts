@@ -6,7 +6,7 @@ export interface OfferTool { product?: string; aantal?: number; stukprijs?: numb
 export interface Offer {
   id: number | null; nummer: string | null; status: string | null;
   editUrl: string | null; klantUrl: string | null; mandUrl: string | null;
-  kleurenOnbekend: string[]; regels: OfferLine[]; tools: OfferTool[];
+  kleurenOnbekend: string[]; waarschuwingen: string[]; regels: OfferLine[]; tools: OfferTool[];
   subtotaal: number | null; korting: { label: string; bedrag: number } | null;
   extra: { label: string; bedrag: number }[]; verzending: number | null; totaal: number | null; bijgewerkt: string | null;
 }
@@ -20,6 +20,7 @@ export function normalizeOffer(d: any): Offer {
     id: num(d?.id), nummer: d?.nummer ?? null, status: d?.status ?? null,
     editUrl: d?.editUrl ?? null, klantUrl: d?.klantUrl ?? null, mandUrl: d?.mandUrl ?? null,
     kleurenOnbekend: arr<unknown>(d?.kleurenOnbekend).map(String).slice(0, 20),
+    waarschuwingen: arr<unknown>(d?.waarschuwingen).map((w: any) => (typeof w === "string" ? w : String(w?.tekst ?? w?.message ?? w?.label ?? JSON.stringify(w)))).slice(0, 20),
     regels: arr<OfferLine>(d?.regels).slice(0, 200),
     tools: arr<OfferTool>(d?.tools).slice(0, 50),
     subtotaal: num(d?.subtotaal),
