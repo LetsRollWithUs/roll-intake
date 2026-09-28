@@ -34,7 +34,14 @@ export function Photos({ photos, size = 84 }: { photos?: (DbPhoto | null)[]; siz
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  if (list.length === 0) return <span style={{ opacity: 0.5, fontSize: 13 }}>Geen foto's</span>;
+  // Gekozen maar niet ontvangen (upload mislukt, bijv. te groot bestand).
+  const missing = (photos ?? []).filter((p): p is DbPhoto => !!p && !photoPath(p) && !!p.name).length;
+  const missingNote = missing > 0 && (
+    <div style={{ flexBasis: "100%", fontSize: 13, color: "var(--rd-pink-dark)", fontWeight: 600 }}>
+      {missing === 1 ? "1 foto is niet goed doorgekomen." : `${missing} foto's zijn niet goed doorgekomen.`} Vraag de klant die even te mailen.
+    </div>
+  );
+  if (list.length === 0) return missingNote || <span style={{ opacity: 0.5, fontSize: 13 }}>Geen foto's</span>;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {list.map((p, i) => {
@@ -47,6 +54,7 @@ export function Photos({ photos, size = 84 }: { photos?: (DbPhoto | null)[]; siz
           </a>
         );
       })}
+      {missingNote}
     </div>
   );
 }

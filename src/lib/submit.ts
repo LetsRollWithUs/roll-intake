@@ -3,6 +3,7 @@ import { assessComplexity } from "./complexity";
 import { getIntakeId } from "./store";
 import type { IntakeState, UploadedImage } from "./types";
 import { getTurnstileToken } from "./turnstile";
+import { compressImage } from "./imageCompress";
 import { FunctionsHttpError } from "@supabase/supabase-js";
 
 /**
@@ -25,18 +26,31 @@ function extFromName(name: string): string {
 // Slaat het opslagpad op (geen publieke URL): de bucket is privé, het dashboard
 // maakt er een signed URL van. Bij een mislukte upload blijft path leeg.
 // Met upload-links van de server (signed) als die er zijn, anders de oude directe upload.
+// Foto's worden eerst verkleind (telefoonfoto's zijn vaak groter dan de 8 MB-limiet) en bij een
+// fout nog één keer geprobeerd. Mislukt het toch, dan blijft de foto staan met failed: true,
+// zodat de styliste ziet dat er een foto ontbreekt.
+type PhotoRecord = { id: string; name: string; url: string | null; path: string | null; failed?: boolean };
+let failedUploads = 0;
+
 async function uploadImage(
   img: UploadedImage,
   path: string,
   signed: Record<string, string> | null,
-): Promise<{ id: string; name: string; url: string | null; path: string | null }> {
+): Promise<PhotoRecord> {
   if (!img.file) return { id: img.id, name: img.name, url: null, path: null };
+  const file = await compressImage(img.file);
   const bucket = supabase.storage.from(INTAKE_PHOTOS_BUCKET);
   const token = signed?.[path];
-  const { error } = token
-    ? await bucket.uploadToSignedUrl(path, token, img.file, { contentType: img.file.type })
-    : await bucket.upload(path, img.file, { upsert: false, contentType: img.file.type });
-  if (error) return { id: img.id, name: img.name, url: null, path: null };
+  const attempt = () =>
+    token
+      ? bucket.uploadToSignedUrl(path, token, file, { contentType: file.type, upsert: true })
+      : bucket.upload(path, file, { upsert: false, contentType: file.type });
+  let { error } = await attempt();
+  if (error) ({ error } = await attempt());
+  if (error) {
+    failedUploads++;
+    return { id: img.id, name: img.name, url: null, path: null, failed: true };
+  }
   return { id: img.id, name: img.name, url: null, path };
 }
 
@@ -71,8 +85,9 @@ export async function saveConceptLead(state: IntakeState): Promise<void> {
 export async function submitIntake(
   state: IntakeState,
   opts?: { bookingId?: string | null; mode?: string | null },
-): Promise<{ id: string }> {
+): Promise<{ id: string; failedPhotos: number }> {
   const intakeId = getIntakeId();
+  failedUploads = 0;
 
   // Eerst Turnstile + upload-links ophalen voor alle foto's in één keer.
   const paths = [
@@ -215,5 +230,5 @@ export async function submitIntake(
     }
   }
 
-  return { id: intakeId };
+  return { id: intakeId, failedPhotos: failedUploads };
 }
