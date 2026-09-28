@@ -10,6 +10,7 @@ import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, PACK_PRODUCT_IDS, PRICE, colorNam
 import { ROLL_COLORS } from "../_shared/roll-collection.ts";
 import { buildOfferPayload } from "../_shared/offerte.ts";
 import { turnstileGate, TURNSTILE_BLOCKED_MSG } from "../_shared/turnstile.ts";
+import { normalizeOffer, sampleDiscount, MAATWERK_GRENS, PILOT_AANTAL, ROLL_WHATSAPP, type Offer } from "../_shared/voorstel.ts";
 const HEX_BY_ID = new Map(ROLL_COLORS.map((c: any) => [c.id, c.hex]));
 
 const cors = {
@@ -350,6 +351,114 @@ Deno.serve(async (req) => {
         sent_to: (it as any).contact_email, sent_by: u?.user?.email ?? null, sent_at: meta.at,
       });
       return j({ ok: true, offer_url: klantUrl, edit_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null, kleuren_onbekend: onbekend });
+    }
+
+    // Bestelvoorstel, stap 1: concept in de offerte-tool aanmaken of bijwerken, met Sample korting
+    // en kenmerk (styliste/intake). Geeft de offerte terug voor het controlescherm.
+    if (action === "voorstel_concept") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: seen } = await caller.from("intake").select("id").eq("id", body.intake_id ?? "").maybeSingle();
+      if (!seen) return j({ error: "Geen toegang" }, 403);
+      const { data: it } = await admin.from("intake")
+        .select("id,booking_id,contact_name,contact_email,rooms,room_measures,advice_verf,offer_meta,offer_status")
+        .eq("id", body.intake_id).maybeSingle();
+      if (!it) return j({ ok: false, skipped: "geen intake" });
+      const row = it as any;
+      const bid = row.booking_id ?? body.booking_id ?? null;
+      const { data: bk } = bid ? await admin.from("bookings").select("customer_name,customer_phone,stylist_id, stylists(name)").eq("id", bid).maybeSingle() : { data: null };
+      const toolsInCart = body.tools_in_cart !== false;
+      const payload: any = buildOfferPayload(row, { phone: (bk as any)?.customer_phone ?? "", name: (bk as any)?.customer_name ?? "", toolsInCart, notes: typeof body.notes === "string" ? body.notes : "" });
+      if (payload.project.surfaces.length === 0) return j({ ok: false, skipped: "geen ruimtes met maten" });
+      const korting = await sampleDiscount(row.contact_email ?? "", WOO_URL, wooAuth);
+      payload.status = "concept";
+      payload.korting = korting;
+      payload.kenmerk = { intake_id: row.id, booking_id: bid, styliste_id: (bk as any)?.stylist_id ?? null, styliste_naam: (bk as any)?.stylists?.name ?? null };
+      if (!OFFERTE_API_KEY) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", korting });
+      let data: any = {};
+      try {
+        const resp = await fetch(OFFERTE_API_URL, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify(payload) });
+        data = await resp.json().catch(() => ({}));
+        if (resp.status === 503) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", korting });
+        if (!resp.ok || !data?.ok) return j({ ok: false, error: `offerte-tool gaf ${resp.status}`, detail: data, korting });
+      } catch (e) {
+        return j({ ok: false, error: "offerte-tool niet bereikbaar", detail: String(e), korting });
+      }
+      const offer = normalizeOffer(data);
+      const meta = { ...(row.offer_meta ?? {}), tools_in_cart: toolsInCart, id: offer.id, nummer: offer.nummer, edit_url: offer.editUrl, klant_url: offer.klantUrl, mand_url: offer.mandUrl, kleuren_onbekend: offer.kleurenOnbekend, korting, offer, at: new Date().toISOString() };
+      await admin.from("intake").update({ offer_meta: meta, offer_status: "concept", offer_total: offer.totaal }).eq("id", row.id);
+      return j({ ok: true, offer, korting, grens: MAATWERK_GRENS });
+    }
+
+    // Bestelvoorstel, stap 2: offerte vers ophalen, markeren als verstuurd en de klantmail (Klaviyo) starten.
+    // Door de styliste (eigen klant) of door Roll vanuit een taak.
+    if (action === "voorstel_versturen") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: seen } = await caller.from("intake").select("id").eq("id", body.intake_id ?? "").maybeSingle();
+      if (!seen) return j({ error: "Geen toegang" }, 403);
+      const { data: u } = await caller.auth.getUser();
+      const { data: it } = await admin.from("intake").select("id,booking_id,contact_name,contact_email,offer_meta,offer_status").eq("id", body.intake_id).maybeSingle();
+      const row = it as any;
+      const offerId = row?.offer_meta?.id;
+      if (!row?.contact_email || !offerId) return j({ ok: false, skipped: "nog geen voorstel" });
+      if (!OFFERTE_API_KEY) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld" });
+      // Vers ophalen, zodat aanpassingen van Roll in de editor meegaan. Oudere offerte-tool zonder GET: laatste concept.
+      let offer: Offer = normalizeOffer(row.offer_meta?.offer ?? row.offer_meta);
+      try {
+        const r = await fetch(`${OFFERTE_API_URL}/${offerId}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
+        if (r.ok) { const d = await r.json().catch(() => null); if (d?.ok !== false && d) offer = normalizeOffer(d); }
+      } catch { /* terugval op concept */ }
+      if (offer.kleurenOnbekend.length) return j({ ok: false, skipped: "kleuren onbekend", kleuren_onbekend: offer.kleurenOnbekend });
+      try {
+        await fetch(`${OFFERTE_API_URL}/${offerId}/verstuurd`, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify({ verstuurd_door: u?.user?.email ?? null }) });
+      } catch { /* status in de offerte-tool is niet kritiek voor de mail */ }
+      const bid = row.booking_id ?? body.booking_id ?? null;
+      const { data: bk } = bid ? await admin.from("bookings").select("customer_name,stylist_id, stylists(name,email)").eq("id", bid).maybeSingle() : { data: null };
+      const stylistName = (bk as any)?.stylists?.name ?? null;
+      const klantUrl = offer.klantUrl ?? row.offer_meta?.klant_url ?? null;
+      // Bedragen als Nederlandse tekst voor de mail (Klaviyo kent geen komma-notatie).
+      const fmt = (v: number | null | undefined) => (v == null ? null : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(v));
+      const withFmt = <T extends { totaal?: number }>(xs: T[]) => xs.map((x) => ({ ...x, totaal_fmt: fmt(x.totaal ?? null) }));
+      const props = {
+        stap: "offerte_verstuurd",
+        intake_id: row.id, booking_id: bid, stylist_name: stylistName,
+        afzender: stylistName ? `${stylistName} van Roll` : "Roll",
+        offerte_nummer: offer.nummer, klant_url: klantUrl, mand_url: offer.mandUrl ?? row.offer_meta?.mand_url ?? null,
+        regels: withFmt(offer.regels), tools: withFmt(offer.tools.filter((t) => t.inMandje !== false)), tools_los: withFmt(offer.tools.filter((t) => t.inMandje === false)),
+        subtotaal: offer.subtotaal, subtotaal_fmt: fmt(offer.subtotaal),
+        korting: offer.korting ? { ...offer.korting, bedrag_fmt: fmt(offer.korting.bedrag) } : null,
+        extra: offer.extra.map((e) => ({ ...e, bedrag_fmt: e.bedrag ? fmt(e.bedrag) : null })),
+        verzending: offer.verzending, verzending_fmt: offer.verzending ? fmt(offer.verzending) : "gratis",
+        totaal: offer.totaal, totaal_fmt: fmt(offer.totaal),
+        kleuren: [...new Map(offer.regels.filter((l) => l.kleurNaam).map((l) => [l.kleurNaam, { naam: l.kleurNaam, hex: l.kleurHex ?? null }])).values()],
+        whatsapp: ROLL_WHATSAPP,
+      };
+      const r = await klaviyoTrack("Advies flow", { email: row.contact_email, first_name: row.contact_name ?? undefined }, props, {}, `${row.id}:offerte:${offerId}:${Date.now()}`, admin);
+      if (!r.ok) return j({ ok: false, error: "mail niet gestart", detail: r.detail });
+      const now = new Date().toISOString();
+      await admin.from("intake").update({
+        offer_status: "verstuurd", offer_sent_at: now, offer_total: offer.totaal, offer_nazorg_at: null,
+        advisor_offer_url: klantUrl ?? undefined, offer_meta: { ...(row.offer_meta ?? {}), offer, sent_at: now, sent_by: u?.user?.email ?? null },
+      }).eq("id", row.id);
+      await admin.from("advice_sends").insert({
+        intake_id: row.id, booking_id: bid, route: "offerte", subject: `Bestelvoorstel ${offer.nummer ?? ""}`.trim(),
+        body: `${klantUrl ?? ""}\nTotaal: ${offer.totaal ?? "onbekend"}`, sent_to: row.contact_email, sent_by: u?.user?.email ?? null, sent_at: now,
+      });
+      if (body.task_id) await admin.from("roll_tasks").update({ status: "verstuurd", updated_at: now, result: { offer_url: klantUrl ?? undefined } }).eq("id", body.task_id);
+      const klant = (bk as any)?.customer_name ?? row.contact_name ?? "klant";
+      const dash = bid ? `https://intake.roll.nl/beheer/gesprek/${bid}` : "https://intake.roll.nl/beheer";
+      if ((offer.totaal ?? 0) > MAATWERK_GRENS) {
+        await admin.rpc("roll_melding", { p_soort: "groot_voorstel", p_props: { klant_naam: klant, styliste: stylistName, totaal: offer.totaal, dashboard_url: dash }, p_key: `groot:${row.id}:${offerId}` });
+      }
+      // Pilot: de eerste voorstellen per styliste krijgt Roll ter controle.
+      if ((bk as any)?.stylist_id) {
+        const { data: sb } = await admin.from("bookings").select("id").eq("stylist_id", (bk as any).stylist_id);
+        const ids = ((sb as any[]) ?? []).map((b) => b.id);
+        const { count } = ids.length ? await admin.from("intake").select("id", { count: "exact", head: true }).in("booking_id", ids).not("offer_sent_at", "is", null) : { count: 0 };
+        if ((count ?? 0) <= PILOT_AANTAL && u?.user?.email?.toLowerCase() === String((bk as any)?.stylists?.email ?? "").toLowerCase()) {
+          await admin.rpc("roll_melding", { p_soort: "pilot_controle", p_props: { klant_naam: klant, styliste: stylistName, totaal: offer.totaal, nummer_voorstel: count, dashboard_url: dash }, p_key: `pilot:${row.id}:${offerId}` });
+        }
+      }
+      return j({ ok: true, offer, klant_url: klantUrl });
     }
 
     // Aankopen van een klant ophalen uit WooCommerce (op e-mail). Alleen adviseurs.

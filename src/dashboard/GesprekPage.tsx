@@ -212,7 +212,7 @@ export function GesprekPage() {
   const boughtVerf = (orders?.product_items ?? 0) > 0 || commissions.some((c) => c.status !== "vervallen") || b.kanban_stage === "verf";
   const boughtSamples = (orders?.sample_items ?? 0) > 0 || b.samples_besteld;
   const sampleSkipped = samplesBefore && !sentRoutes.has("samples");
-  const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen" || !!task || !!intake?.advisor_offer_url || !!intake?.offer_meta?.edit_url;
+  const verfAdviceDone = sentRoutes.has("zelf") || sentRoutes.has("roll") || intake?.advisor_outcome === "color_chosen" || !!task || !!intake?.advisor_offer_url || !!intake?.offer_meta?.edit_url || !!intake?.offer_status;
   const roomSeeds = rooms.map((r) => ({ id: r.id, label: r.label, surfaces: r.surfaces ?? [] }));
   // Gekozen verfkleuren per intake-ruimte (op id, anders naam) voor het maten-blok.
   const colorsByRoom: Record<string, { surface: string; color: string; hex?: string }[]> = {};
@@ -463,7 +463,7 @@ export function GesprekPage() {
               onSent={() => { reloadSends(); loadTasks(b.id); }}
             />
             <div id="opmeten" style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--rd-line)" }}>
-              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & offerte</div>
+              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & bestelvoorstel</div>
               <MeasurePanel
                 key={`measure:${intake.id}`}
                 intake={intake}
@@ -476,6 +476,7 @@ export function GesprekPage() {
                 task={task}
                 onSaved={(next) => setIntake({ ...intake, room_measures: next })}
                 onOffer={(url, meta) => setIntake({ ...intake, advisor_offer_url: url, offer_meta: meta })}
+                onIntake={(patch) => setIntake((cur) => (cur ? { ...cur, ...patch } : cur))}
                 onTask={(t) => setTask(t)}
               />
             </div>

@@ -8,7 +8,7 @@ import type { IntakeRow } from "./types";
 // automatisch opgebouwd uit het verf-advies en de maten; de styliste hoeft niets over te typen.
 export interface RollTask {
   id: string;
-  type: "offerte" | "contact";
+  type: "offerte" | "contact" | "maatwerk" | "nazorg";
   status: "aangevraagd" | "opgepakt" | "verstuurd" | "afgerond";
   owner: string | null;
   due_date: string | null;
@@ -21,7 +21,7 @@ interface TaskRoom { room: string; surface: string; color: string; color_status:
 export interface TaskPayload { rooms: TaskRoom[]; planning: string; notes: string }
 
 export const TASK_STATUS: Record<RollTask["status"], string> = { aangevraagd: "Aangevraagd", opgepakt: "Opgepakt", verstuurd: "Verstuurd", afgerond: "Afgerond" };
-export const TASK_TYPE: Record<RollTask["type"], string> = { offerte: "Offerte door Roll", contact: "Roll neemt contact op" };
+export const TASK_TYPE: Record<RollTask["type"], string> = { offerte: "Voorstel door Roll", contact: "Roll neemt contact op", maatwerk: "Maatwerk met extra korting", nazorg: "Nazorg: nog niet besteld" };
 
 const isWood = (s: string) => /kozijn|deur|houtwerk|plint|lak|trap/i.test(s);
 const g1 = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
