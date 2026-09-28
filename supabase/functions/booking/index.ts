@@ -28,6 +28,9 @@ const WEBHOOK_SECRET = Deno.env.get("WOO_WEBHOOK_SECRET")!;
 // Offerte-tool (WP-plugin) endpoint dat een offerte-record maakt uit de ruimtedata.
 const OFFERTE_API_URL = Deno.env.get("OFFERTE_API_URL") || "https://roll.nl/wp-json/roll-advies/v1/offerte";
 const OFFERTE_API_KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
+// Bestelvoorstellen (concept/ophalen/verstuurd) pas aan zodra de offerte-tool v2 live is (secret OFFERTE_V2=1).
+// Tot dan gaat een voorstel als Roll-taak, zodat de oude versie geen losse offertes aanmaakt.
+const OFFERTE_V2 = Deno.env.get("OFFERTE_V2") === "1";
 const PRODUCT_ID = 14753; // online kleuradvies
 const wooAuth = "Basic " + btoa(`${WOO_KEY}:${WOO_SECRET}`);
 
@@ -322,7 +325,7 @@ Deno.serve(async (req) => {
       const payload = buildOfferPayload(it as any, { phone: (bk as any)?.customer_phone ?? "", name: (bk as any)?.customer_name ?? "", toolsInCart, notes: typeof body.notes === "string" ? body.notes : "" });
       if (payload.project.surfaces.length === 0) return j({ ok: false, skipped: "geen ruimtes met maten" });
       // Zonder sleutel staat de koppeling uit (het endpoint geeft dan 503).
-      if (!OFFERTE_API_KEY) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", payload });
+      if (!OFFERTE_API_KEY || !OFFERTE_V2) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", payload });
 
       let data: any = {};
       try {
@@ -373,7 +376,7 @@ Deno.serve(async (req) => {
       payload.status = "concept";
       payload.korting = korting;
       payload.kenmerk = { intake_id: row.id, booking_id: bid, styliste_id: (bk as any)?.stylist_id ?? null, styliste_naam: (bk as any)?.stylists?.name ?? null };
-      if (!OFFERTE_API_KEY) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", korting });
+      if (!OFFERTE_API_KEY || !OFFERTE_V2) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld", korting });
       let data: any = {};
       try {
         const resp = await fetch(OFFERTE_API_URL, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify(payload) });
@@ -400,7 +403,7 @@ Deno.serve(async (req) => {
       const row = it as any;
       const offerId = row?.offer_meta?.id;
       if (!row?.contact_email || !offerId) return j({ ok: false, skipped: "nog geen voorstel" });
-      if (!OFFERTE_API_KEY) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld" });
+      if (!OFFERTE_API_KEY || !OFFERTE_V2) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld" });
       // Vers ophalen, zodat aanpassingen van Roll in de editor meegaan. Oudere offerte-tool zonder GET: laatste concept.
       let offer: Offer = normalizeOffer(row.offer_meta?.offer ?? row.offer_meta);
       try {
