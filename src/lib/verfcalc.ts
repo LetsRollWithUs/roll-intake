@@ -81,10 +81,12 @@ export const margeFor = (m: RoomMeasure) => (m.wall_substrate === "nieuw" && !ne
 
 // C. Oppervlaktes
 export const wallVlakArea = (w: WandVlak) => num(w.w) * num(w.h);
-export function wallArea(m: RoomMeasure): number { return m.walls.reduce((s, w) => s + wallVlakArea(w), 0); }
-export function ceilingArea(m: RoomMeasure): number { return m.ceilings.reduce((s, c) => s + num(c.l) * num(c.b), 0); }
+export function wallArea(m: RoomMeasure): number { return (m.walls ?? []).reduce((s, w) => s + wallVlakArea(w), 0); }
+export function ceilingArea(m: RoomMeasure): number { return (m.ceilings ?? []).reduce((s, c) => s + num(c.l) * num(c.b), 0); }
+// Oudere of onvolledige metingen missen soms houtwerk of muren: vul aan met lege waarden.
+const woodOf = (m: RoomMeasure) => ({ ...emptyMeasure().woodwork, ...(m.woodwork ?? {}) });
 export function woodworkArea(m: RoomMeasure): number {
-  const w = m.woodwork;
+  const w = woodOf(m);
   let a = 0;
   a += num(w.doors) * 2.5; // deur met kozijn
   a += w.windows.reduce((s, r) => s + 2 * (num(r.w) + num(r.h)) * 0.25, 0); // raamkozijn
@@ -141,12 +143,12 @@ export function packBlikken(liters: number, sizes: (number | BlikSize)[]): BlikC
 export function summarizeMeasure(m: RoomMeasure): string[] {
   const g = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
   const out: string[] = [];
-  const ws = m.walls.filter((w) => num(w.w) > 0);
+  const ws = (m.walls ?? []).filter((w) => num(w.w) > 0);
   const staat = m.wall_condition === "oneffen" ? " · oneffen" : m.wall_condition === "scheuren" ? " · scheuren of behang eraf" : "";
   if (ws.length) out.push(`Muren: ${ws.map((w) => `${g(num(w.w))} × ${g(num(w.h) || STANDAARD_HOOGTE)} m`).join(" + ")}${m.wall_substrate === "nieuw" ? " · nieuw stucwerk" : ""}${staat}`);
-  const cs = m.ceilings.filter((c) => num(c.l) > 0 && num(c.b) > 0);
+  const cs = (m.ceilings ?? []).filter((c) => num(c.l) > 0 && num(c.b) > 0);
   if (cs.length) out.push(`Plafond: ${cs.map((c) => `${g(num(c.l))} × ${g(num(c.b))} m`).join(" + ")}`);
-  const w = m.woodwork;
+  const w = woodOf(m);
   const wood: string[] = [];
   if (num(w.doors) > 0) wood.push(`${num(w.doors)} deur${num(w.doors) === 1 ? "" : "en"}`);
   const win = w.windows.filter((x) => num(x.w) > 0 || num(x.h) > 0).length;
@@ -192,7 +194,7 @@ function paintByColor(m: RoomMeasure): { muur: Map<string, number>; lak: Map<str
   const marge = margeFor(m);
   const muur = new Map<string, number>();
   const add = (map: Map<string, number>, color: string | undefined, l: number) => { if (l <= 0) return; const k = (color ?? "").trim() || NO_COLOR; map.set(k, (map.get(k) ?? 0) + l); };
-  for (const w of m.walls) add(muur, w.color, (wallVlakArea(w) * lagen) / MUURVERF_DEKKING * marge);
+  for (const w of m.walls ?? []) add(muur, w.color, (wallVlakArea(w) * lagen) / MUURVERF_DEKKING * marge);
   add(muur, m.ceiling_color, (ceilingArea(m) * lagen) / MUURVERF_DEKKING * marge);
   const lak = new Map<string, number>();
   add(lak, m.wood_color, woodworkArea(m) * lagen * LAK_PER_M2 * marge);

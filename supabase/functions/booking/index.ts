@@ -411,6 +411,9 @@ Deno.serve(async (req) => {
         .eq("id", body.intake_id).maybeSingle();
       if (!it) return j({ ok: false, skipped: "geen intake" });
       const row = it as any;
+      // Alleen ruimtes met een bevestigde kleur gaan in het voorstel (deelvoorstel bij nog te testen ruimtes).
+      const verfIds = new Set(((row.advice_verf?.rooms ?? []) as any[]).map((r) => r.room_id).filter(Boolean));
+      if (verfIds.size) row.rooms = (row.rooms ?? []).filter((r: any) => verfIds.has(r.id));
       const bid = row.booking_id ?? body.booking_id ?? null;
       const { data: bk } = bid ? await admin.from("bookings").select("customer_name,customer_phone,stylist_id, stylists(name)").eq("id", bid).maybeSingle() : { data: null };
       const toolsInCart = body.tools_in_cart !== false;
