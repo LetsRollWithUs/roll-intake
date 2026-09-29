@@ -471,13 +471,12 @@ Deno.serve(async (req) => {
         .eq("id", body.intake_id).maybeSingle();
       if (!it) return j({ ok: false, skipped: "geen intake" });
       const row = it as any;
-      // Alleen ruimtes met een bevestigde kleur gaan in het voorstel (deelvoorstel bij nog te testen ruimtes).
-      const verfIds = new Set(((row.advice_verf?.rooms ?? []) as any[]).map((r) => r.room_id).filter(Boolean));
-      if (verfIds.size) row.rooms = (row.rooms ?? []).filter((r: any) => verfIds.has(r.id));
+      // Advies in de editor: alle ruimtes uit de intake, ook zonder kleur of maten. Welke vlakken in de
+      // offerte komen, bepaalt de status per vlak in de editor (alleen bevestigde vlakken tellen mee).
       const bid = row.booking_id ?? body.booking_id ?? null;
       const { data: bk } = bid ? await admin.from("bookings").select("customer_name,customer_phone,stylist_id, stylists(name)").eq("id", bid).maybeSingle() : { data: null };
       const toolsInCart = body.tools_in_cart !== false;
-      const payload: any = buildOfferPayload(row, { phone: (bk as any)?.customer_phone ?? "", name: (bk as any)?.customer_name ?? "", toolsInCart, notes: typeof body.notes === "string" ? body.notes : "" });
+      const payload: any = buildOfferPayload(row, { phone: (bk as any)?.customer_phone ?? "", name: (bk as any)?.customer_name ?? "", toolsInCart, notes: typeof body.notes === "string" ? body.notes : "", alleRuimtes: true });
       if (payload.project.surfaces.length === 0) return j({ ok: false, skipped: "geen ruimtes met maten" });
       const korting = await sampleDiscount(row.contact_email ?? "", WOO_URL, wooAuth);
       payload.status = "concept";

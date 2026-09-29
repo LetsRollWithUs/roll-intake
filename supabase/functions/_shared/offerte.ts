@@ -56,15 +56,18 @@ export function buildOfferPayload(row: {
   rooms?: { id: string; label: string; surfaces?: string[] }[] | null;
   room_measures?: Record<string, Measure> | null;
   advice_verf?: { rooms?: AdviceRoomLike[] } | null;
-}, opts: { phone?: string | null; name?: string | null; toolsInCart?: boolean; notes?: string } = {}): OfferPayload {
+}, opts: { phone?: string | null; name?: string | null; toolsInCart?: boolean; notes?: string; alleRuimtes?: boolean } = {}): OfferPayload {
   const full = (row.contact_name || opts.name || "").trim();
   const [voornaam, ...rest] = full.split(/\s+/);
   const verf = (row.advice_verf?.rooms ?? []).filter((a) => (a.color ?? "").trim());
   const surfaces: OfferSurface[] = [];
 
   for (const r of row.rooms ?? []) {
-    const m = row.room_measures?.[r.id];
-    if (!m) continue;
+    const gemeten = row.room_measures?.[r.id];
+    // Advies: elke ruimte uit de intake doet mee, ook zonder maten (die zijn voor samples niet nodig).
+    if (!gemeten && !opts.alleRuimtes) continue;
+    const m: Measure = gemeten ?? {};
+    const wil = new Set(r.surfaces ?? []);
     // Standaardkleuren uit het verf-advies (op ruimte-id, anders naam) als een vlak geen eigen kleur heeft.
     const mine = verf.filter((a) => (a.room_id ? a.room_id === r.id : norm(a.room) === norm(r.label)));
     const dMuur = mine.find((a) => !isWoodS(a.surface ?? "") && !isCeilS(a.surface ?? ""))?.color ?? "";
@@ -74,6 +77,12 @@ export function buildOfferPayload(row: {
 
     const walls = (m.walls ?? []).filter((w) => n(w.w) > 0);
     const plaf = (m.ceilings ?? []).filter((c) => n(c.l) > 0 && n(c.b) > 0);
+    if (!walls.length && !plaf.length && opts.alleRuimtes && (wil.has("muren") || wil.has("plafond") || !wil.size)) {
+      const leeg: Vlak[] = [];
+      if (wil.has("muren") || !wil.size) leeg.push({ soort: "muur", breedte: 0, hoogte: 2.6, kleurId: 0, kleurNaam: dMuur });
+      if (wil.has("plafond")) leeg.push({ soort: "plafond", delen: [{ breedte: 0, diepte: 0 }], kleurId: 0, kleurNaam: dPlaf });
+      surfaces.push({ naam: r.label, type: "muur", ondergrond: "bestaand", lagen, renovlies: false, voorbehandeling: false, vlakken: leeg });
+    }
     if (walls.length || plaf.length) {
       const vlakken: Vlak[] = walls.map((w) => ({ soort: "muur", breedte: n(w.w), hoogte: n(w.h) || 2.6, kleurId: 0, kleurNaam: (w.color ?? "").trim() || dMuur }));
       if (plaf.length) vlakken.push({ soort: "plafond", delen: plaf.map((c) => ({ breedte: n(c.b), diepte: n(c.l) })), kleurId: 0, kleurNaam: (m.ceiling_color ?? "").trim() || dPlaf });
@@ -97,6 +106,7 @@ export function buildOfferPayload(row: {
     for (const x of w.cabinets ?? []) if (n(x.w) > 0) objecten.push({ soort: "kast", b: n(x.w), h: n(x.h) });
     // De tool kent geen trap-object: een standaard trap gaat als vrij oppervlak van 6 m² (6 x 1) mee.
     for (let i = 0; i < Math.round(n(w.stairs)); i++) objecten.push({ soort: "vrij", b: TRAP_M2, h: 1 });
+    if (!objecten.length && opts.alleRuimtes && !gemeten && ["kozijnen", "deuren", "houtwerk"].some((k) => wil.has(k))) objecten.push({ soort: "vrij", b: 0, h: 0 });
     if (objecten.length) {
       surfaces.push({
         naam: `${r.label} houtwerk`,
