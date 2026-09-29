@@ -37,9 +37,8 @@ export function KlantDemo() {
       </div>
       {fase === "voor" && <Voorbereiden intake={intake} advice={advice} email="sanne@voorbeeld.nl" samplesBefore samplesAfter={false} onIntake={() => {}} onOrders={() => {}} />}
       {fase === "advies" && <AdviesFase advice={advice} setAdvice={(fn) => setAdviceState(fn)} intakeRooms={intake.rooms ?? []} roomId={room} setRoomId={setRoom} />}
-      {fase === "af" && <Afronden intake={{ ...intake, advice_verf: { answer: "", rooms: [{ room_id: "r1", room: "Woonkamer", surface: "Muren", color: "Shadow Nap", status: "definitief", product: "Muurverf", m2: "", liters: "", motivation: "" }], sample_instruction: "", next_step: "", internal: "", plan: { what: "", who: "", when: "" }, route: "roll", products: [] }, advice_sample: { answer: "", rooms: [], sample_instruction: "", next_step: "", internal: "", plan: { what: "", who: "", when: "" }, route: "samples", products: [] } }}
-        advice={advice} setMessage={(v) => setAdviceState((a) => ({ ...a, message: v }))} bookingId="demo" stylistId={null} stylistName="Selene" customerName="Sanne de Vries" customerEmail="sanne@voorbeeld.nl"
-        rooms={intake.rooms ?? []} task={null} sends={[]} onIntake={() => {}} onTask={() => {}} onSent={() => {}} onEditAdvice={() => setFase("advies")} />}
+      {fase === "af" && <Afronden intake={intake} message={advice.message} setMessage={(v) => setAdviceState((a) => ({ ...a, message: v }))} bookingId="demo" stylistId={null} stylistName="Selene" customerName="Sanne de Vries" customerEmail="sanne@voorbeeld.nl"
+        task={null} sends={[]} onIntake={() => {}} onTask={() => {}} onSent={() => {}} onEditOffer={() => setFase("advies")} />}
     </div>
   );
 }
