@@ -28,9 +28,13 @@ interface Props {
   persist: () => Promise<boolean>;
   createRollTask: (type: RollTask["type"], note: string) => Promise<boolean>;
   onIntake: (patch: Partial<IntakeRow>) => void;
+  // In de klantkaart: Roll-knoppen staan elders, en het advies (C05) gaat met dezelfde klik mee.
+  embedded?: boolean;
+  beforeSend?: () => Promise<boolean>;
+  sendLabel?: string;
 }
 
-export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, persist, createRollTask, onIntake }: Props) {
+export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, persist, createRollTask, onIntake, embedded, beforeSend, sendLabel }: Props) {
   const [offer, setOffer] = useState<Offer | null>(null);
   const [korting, setKorting] = useState<{ label: string; pct: number } | null>(null);
   const [off, setOff] = useState(false); // koppeling met de offerte-tool staat (nog) uit
@@ -55,6 +59,7 @@ export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, per
 
   const verstuur = async () => {
     setBusy("versturen"); setMsg(null);
+    if (beforeSend && !(await beforeSend())) { setBusy(null); setMsg("Het advies versturen lukte niet. Er is nog niets naar de klant gegaan; probeer het opnieuw."); return; }
     const { data } = await supabase.functions.invoke("booking", { body: { action: "voorstel_versturen", intake_id: intake.id, booking_id: bookingId } });
     setBusy(null);
     const d = data as { ok?: boolean; offer?: Offer; klant_url?: string | null; skipped?: string; kleuren_onbekend?: string[]; error?: string } | null;
@@ -65,7 +70,7 @@ export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, per
       return;
     }
     if (d?.skipped === "kleuren onbekend") { setMsg(`Deze kleuren herkent de offerte-tool niet: ${(d.kleuren_onbekend ?? []).join(", ")}. Laat Roll het voorstel afmaken.`); return; }
-    setMsg(`Versturen lukte niet${d?.error ? ` (${d.error})` : ""}. Probeer het opnieuw of laat Roll het oppakken.`);
+    setMsg(`${beforeSend ? "Het advies is verstuurd, het bestelvoorstel nog niet. " : ""}Versturen lukte niet${d?.error ? ` (${d.error})` : ""}. Probeer het opnieuw of laat Roll het oppakken.`);
   };
 
   const naarRoll = async (type: RollTask["type"], note: string, done: string) => {
@@ -101,7 +106,7 @@ export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, per
       {!offer && !off && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <button className="rd-btn rd-btn-primary" onClick={controleer} disabled={!!busy} style={{ width: "auto", padding: "0 22px" }}>{busy === "controle" ? "Voorstel samenstellen..." : "Controleer voorstel"}</button>
-          <button className="rd-textlink" onClick={() => naarRoll("contact", "Styliste vraagt Roll het project door te spreken en het voorstel te maken.", "Roll neemt contact op met de klant en maakt het voorstel.")} disabled={!!busy}>Te ingewikkeld? Roll neemt contact op</button>
+          {!embedded && <button className="rd-textlink" onClick={() => naarRoll("contact", "Styliste vraagt Roll het project door te spreken en het voorstel te maken.", "Roll neemt contact op met de klant en maakt het voorstel.")} disabled={!!busy}>Te ingewikkeld? Roll neemt contact op</button>}
         </div>
       )}
 
@@ -170,10 +175,11 @@ export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, per
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button className="rd-btn rd-btn-primary" onClick={verstuur} disabled={!!busy || blocked} style={{ width: "auto", padding: "0 22px", ...(blocked ? { opacity: 0.5 } : {}) }}>{busy === "versturen" ? "Versturen..." : "Verstuur voorstel"}</button>
+            <button className="rd-btn rd-btn-primary" onClick={verstuur} disabled={!!busy || blocked} style={{ width: "auto", padding: "0 22px", ...(blocked ? { opacity: 0.5 } : {}) }}>{busy === "versturen" ? "Versturen..." : sendLabel ?? "Verstuur voorstel"}</button>
             <button className="rd-textlink" onClick={() => setOffer(null)} disabled={!!busy}>Maten of kleuren aanpassen</button>
           </div>
 
+          {!embedded && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--rd-line)", paddingTop: 10 }}>
             {groot && (
               <button className="rd-btn rd-btn-outline" onClick={() => naarRoll("maatwerk", `Voorstel boven ${eur(GRENS)} (${eur(offer.totaal)}): Roll maakt een maatwerkofferte met extra korting.`, "Roll maakt een maatwerkofferte met extra korting en neemt contact op met de klant.")} disabled={!!busy} style={{ width: "auto", padding: "0 18px", alignSelf: "flex-start" }}>
@@ -186,6 +192,7 @@ export function VoorstelPanel({ intake, bookingId, task, toolsInCart, notes, per
             </div>
             {blocked && <button className="rd-textlink" style={{ alignSelf: "flex-start" }} onClick={() => naarRoll("offerte", `Onbekende kleur(en): ${offer.kleurenOnbekend.join(", ")}.`, "Roll maakt het voorstel af en stuurt het naar de klant.")} disabled={!!busy}>Laat Roll het voorstel afmaken</button>}
           </div>
+          )}
         </div>
       )}
 

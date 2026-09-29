@@ -57,7 +57,6 @@ export function AdviesFase({ advice, setAdvice, intakeRooms, roomId, setRoomId }
   };
 
   if (!room) return <p className="rd-sub">Deze intake heeft nog geen ruimtes.</p>;
-  const has = (t: SurfaceType) => room.surfaces.some((s) => s.type === t);
   const pickerSurface = picker ? room.surfaces.find((s) => s.id === picker.surfaceId) : null;
 
   return (
@@ -89,8 +88,10 @@ export function AdviesFase({ advice, setAdvice, intakeRooms, roomId, setRoomId }
           <div key={s.id} className="kk-surface">
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <strong style={{ fontSize: 15 }}>{TYPE_LABEL[s.type]}</strong>
-              {s.type === "accent" && (
-                <input className="rd-input" value={s.name} onChange={(e) => updSurface(s.id, { name: e.target.value })} placeholder="Welke wand? Bijv. Achter de bank" aria-label="Naam accentwand" style={{ height: 38, flex: "1 1 200px" }} />
+              {(s.type === "accent" || room.surfaces.filter((x) => x.type === s.type).length > 1) && (
+                <input className="rd-input" value={s.name === TYPE_LABEL[s.type] ? "" : s.name} onChange={(e) => updSurface(s.id, { name: e.target.value || TYPE_LABEL[s.type] })}
+                  placeholder={s.type === "accent" ? "Welke wand? Bijv. Achter de bank" : s.type === "houtwerk" ? "Welk deel? Bijv. Kozijnen, deuren, radiator" : s.type === "muren" ? "Welke muren? Bijv. Muren zithoek" : "Welk deel?"}
+                  aria-label={`Naam ${TYPE_LABEL[s.type].toLowerCase()}`} style={{ height: 38, flex: "1 1 220px" }} />
               )}
               <button className="rd-textlink" onClick={() => removeSurface(s)} style={{ marginLeft: "auto", fontSize: 13, opacity: 0.7 }}>Verwijderen</button>
             </div>
@@ -130,10 +131,11 @@ export function AdviesFase({ advice, setAdvice, intakeRooms, roomId, setRoomId }
         ))}
 
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          {!has("muren") && <button className="rd-textlink" onClick={() => addSurface("muren")}>+ Muren toevoegen</button>}
-          {!has("plafond") && <button className="rd-textlink" onClick={() => addSurface("plafond")}>+ Plafond toevoegen</button>}
-          <button className="rd-textlink" onClick={() => addSurface("accent")}>+ Accentwand toevoegen</button>
-          {!has("houtwerk") && <button className="rd-textlink" onClick={() => addSurface("houtwerk")}>+ Houtwerk toevoegen</button>}
+          <span className="kk-label" style={{ alignSelf: "center" }}>Toevoegen:</span>
+          <button className="rd-textlink" onClick={() => addSurface("muren")}>+ Muren</button>
+          <button className="rd-textlink" onClick={() => addSurface("accent")}>+ Accentwand</button>
+          <button className="rd-textlink" onClick={() => addSurface("plafond")}>+ Plafond</button>
+          <button className="rd-textlink" onClick={() => addSurface("houtwerk")}>+ Hout &amp; metaal</button>
         </div>
         {undo && (
           <div role="status" style={{ display: "flex", gap: 12, alignItems: "center", fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-grey-light)" }}>
