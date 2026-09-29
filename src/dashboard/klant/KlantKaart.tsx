@@ -36,7 +36,7 @@ const day = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, we
 const safeUrl = (v?: string | null) => (v && /^https?:\/\//i.test(v.trim()) ? v.trim() : null);
 const ROUTE_LABEL: Record<string, string> = { samples: "Sampleadvies", zelf: "Verfadvies (zelf bestellen)", roll: "Verfadvies met bestelvoorstel", offerte: "Bestelvoorstel" };
 const STAGES = [["ingepland", "Ingepland"], ["advies", "Advies gegeven"], ["opvolging", "In opvolging"], ["verf", "Verf gekocht"], ["afgehaakt", "Afgehaakt"]] as const;
-const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies en offerte" }, { key: "afronden", label: "Afronden" }];
+const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies" }, { key: "afronden", label: "Afronden" }];
 
 function afspraakLabel(b: Booking): string {
   if (b.status === "manual" || b.status === "paid_unplaced") return "Afspraak nog niet gepland";
@@ -207,9 +207,12 @@ export function KlantKaart() {
     if (!b.gesprek_gevoerd_at && new Date(b.start_at).getTime() > Date.now() && b.status !== "manual") return { t: "Bereid het gesprek voor", f: "voorbereiden" as Fase };
     if (intake.offer_status === "besteld") return { t: "Besteld. Het traject is rond", f: "afronden" as Fase };
     if (intake.offer_status === "verstuurd") return { t: "Advies en offerte verstuurd · wacht op de bestelling", f: "afronden" as Fase };
-    if (!intake.offer_meta?.id && !sent.has("samples")) return { t: "Maak de offerte vanuit de intake en vul de kleuren aan", f: "advies" as Fase };
-    if (intake.offer_meta?.id) return { t: "Verstuur advies en offerte", f: "afronden" as Fase };
-    if (sent.has("samples")) return { t: "Vraag hoe de samples bevallen", f: "afronden" as Fase };
+    const vl = ((intake.offer_meta as { offer?: { vlakken?: { status?: string }[] } } | null)?.offer?.vlakken ?? []);
+    const testen = vl.some((v) => v.status === "testen");
+    if (!intake.offer_meta?.id) return { t: "Leg het advies vast: per oppervlak bevestigd of eerst testen", f: "advies" as Fase };
+    if (testen && !sent.has("samples")) return { t: "Verstuur het sampleadvies", f: "afronden" as Fase };
+    if (testen) return { t: "Check-in: kies per oppervlak de winnende kleur", f: "afronden" as Fase };
+    if (!sent.has("roll") && !sent.has("zelf")) return { t: "Verstuur advies en offerte", f: "afronden" as Fase };
     return { t: "Rond het advies af", f: "afronden" as Fase };
   }, [b, intake, sends, task]);
 
@@ -313,7 +316,7 @@ export function KlantKaart() {
             onIntake={(i) => setIntake(i)} onOrders={setOrders} />
         )}
         {fase === "advies" && (intake && advice ? (
-          <OfferteEditor intake={intake} bookingId={b.id} onIntake={(p) => setIntake((cur) => (cur ? { ...cur, ...p } : cur))} />
+          <OfferteEditor intake={intake} bookingId={b.id} modus="advies" onIntake={(p) => setIntake((cur) => (cur ? { ...cur, ...p } : cur))} />
         ) : <p className="rd-sub">Zonder intake kun je het advies nog niet vastleggen.</p>)}
         {fase === "afronden" && (intake && advice ? (
           <Afronden intake={intake} message={advice.message} setMessage={(v) => setAdvice((a) => ({ ...a, message: v }))} bookingId={b.id} stylistId={b.stylist_id} stylistName={b.stylists?.name ?? ""}
