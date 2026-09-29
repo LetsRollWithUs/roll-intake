@@ -66,6 +66,11 @@ export function OfferteEditor({ intake, bookingId, onIntake, modus = "advies" }:
       if (type === "roll-offerte:opgeslagen") {
         setInfo((i) => ({ ...i, ...(p as EditorInfo) }));
         if (typeof p.totaal === "number") onIntake({ offer_total: p.totaal as number });
+        // Vlakken en status meteen in de klantkaart, zodat "Volgende stap" direct klopt.
+        if (Array.isArray(p.vlakken) && intake.offer_meta) {
+          const meta = intake.offer_meta as typeof intake.offer_meta & { offer?: Record<string, unknown> };
+          onIntake({ offer_meta: { ...meta, offer: { ...(meta.offer ?? {}), vlakken: p.vlakken, klaarVoorOfferte: p.klaarVoorOfferte } } as typeof intake.offer_meta });
+        }
       }
       if (type === "roll-offerte:fout") setErr(String(p.melding ?? "Er ging iets mis in de editor."));
     };
@@ -90,11 +95,12 @@ export function OfferteEditor({ intake, bookingId, onIntake, modus = "advies" }:
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
-        <strong>{modus === "advies" ? "Kleuren en maten per ruimte" : `Offerte ${info.nummer ?? intake.offer_meta?.nummer ?? ""}${info.versie && info.versie > 1 ? ` · versie ${info.versie}` : ""}`}</strong>
+        <strong>{modus === "advies" ? "Wat is het advies per oppervlak?" : `Offerte ${info.nummer ?? intake.offer_meta?.nummer ?? ""}${info.versie && info.versie > 1 ? ` · versie ${info.versie}` : ""}`}</strong>
         {modus === "offerte" && info.totaal != null && <span>Totaal {eur(info.totaal)}</span>}
         {info.bijgewerkt && <span style={{ opacity: 0.7 }}>Opgeslagen {new Date(info.bijgewerkt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}</span>}
         <button className="kk-link" onClick={openEditor} style={{ marginLeft: "auto" }}>Editor opnieuw laden</button>
       </div>
+      {modus === "advies" && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.8 }}>Twijfelt de klant nog? Zet het oppervlak op <strong>Eerst testen</strong>, dan krijgt de klant samples. Is de klant zeker? Kies <strong>Bevestigd</strong>, dan maak je bij Afronden de offerte. Alles slaat automatisch op.</p>}
       {onbekend.length > 0 && <div style={{ fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}><strong>Kies deze kleuren in de editor:</strong> {onbekend.join(", ")}</div>}
       {(info.waarschuwingen?.length ?? 0) > 0 && <div style={{ fontSize: 14, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--rd-line)" }}><strong>Let op:</strong> {info.waarschuwingen!.join(" · ")}</div>}
       {err && <span role="status" style={{ fontSize: 14, color: "var(--rd-pink-dark)", fontWeight: 600 }}>{err}</span>}
