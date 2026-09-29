@@ -6,6 +6,8 @@ import { ConceptPanel } from "../ConceptPanel";
 import { CustomerPurchases, type OrdersResp } from "../CustomerPurchases";
 import type { AdviceV2, SurfaceType } from "./advice";
 import { INSPIRATIONS } from "@/data/inspiration";
+import { summarizeMeasure, calcRoom } from "@/lib/verfcalc";
+import { maatSignalen } from "../advicePrompt";
 
 const lbl = (list: { key: string; label: string }[], key?: string | null) => list.find((x) => x.key === key)?.label ?? key ?? "";
 const safeUrl = (v?: string | null) => (v && /^https?:\/\//i.test(v.trim()) ? v.trim() : null);
@@ -54,6 +56,7 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
         <div>
           <span className="kk-label">Hulpvraag</span>
           <p style={{ fontSize: 18, lineHeight: 1.4, fontWeight: 700, margin: "4px 0 0" }}>{intake.main_question || "Geen hulpvraag ingevuld"}</p>
+          {(intake.payload as { questionScope?: string } | null)?.questionScope && <div style={{ fontSize: 14, marginTop: 6, opacity: 0.8 }}>Gaat over: {(intake.payload as { questionScope?: string }).questionScope === "een" ? "één ruimte" : "meerdere ruimtes of het hele huis"}</div>}
           {(intake.help_needs?.length ?? 0) > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{intake.help_needs!.map((h) => <span key={h} className="rd-chip">{h}</span>)}</div>}
         </div>
 
@@ -67,6 +70,13 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
                 {r.skylight ? " · dakraam" : ""}{r.usage ? ` · ${lbl(USAGE_TIMES, r.usage).toLowerCase()}` : ""}
                 {r.otherChanges ? ` · verandert: ${r.otherChangesNote || "ja"}` : ""}
               </div>
+              {intake.room_measures?.[r.id] && summarizeMeasure(intake.room_measures[r.id]).length > 0 && (
+                <div style={{ fontSize: 14, margin: "0 0 8px" }}>
+                  <span className="kk-label">Maten volgens de klant: </span>
+                  {summarizeMeasure(intake.room_measures[r.id]).join("; ")}
+                  <span style={{ opacity: 0.7 }}> ({String(Math.round(calcRoom(intake.room_measures[r.id]).wall_m2 * 10) / 10).replace(".", ",")} m² muur)</span>
+                </div>
+              )}
               <Photos photos={r.photos} size={120} />
               <AddPhotos intake={intake} room={r} onDone={onIntake} />
             </div>
@@ -115,7 +125,18 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
         ) : <span style={{ opacity: 0.6 }}>Geen</span>}</Row>
         <Row k="Samples">
           <div>{samplesBefore ? "De klant had al samples vóór het gesprek." : "Nog geen samples vóór het gesprek."}{samplesAfter ? " Na het gesprek zijn samples besteld." : ""}</div>
-          {(intake.samples?.length ?? 0) > 0 && <div style={{ fontSize: 14, marginTop: 4 }}>{intake.samples!.map((s) => `${[s.brand, s.name].filter(Boolean).join(" ")}${s.verdict ? ` (${s.verdict})` : ""}`).join(" · ")}</div>}
+          {(intake.samples?.length ?? 0) > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+              {intake.samples!.map((smp) => (
+                <div key={smp.id} style={{ fontSize: 14 }}>
+                  <strong>{[smp.brand, smp.name].filter(Boolean).join(" ")}</strong>{smp.verdict ? ` · ${smp.verdict}` : ""}
+                  {smp.roomId && (intake.rooms ?? []).find((x) => x.id === smp.roomId) ? <span style={{ opacity: 0.7 }}> · in {(intake.rooms ?? []).find((x) => x.id === smp.roomId)!.label.toLowerCase()}</span> : null}
+                  {smp.note && <div style={{ opacity: 0.85 }}>"{smp.note}"</div>}
+                  {smp.photo && <div style={{ marginTop: 4 }}><Photos photos={[smp.photo] as never} size={90} /></div>}
+                </div>
+              ))}
+            </div>
+          )}
         </Row>
         <Row k="Planning">{lbl(PLANNING, intake.planning) || <span style={{ opacity: 0.6 }}>Onbekend</span>}{intake.painter ? ` · ${lbl(PAINTERS, intake.painter)}` : ""}</Row>
         <CustomerPurchases email={email} title="Eerdere samples en aankopen" onData={onOrders} />
@@ -126,9 +147,14 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
         {open.length === 0 ? <p style={{ margin: 0, fontSize: 14 }}>Alles is bekend. Je kunt direct beginnen met het advies.</p> : (
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 1.6 }}>{open.map((o) => <li key={o}>{o}</li>)}</ul>
         )}
+        {maatSignalen(intake).length > 0 && (
+          <div style={{ fontSize: 13.5, lineHeight: 1.5, marginTop: 4 }}>
+            <span className="kk-label">Maten om te controleren</span>
+            <ul style={{ margin: "2px 0 0", paddingLeft: 18 }}>{maatSignalen(intake).map((x) => <li key={x}>{x}</li>)}</ul>
+          </div>
+        )}
         <details style={{ marginTop: 8 }}>
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>Voorstel voorbereiden</summary>
-          <p style={{ fontSize: 13, opacity: 0.75, margin: "6px 0" }}>Een eerste kleurvoorstel op basis van de intake. Het blijft een voorstel tot jij het in het advies overneemt.</p>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, minHeight: 32 }}>Beslisblad voorbereiden met AI</summary>
           <ConceptPanel intake={intake} />
         </details>
       </aside>
