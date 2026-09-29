@@ -8,6 +8,7 @@ import { buildTaskPayload, RollTaskStatus, type RollTask } from "../RollHelpForm
 import type { Offer, OfferVlak } from "../VoorstelPanel";
 import { OfferteEditor } from "./OfferteEditor";
 import { rollColors } from "@/data/roll-colors";
+import { SAMPLE_PACKS } from "@/data/sample-packs";
 
 const ROLL_BY_NAME = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
 
@@ -115,7 +116,11 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
   const sampleRooms: AdviceRoom[] = testVlakken.flatMap((v) => v.testKleuren.map((t) => ({ room: v.ruimte ?? "", surface: v.type ?? v.soort ?? "", color: t.naam, status: "voorgesteld" as const, product: "Muurverf", m2: "", liters: "", motivation: "" })));
   const candidates = [...new Map(testVlakken.flatMap((v) => v.testKleuren).map((t) => { const c = ROLL_BY_NAME.get(t.naam.trim().toLowerCase()); return [t.naam, { id: c?.id ?? t.naam.toLowerCase().replace(/\s+/g, "-"), name: t.naam, hex: c?.hex ?? t.hex ?? "" }] as const; })).values()];
   const savedProducts = intake.advice_sample?.products ?? [];
-  const products: AdviceProduct[] = [...candidates.map((c) => ({ kind: (savedProducts.find((p) => p.ref === c.id)?.kind ?? "sticker") as AdviceProduct["kind"], ref: c.id, name: c.name })), ...savedProducts.filter((p) => p.kind === "pack")];
+  // Losse kleur die in een gekozen bundel zit en bewust is weggehaald, blijft weg.
+  const savedPacks = savedProducts.filter((p) => p.kind === "pack");
+  const packColors = new Set(SAMPLE_PACKS.filter((pk) => savedPacks.some((p) => p.ref === pk.id)).flatMap((pk) => pk.colorIds));
+  const weggehaald = (id: string) => savedProducts.length > 0 && packColors.has(id) && !savedProducts.some((p) => p.ref === id && p.kind !== "pack");
+  const products: AdviceProduct[] = [...candidates.filter((c) => !weggehaald(c.id)).map((c) => ({ kind: (savedProducts.find((p) => p.ref === c.id)?.kind ?? "sticker") as AdviceProduct["kind"], ref: c.id, name: c.name })), ...savedPacks];
   const last = (routes: string[]) => sends.find((s) => routes.includes(s.route))?.sent_at ?? null;
   const verzonden = [
     ...(last(["roll", "zelf"]) ? [`Advies ${fmt(last(["roll", "zelf"])!)}`] : []),
