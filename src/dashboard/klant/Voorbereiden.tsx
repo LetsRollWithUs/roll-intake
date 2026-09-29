@@ -5,6 +5,7 @@ import { AddPhotos } from "../AddPhotos";
 import { ConceptPanel } from "../ConceptPanel";
 import { CustomerPurchases, type OrdersResp } from "../CustomerPurchases";
 import type { AdviceV2, SurfaceType } from "./advice";
+import { INSPIRATIONS } from "@/data/inspiration";
 
 const lbl = (list: { key: string; label: string }[], key?: string | null) => list.find((x) => x.key === key)?.label ?? key ?? "";
 const safeUrl = (v?: string | null) => (v && /^https?:\/\//i.test(v.trim()) ? v.trim() : null);
@@ -72,12 +73,42 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
           ))}
         </div>
 
-        <Row k="Gewenste sfeer">{(intake.moods ?? []).filter((m) => MOODS.includes(m)).join(", ") || <span style={{ opacity: 0.6 }}>Niet ingevuld</span>}
-          {intake.inspiration_note && <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>{intake.inspiration_note}</div>}
-          <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-            {safeUrl(intake.pinterest_url) && <a href={safeUrl(intake.pinterest_url)!} target="_blank" rel="noreferrer" className="rd-textlink">Pinterest</a>}
+        <Row k="Gewenste sfeer">
+          {(intake.moods ?? []).filter((m) => MOODS.includes(m)).join(", ") || <span style={{ opacity: 0.6 }}>Niet ingevuld</span>}
+          {intake.boldness ? <div style={{ fontSize: 14, marginTop: 4 }}>Durf: <strong>{intake.boldness}/5</strong> <span style={{ opacity: 0.7 }}>({intake.boldness >= 4 ? "mag uitgesproken" : intake.boldness <= 2 ? "rustig en ingetogen" : "gemiddeld"})</span></div> : null}
+          {(intake.rooms?.length ?? 0) > 1 && (intake.payload as { sfeerSameAll?: boolean | null } | null)?.sfeerSameAll != null && (
+            <div style={{ fontSize: 14, marginTop: 2 }}>{(intake.payload as { sfeerSameAll?: boolean }).sfeerSameAll ? "Zelfde sfeer in alle ruimtes" : `Niet overal dezelfde sfeer${(intake.payload as { sfeerExceptionNote?: string }).sfeerExceptionNote ? `: ${(intake.payload as { sfeerExceptionNote?: string }).sfeerExceptionNote}` : ""}`}</div>
+          )}
+        </Row>
+        <Row k="Inspiratie">
+          {intake.inspiration_note && <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.5 }}>"{intake.inspiration_note.trim()}"</p>}
+          {(intake.inspiration_likes?.length ?? 0) > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <span className="kk-label">Gekozen sfeerbeelden</span>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+                {intake.inspiration_likes!.map((id) => {
+                  const ins = INSPIRATIONS.find((x) => x.id === id);
+                  return ins ? (
+                    <figure key={id} style={{ margin: 0, width: 120 }}>
+                      <img src={ins.src} alt="" style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 10, display: "block" }} />
+                      <figcaption style={{ fontSize: 12.5, marginTop: 4 }}>{ins.label}</figcaption>
+                    </figure>
+                  ) : <span key={id} className="rd-chip">{id}</span>;
+                })}
+              </div>
+            </div>
+          )}
+          {(intake.inspiration_images?.length ?? 0) > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <span className="kk-label">Eigen inspiratiefoto's</span>
+              <div style={{ marginTop: 6 }}><Photos photos={intake.inspiration_images as never} size={120} /></div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 12 }}>
+            {safeUrl(intake.pinterest_url) && <a href={safeUrl(intake.pinterest_url)!} target="_blank" rel="noreferrer" className="rd-textlink">Pinterest-bord</a>}
             {safeUrl(intake.other_inspiration_url) && <a href={safeUrl(intake.other_inspiration_url)!} target="_blank" rel="noreferrer" className="rd-textlink">Inspiratielink</a>}
           </div>
+          {!intake.inspiration_note && !(intake.inspiration_likes?.length) && !(intake.inspiration_images?.length) && !safeUrl(intake.pinterest_url) && !safeUrl(intake.other_inspiration_url) && <span style={{ opacity: 0.6 }}>Geen inspiratie gedeeld</span>}
         </Row>
         <Row k="Overwogen kleuren">{(intake.colors?.length ?? 0) > 0 ? (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{intake.colors!.map((c, i) => <span key={i} className="rd-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span aria-hidden style={{ width: 12, height: 12, borderRadius: 99, background: c.hex, border: "1px solid rgba(0,0,0,.1)" }} />{c.name}</span>)}</div>

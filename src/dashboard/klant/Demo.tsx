@@ -10,12 +10,13 @@ const intake = {
   id: "00000000-0000-0000-0000-000000000000", created_at: new Date().toISOString(), status: "verzonden",
   contact_name: "Sanne de Vries", contact_email: "sanne@voorbeeld.nl",
   main_question: "Welke warme kleur past in de woonkamer bij onze eikenhouten vloer, zonder dat het donker wordt?",
-  help_needs: ["Kleur kiezen", "Combinaties"], moods: [], colors: [{ id: "spiced-latte", name: "Spiced Latte", hex: "#AC7C59" }],
+  help_needs: ["Kleur kiezen", "Combinaties"], colors: [{ id: "spiced-latte", name: "Spiced Latte", hex: "#AC7C59" }],
   rooms: [
     { id: "r1", typeKey: "woonkamer", label: "Woonkamer", surfaces: ["muren", "plafond"], sun: ["middag"], photos: [] },
     { id: "r2", typeKey: "keuken", label: "Keuken", surfaces: ["muren"], sun: [], noWindows: false, photos: [] },
   ],
   samples: [{ id: "s1", brand: "Roll", name: "Home Safari", verdict: "favoriet" }], has_samples: "roll",
+  moods: ["Natuurlijk & aards", "Rustig & sereen"], boldness: 5, inspiration_likes: ["licht-1", "warm-2"], inspiration_note: "Sereen wit met hout, en aardse tinten.", inspiration_images: [], payload: { sfeerSameAll: true },
   planning: "binnen_maand", painter: "zelf", room_measures: { r1: { walls: [{ w: 4, h: 2.6 }], ceilings: [] } },
   advice_sample: null, advice_verf: null,
 } as unknown as IntakeRow;
