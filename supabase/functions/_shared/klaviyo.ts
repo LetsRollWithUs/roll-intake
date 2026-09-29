@@ -153,6 +153,15 @@ export function appointmentProfileProps(
   return out;
 }
 
+// Klanten vullen hun volledige naam in; de mails groeten met de voornaam ("Hoi Ingmar").
+// Eerste woord = voornaam (met hoofdletter), de rest = achternaam.
+export function splitName(full: string): { first_name: string; last_name?: string } {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { first_name: full };
+  const first = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  return parts.length > 1 ? { first_name: first, last_name: parts.slice(1).join(" ") } : { first_name: first };
+}
+
 // Directe HTTP-verzending naar Klaviyo (één poging, geen retry). Gebruik klaviyoTrack voor het outbox-pad.
 // profileProps worden als custom profieleigenschappen meegeschreven
 // (o.a. next_appointment_at + intake_ingevuld voor de date-triggered reminderflow).
@@ -167,7 +176,7 @@ export async function sendToKlaviyo(
   if (!profile.email) return { ok: false, status: 0, detail: "geen e-mailadres" };
 
   const profileAttrs: Record<string, unknown> = { email: profile.email };
-  if (profile.first_name) profileAttrs.first_name = profile.first_name;
+  if (profile.first_name) Object.assign(profileAttrs, splitName(profile.first_name));
   if (profile.phone_number) profileAttrs.phone_number = profile.phone_number;
   if (Object.keys(profileProps).length) profileAttrs.properties = profileProps;
 
