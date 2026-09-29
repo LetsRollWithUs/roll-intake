@@ -10,8 +10,8 @@ const KM = "https://roll.nl/wp-json/ark-kleurmatch/v1";
 interface KmColor { id: string; brand: string; line: string | null; name: string; hex: string; family?: string; rollName?: string; rollCode?: string }
 interface KmBrand { brand: string; count: number; lines: { line: string; count: number }[] }
 
-export function ColorPicker({ open, initial, onPick, onClose, title = "Kies een kleur" }: {
-  open: boolean; initial?: PickedColor | null; onPick: (c: PickedColor) => void; onClose: () => void; title?: string;
+export function ColorPicker({ open, initial, onPick, onClose, title = "Kies een kleur", rollOnly = false }: {
+  open: boolean; initial?: PickedColor | null; onPick: (c: PickedColor) => void; onClose: () => void; title?: string; rollOnly?: boolean;
 }) {
   const [tab, setTab] = useState<"roll" | "ark">(initial?.source === "ark" ? "ark" : "roll");
   const [q, setQ] = useState("");
@@ -95,7 +95,7 @@ export function ColorPicker({ open, initial, onPick, onClose, title = "Kies een 
           </div>
           <div role="tablist" style={{ display: "flex", gap: 6 }}>
             <button role="tab" aria-selected={tab === "roll"} className={`rd-plan-chip${tab === "roll" ? " is-on" : ""}`} onClick={() => setTab("roll")}>Roll kleuren ({rollColors.length})</button>
-            <button role="tab" aria-selected={tab === "ark"} className={`rd-plan-chip${tab === "ark" ? " is-on" : ""}`} onClick={() => setTab("ark")}>Andere kleuren {kmTotal ? `(${kmTotal.toLocaleString("nl-NL")})` : "24.000+"}</button>
+            {!rollOnly && <button role="tab" aria-selected={tab === "ark"} className={`rd-plan-chip${tab === "ark" ? " is-on" : ""}`} onClick={() => setTab("ark")}>Andere kleuren {kmTotal ? `(${kmTotal.toLocaleString("nl-NL")})` : "24.000+"}</button>}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input ref={inputRef} className="rd-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === "roll" ? "Zoek op naam" : "Zoek op naam, kleurcode of HEX"} aria-label="Zoeken" style={{ height: 42, flex: "1 1 220px" }} />

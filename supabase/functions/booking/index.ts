@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
       if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
       const { data: it } = await admin
         .from("intake")
-        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,advice_products,advice_sample,advice_verf,booking_id")
+        .select("contact_email,contact_name,advisor_outcome,advisor_advice,advisor_offer_url,advisor_summary,advice_products,advice_sample,advice_verf,booking_id,offer_meta")
         .eq("id", body.intake_id)
         .maybeSingle();
       if (!it || !(it as any).contact_email) return j({ ok: false, skipped: "geen intake/e-mail" });
@@ -197,7 +197,21 @@ Deno.serve(async (req) => {
       // Terugval op de oude, gespiegelde velden voor rijen van vóór de splitsing.
       const phase = body.phase === "sample" || body.phase === "verf" ? body.phase : null;
       const bundle = phase === "sample" ? row.advice_sample : phase === "verf" ? row.advice_verf : null;
-      const advice = bundle && Array.isArray(bundle.rooms)
+      // Verfadvies met een offerte in de editor: de kleuren komen uit de actuele offerte (enige bron), met HEX.
+      let offerRows: any[] | null = null;
+      if (phase === "verf" && row.offer_meta?.id && OFFERTE_API_KEY && OFFERTE_V2) {
+        try {
+          const rr = await fetch(`${OFFERTE_API_URL}/${row.offer_meta.id}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
+          if (rr.ok) {
+            const o = normalizeOffer(await rr.json());
+            const seen = new Set<string>();
+            offerRows = o.regels.filter((l) => l.kleurNaam && ["verf", undefined, null].includes(l.soort as any))
+              .filter((l) => { const k = `${l.ruimte}|${l.oppervlak}|${l.kleurNaam}`; if (seen.has(k)) return false; seen.add(k); return true; })
+              .map((l) => ({ room: [l.ruimte, l.oppervlak].filter(Boolean).join(" · "), color: l.kleurNaam ?? "", hex: l.kleurHex ?? null, url: l.url ?? null, product: l.product ?? "", liters: "", m2: "" }));
+          }
+        } catch { /* terugval op het vastgelegde advies */ }
+      }
+      const advice = offerRows?.length ? offerRows : bundle && Array.isArray(bundle.rooms)
         ? bundle.rooms.map((r: any) => ({ room: [r.room, r.surface].filter((x: string) => (x ?? "").trim()).join(" · "), color: r.color ?? "", product: r.product ?? "", liters: r.liters ?? "", m2: r.m2 ?? "" }))
         : (Array.isArray(row.advisor_advice) ? row.advisor_advice : []);
       const stickerPairs: [number, number][] = [];
@@ -212,7 +226,7 @@ Deno.serve(async (req) => {
           const po = SAMPLE_POUCH_IDS[colorId];
           if (po && !seenPo.has(po)) { seenPo.add(po); pouchPairs.push([po, 1]); }
         }
-        return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, product: a.product ?? "", liters: a.liters ?? "", m2: a.m2 ?? "" };
+        return { room: a.room ?? "", color: a.color ?? "", color_id: colorId, hex: a.hex ?? null, url: a.url ?? null, product: a.product ?? "", liters: a.liters ?? "", m2: a.m2 ?? "" };
       });
       const outcome = row.advisor_outcome ?? null;
       // Vervolgrichting: uit de fase-bundel, anders expliciet meegegeven, anders afgeleid.
@@ -255,12 +269,13 @@ Deno.serve(async (req) => {
       // Verf-route: per geadviseerde kleur een prijsopgave-link met de kleur voorgevuld.
       // De styliste kiest alleen de kleuren; liters/varianten/tools doet Roll of de klant via /prijsopgave.
       const seenColor = new Set<string>();
-      const verf_colors = (enriched as any[]).filter((a) => a.color_id && !seenColor.has(a.color_id) && seenColor.add(a.color_id)).map((a) => ({
-        name: a.color, id: a.color_id, hex: HEX_BY_ID.get(a.color_id) ?? null,
-        pdp_url: `${SHOP_BASE}/product/${encodeURIComponent(a.color_id)}/`,
-        quote_url: `${SHOP_BASE}/prijsopgave/?kleur=${encodeURIComponent(a.color_id)}`,
+      // Roll-kleuren linken naar hun kleurpagina; nagemengde kleuren (Roll-naam uit de editor) naar de offerte of prijsopgave.
+      const verf_colors = (enriched as any[]).filter((a) => { const k = a.color_id || a.color; if (!k || seenColor.has(k)) return false; seenColor.add(k); return !!(a.color_id || a.hex); }).map((a) => ({
+        name: a.color, id: a.color_id ?? null, hex: a.color_id ? HEX_BY_ID.get(a.color_id) ?? a.hex ?? null : a.hex,
+        pdp_url: a.color_id ? `${SHOP_BASE}/product/${encodeURIComponent(a.color_id)}/` : (a.url || row.advisor_offer_url || `${SHOP_BASE}/prijsopgave/`),
+        quote_url: a.color_id ? `${SHOP_BASE}/prijsopgave/?kleur=${encodeURIComponent(a.color_id)}` : (row.advisor_offer_url || `${SHOP_BASE}/prijsopgave/`),
       }));
-      const quote_url = `${SHOP_BASE}/prijsopgave/${verf_colors[0] ? `?kleur=${encodeURIComponent(verf_colors[0].id)}` : ""}`;
+      const quote_url = `${SHOP_BASE}/prijsopgave/${verf_colors[0]?.id ? `?kleur=${encodeURIComponent(verf_colors[0].id)}` : ""}`;
       const props = {
         stap,
         phase,
@@ -398,6 +413,42 @@ Deno.serve(async (req) => {
       if (bid) { const { error } = await admin.from("bookings").delete().eq("id", bid); if (error) return j({ error: error.message }, 500); }
       if (iid) { const { error } = await admin.from("intake").delete().eq("id", iid); if (error) return j({ error: error.message }, 500); }
       return j({ ok: true, photos_removed: removed });
+    }
+
+    // Editor van roll.nl/offerte in de klantkaart: ondertekende bewerklink (styliste of Roll).
+    if (action === "offerte_editlink" || action === "offerte_koppel" || action === "offerte_get") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: seen } = await caller.from("intake").select("id").eq("id", body.intake_id ?? "").maybeSingle();
+      if (!seen) return j({ error: "Geen toegang" }, 403);
+      if (!OFFERTE_API_KEY || !OFFERTE_V2) return j({ ok: false, skipped: "offerte-tool endpoint niet gekoppeld" });
+      const { data: it } = await admin.from("intake").select("id,offer_meta,offer_status").eq("id", body.intake_id).maybeSingle();
+      const meta = (it as any)?.offer_meta ?? {};
+      if (action === "offerte_koppel") {
+        // "Nieuwe versie maken" in de editor: het nieuwe offerte-id aan deze intake koppelen.
+        const nid = Number(body.offer_id);
+        if (!nid) return j({ error: "geen offerte" }, 400);
+        const rr = await fetch(`${OFFERTE_API_URL}/${nid}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
+        const d = rr.ok ? await rr.json().catch(() => null) : null;
+        const own = d?.intake_id ?? d?.kenmerk?.intake_id ?? null;
+        if (!d || (own && own !== body.intake_id)) return j({ error: "offerte hoort niet bij deze intake" }, 400);
+        const o = normalizeOffer(d);
+        await admin.from("intake").update({ offer_meta: { ...meta, id: o.id, nummer: o.nummer, edit_url: o.editUrl, klant_url: o.klantUrl, mand_url: o.mandUrl, offer: o, at: new Date().toISOString() }, offer_status: "concept", offer_total: o.totaal }).eq("id", body.intake_id);
+        return j({ ok: true, offer: o });
+      }
+      if (!meta.id) return j({ ok: false, skipped: "nog geen offerte" });
+      if (action === "offerte_get") {
+        const rr = await fetch(`${OFFERTE_API_URL}/${meta.id}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
+        if (!rr.ok) return j({ ok: false, error: `offerte-tool gaf ${rr.status}` });
+        const o = normalizeOffer(await rr.json());
+        await admin.from("intake").update({ offer_meta: { ...meta, offer: o, klant_url: o.klantUrl ?? meta.klant_url, mand_url: o.mandUrl ?? meta.mand_url }, offer_total: o.totaal }).eq("id", body.intake_id);
+        return j({ ok: true, offer: o, status: (it as any)?.offer_status ?? null });
+      }
+      const { data: isAdm } = await caller.rpc("is_admin");
+      const rol = isAdm === true ? "roll" : "styliste";
+      const rr = await fetch(`${OFFERTE_API_URL}/${meta.id}/editlink`, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify({ rol, uren: 8 }) });
+      const d = await rr.json().catch(() => ({}));
+      if (!rr.ok || !d?.url) return j({ ok: false, error: `offerte-tool gaf ${rr.status}` });
+      return j({ ok: true, url: d.url, rol: d.rol ?? rol, verloopt: d.verloopt ?? null, offer_id: meta.id });
     }
 
     // Bestelvoorstel, stap 1: concept in de offerte-tool aanmaken of bijwerken, met Sample korting

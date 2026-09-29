@@ -10,10 +10,11 @@ import { euro, type OrdersResp } from "../CustomerPurchases";
 import { formatDate } from "../ui";
 import { derive, initialAdvice, summarize, type AdviceV2 } from "./advice";
 import { Voorbereiden, nogBespreken } from "./Voorbereiden";
-import { AdviesFase } from "./AdviesFase";
+import { OfferteEditor } from "./OfferteEditor";
 import { Afronden, type Sent } from "./Afronden";
 
-// Klantkaart: één rustige werkplek in drie vaste fases (Voorbereiden, Advies vastleggen, Afronden).
+// Klantkaart: één rustige werkplek in drie vaste fases (Voorbereiden, Advies en offerte, Afronden).
+// Kleuren, maten en producten leven in de editor van roll.nl/offerte (zelfde back-end), ingebed in fase 2.
 // Het advies wordt één keer per ruimte en oppervlak vastgelegd en automatisch opgeslagen.
 
 interface Booking {
@@ -35,7 +36,7 @@ const day = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, we
 const safeUrl = (v?: string | null) => (v && /^https?:\/\//i.test(v.trim()) ? v.trim() : null);
 const ROUTE_LABEL: Record<string, string> = { samples: "Sampleadvies", zelf: "Verfadvies (zelf bestellen)", roll: "Verfadvies met bestelvoorstel", offerte: "Bestelvoorstel" };
 const STAGES = [["ingepland", "Ingepland"], ["advies", "Advies gegeven"], ["opvolging", "In opvolging"], ["verf", "Verf gekocht"], ["afgehaakt", "Afgehaakt"]] as const;
-const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies vastleggen" }, { key: "afronden", label: "Afronden" }];
+const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies en offerte" }, { key: "afronden", label: "Afronden" }];
 
 function afspraakLabel(b: Booking): string {
   if (b.status === "manual" || b.status === "paid_unplaced") return "Afspraak nog niet gepland";
@@ -110,10 +111,8 @@ export function KlantKaart() {
   const [loading, setLoading] = useState(true);
   const storeKey = `klantkaart:${bookingId}`;
   const [fase, setFaseState] = useState<Fase>(() => { try { return (JSON.parse(localStorage.getItem(`klantkaart:${bookingId}`) ?? "{}").fase as Fase) || "voorbereiden"; } catch { return "voorbereiden"; } });
-  const [roomId, setRoomIdState] = useState<string | null>(() => { try { return JSON.parse(localStorage.getItem(`klantkaart:${bookingId}`) ?? "{}").room ?? null; } catch { return null; } });
   const remember = (p: Record<string, unknown>) => { try { const cur = JSON.parse(localStorage.getItem(storeKey) ?? "{}"); localStorage.setItem(storeKey, JSON.stringify({ ...cur, ...p })); } catch { /* opslag niet beschikbaar */ } };
   const setFase = (f: Fase) => { setFaseState(f); remember({ fase: f }); window.scrollTo({ top: 0 }); };
-  const setRoomId = (id: string) => { setRoomIdState(id); remember({ room: id }); };
 
   const loadSends = useCallback(async (iid: string | null) => {
     if (!iid) return;
@@ -168,7 +167,7 @@ export function KlantKaart() {
     const s = summarize(a);
     const outcome = s.bevestigd.length && !s.testen.length ? "color_chosen" : s.testen.length ? "samples_needed" : cur.advisor_outcome;
     const next = { ...a, updated_at: new Date().toISOString() };
-    const patch = { advice_v2: next, advice_sample: d.advice_sample, advice_verf: d.advice_verf, advisor_advice: d.advisor_advice, advisor_summary: a.message.trim() || null, advisor_outcome: outcome, advisor_updated_at: next.updated_at };
+    const patch = { advice_v2: next, advice_sample: d.advice_sample, advice_verf: d.advice_verf, ...(d.advisor_advice.length ? { advisor_advice: d.advisor_advice } : {}), advisor_summary: a.message.trim() || null, advisor_outcome: outcome, advisor_updated_at: next.updated_at };
     const { error } = await supabase.from("intake").update(patch).eq("id", cur.id);
     if (error) { try { localStorage.setItem(`advies-onopgeslagen:${cur.id}`, JSON.stringify(a)); } catch { /* geen opslag */ } setSave("error"); return; }
     try { localStorage.removeItem(`advies-onopgeslagen:${cur.id}`); } catch { /* geen opslag */ }
@@ -202,20 +201,17 @@ export function KlantKaart() {
 
   const next = useMemo(() => {
     if (!b) return null;
-    const s = advice ? summarize(advice) : null;
     const sent = new Set(sends.map((x) => x.route));
     if (!intake) return { t: "Wacht op de intake van de klant", f: "voorbereiden" as Fase };
     if (task && (task.status === "aangevraagd" || task.status === "opgepakt")) return { t: task.owner ? `Roll pakt dit op: ${task.owner}` : "Bij Roll, nog geen eigenaar", f: "afronden" as Fase };
     if (!b.gesprek_gevoerd_at && new Date(b.start_at).getTime() > Date.now() && b.status !== "manual") return { t: "Bereid het gesprek voor", f: "voorbereiden" as Fase };
-    if (s && !s.bevestigd.length && !s.testen.length) return { t: "Leg per oppervlak de kleur en keuze vast", f: "advies" as Fase };
-    if (s && s.testen.length && !sent.has("samples")) return { t: "Verstuur het sampleadvies", f: "afronden" as Fase };
-    if (s && s.bevestigd.length && !sent.has("zelf") && !sent.has("roll")) return { t: "Verstuur het advies", f: "afronden" as Fase };
-    if (intake.advice_verf?.route === "roll" && s?.bevestigd.length && !intake.offer_status) return { t: "Controleer en verstuur het bestelvoorstel", f: "afronden" as Fase };
-    if (intake.offer_status === "verstuurd") return { t: "Bestelvoorstel verstuurd · wacht op de bestelling", f: "afronden" as Fase };
     if (intake.offer_status === "besteld") return { t: "Besteld. Het traject is rond", f: "afronden" as Fase };
+    if (intake.offer_status === "verstuurd") return { t: "Advies en offerte verstuurd · wacht op de bestelling", f: "afronden" as Fase };
+    if (!intake.offer_meta?.id && !sent.has("samples")) return { t: "Maak de offerte vanuit de intake en vul de kleuren aan", f: "advies" as Fase };
+    if (intake.offer_meta?.id) return { t: "Verstuur advies en offerte", f: "afronden" as Fase };
     if (sent.has("samples")) return { t: "Vraag hoe de samples bevallen", f: "afronden" as Fase };
-    return { t: "Alles is verstuurd", f: "afronden" as Fase };
-  }, [b, intake, advice, sends, task]);
+    return { t: "Rond het advies af", f: "afronden" as Fase };
+  }, [b, intake, sends, task]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
   if (!b) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Deze klant is niet gevonden.</p></div>;
@@ -317,13 +313,13 @@ export function KlantKaart() {
             onIntake={(i) => setIntake(i)} onOrders={setOrders} />
         )}
         {fase === "advies" && (intake && advice ? (
-          <AdviesFase advice={advice} setAdvice={setAdvice} intakeRooms={intake.rooms ?? []} roomId={roomId} setRoomId={setRoomId} />
+          <OfferteEditor intake={intake} bookingId={b.id} onIntake={(p) => setIntake((cur) => (cur ? { ...cur, ...p } : cur))} />
         ) : <p className="rd-sub">Zonder intake kun je het advies nog niet vastleggen.</p>)}
         {fase === "afronden" && (intake && advice ? (
-          <Afronden intake={intake} advice={advice} setMessage={(v) => setAdvice((a) => ({ ...a, message: v }))} bookingId={b.id} stylistId={b.stylist_id} stylistName={b.stylists?.name ?? ""}
-            customerName={name} customerEmail={email} rooms={intake.rooms ?? []} task={task} sends={sends}
+          <Afronden intake={intake} message={advice.message} setMessage={(v) => setAdvice((a) => ({ ...a, message: v }))} bookingId={b.id} stylistId={b.stylist_id} stylistName={b.stylists?.name ?? ""}
+            customerName={name} customerEmail={email} task={task} sends={sends}
             onIntake={(p) => setIntake((cur) => (cur ? { ...cur, ...p } : cur))} onTask={setTask}
-            onSent={() => { loadSends(b.intake_id); loadTasks(b.id); }} onEditAdvice={() => setFase("advies")} />
+            onSent={() => { loadSends(b.intake_id); loadTasks(b.id); }} onEditOffer={() => setFase("advies")} />
         ) : <p className="rd-sub">Zonder intake kun je nog niet afronden.</p>)}
       </main>
 
