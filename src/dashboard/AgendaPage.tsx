@@ -148,13 +148,21 @@ export function AgendaPage() {
     };
   }, [selectedId, stylists]);
 
+  const nasturen = async (stylistId: string): Promise<number> => {
+    const { data } = await supabase.functions.invoke("booking", { body: { action: "videolink_nasturen", stylist_id: stylistId } });
+    return (data as { sent?: number } | null)?.sent ?? 0;
+  };
+
   const saveMeetUrl = async () => {
     setSavingMeet(true);
     setErr(null);
+    const hadLink = !!stylists.find((s) => s.id === selectedId)?.meet_url;
     const { error } = await supabase.rpc("set_meet_url", { p_stylist_id: selectedId, p_url: meetUrl.trim() });
+    if (error) { setSavingMeet(false); return setErr(error.message); }
+    // Eerste keer een link: klanten met een komende afspraak krijgen hun bevestiging opnieuw, nu met link.
+    const sent = !hadLink && meetUrl.trim() ? await nasturen(selectedId) : 0;
     setSavingMeet(false);
-    if (error) return setErr(error.message);
-    flash("Videolink opgeslagen.");
+    flash(sent ? `Videolink opgeslagen. ${sent} ${sent === 1 ? "klant kreeg" : "klanten kregen"} de bevestiging opnieuw, nu met videolink.` : "Videolink opgeslagen.");
     setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, meet_url: meetUrl.trim() || null } : s)));
   };
 
