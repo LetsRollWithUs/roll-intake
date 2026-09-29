@@ -5,11 +5,15 @@ import type { AdvicePhase, AdviceProduct, AdviceRoom, IntakeRow } from "../types
 import { buildMail } from "../AdviceEditor";
 import { SampleComposer } from "../SampleComposer";
 import { buildTaskPayload, RollTaskStatus, type RollTask } from "../RollHelpForm";
-import { ColorPicker } from "./ColorPicker";
-import type { Offer } from "../VoorstelPanel";
+import type { Offer, OfferVlak } from "../VoorstelPanel";
+import { OfferteEditor } from "./OfferteEditor";
+import { rollColors } from "@/data/roll-colors";
 
-// Afronden: de offerte uit de editor is de bron voor kleuren en producten.
-// 1 het advies (uit de offerte), 2 persoonlijk bericht, 3 hoe gaat de klant verder (één knop per keuze).
+const ROLL_BY_NAME = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
+
+// Afronden: het advies uit de editor bepaalt de route.
+// Eén vlak op "Eerst testen" = samples-route (C04); verf komt later na de check-in (winnaar kiezen).
+// Alles bevestigd = verf-route: advies + offerte (C05 + C11), alleen advies, of Roll laten meekijken.
 
 const eur = (v?: number | null) => (v == null ? "" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(v));
 const fmt = (iso: string) => new Date(iso).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -81,7 +85,8 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const mailFor = useRef<string>("");
-  const [picker, setPicker] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [winBusy, setWinBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!intake.offer_meta?.id) { setLoading(false); return; }
@@ -99,21 +104,26 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     return (offer?.regels ?? []).filter((l) => l.kleurNaam && (!l.soort || l.soort === "verf")).filter((l) => { const k = `${l.ruimte}|${l.oppervlak}|${l.kleurNaam}`; if (seen.has(k)) return false; seen.add(k); return true; })
       .map((l) => ({ room: l.ruimte ?? "", surface: l.oppervlak ?? "", color: l.kleurNaam ?? "", status: "definitief", product: l.product ?? "", m2: "", liters: "", motivation: "" }));
   }, [offer]);
-  const hasOffer = !!offer && verfRooms.length > 0;
+  const testVlakken: OfferVlak[] = (offer?.vlakken ?? []).filter((v) => v.status === "testen");
+  const samplesRoute = testVlakken.length > 0;
+  const hasOffer = !!offer && verfRooms.length > 0 && !samplesRoute && offer.klaarVoorOfferte !== false;
   const blocked = !!offer && offer.kleurenOnbekend.length > 0;
-  const sampleColors = (intake.advice_sample?.rooms ?? []).filter((r) => r.color.trim());
-  const products = intake.advice_sample?.products ?? [];
+  // Samplekleuren uit de testvlakken (alleen Roll-kleuren; de editor controleert dat).
+  const sampleRooms: AdviceRoom[] = testVlakken.flatMap((v) => v.testKleuren.map((t) => ({ room: v.ruimte ?? "", surface: v.type ?? v.soort ?? "", color: t.naam, status: "voorgesteld" as const, product: "Muurverf", m2: "", liters: "", motivation: "" })));
+  const candidates = [...new Map(testVlakken.flatMap((v) => v.testKleuren).map((t) => { const c = ROLL_BY_NAME.get(t.naam.trim().toLowerCase()); return [t.naam, { id: c?.id ?? t.naam.toLowerCase().replace(/\s+/g, "-"), name: t.naam, hex: c?.hex ?? t.hex ?? "" }] as const; })).values()];
+  const savedProducts = intake.advice_sample?.products ?? [];
+  const products: AdviceProduct[] = [...candidates.map((c) => ({ kind: (savedProducts.find((p) => p.ref === c.id)?.kind ?? "sticker") as AdviceProduct["kind"], ref: c.id, name: c.name })), ...savedProducts.filter((p) => p.kind === "pack")];
   const last = (routes: string[]) => sends.find((s) => routes.includes(s.route))?.sent_at ?? null;
   const verzonden = [
     ...(last(["roll", "zelf"]) ? [`Advies ${fmt(last(["roll", "zelf"])!)}`] : []),
     ...(intake.offer_sent_at ? [`Offerte ${fmt(intake.offer_sent_at)}`] : []),
     ...(last(["samples"]) ? [`Sampleadvies ${fmt(last(["samples"])!)}`] : []),
   ];
-  const suggested: Keuze | null = hasOffer && !blocked ? "voorstel" : sampleColors.length ? "samples" : null;
+  const suggested: Keuze | null = samplesRoute ? "samples" : hasOffer && !blocked ? "voorstel" : null;
   const gekozen = keuze ?? suggested;
 
   const bundleFor = (k: Keuze): { phase: "sample" | "verf"; bundle: AdvicePhase } => k === "samples"
-    ? { phase: "sample", bundle: { ...(intake.advice_sample ?? emptyPhase("samples")), route: "samples", answer: message } }
+    ? { phase: "sample", bundle: { ...(intake.advice_sample ?? emptyPhase("samples")), rooms: sampleRooms, products, route: "samples", answer: message } }
     : { phase: "verf", bundle: { ...(intake.advice_verf ?? emptyPhase("roll")), rooms: verfRooms, route: k === "advies" ? "zelf" : "roll", answer: message } };
   const ensureMail = (k: Keuze) => {
     const b = bundleFor(k);
@@ -133,6 +143,7 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     const m = ensureMail(k);
     setState({ k, s: "busy" });
     if (k === "voorstel" || k === "advies") await saveVerf(k === "advies" ? "zelf" : "roll");
+    if (k === "samples") await saveSamples(sampleRooms, products);
     const adviceAlready = k === "voorstel" && !!last(["roll"]);
     if (!adviceAlready) {
       const ok = await sendAdviceMail({ phase: m.b.phase, route: m.b.bundle.route, intakeId: intake.id, bookingId, subject: m.subject, body: m.body });
@@ -157,7 +168,16 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     await supabase.from("intake").update({ advice_sample: next }).eq("id", intake.id);
     onIntake({ advice_sample: next });
   };
-  const candidates = sampleColors.map((r) => ({ id: r.color, name: r.color, hex: "" })).map((c) => ({ ...c, id: c.name.toLowerCase().replace(/\s+/g, "-") }));
+
+  const kiesWinnaar = async (v: OfferVlak, kleurId: number | null | undefined, naam: string) => {
+    if (!kleurId) return;
+    setWinBusy(`${v.vid}:${naam}`);
+    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_bevestig", intake_id: intake.id, vid: v.vid, kleurId } });
+    const d = data as { ok?: boolean; offer?: Offer; error?: string } | null;
+    setWinBusy(null);
+    if (d?.ok && d.offer) setOffer(d.offer);
+    else setState({ k: "samples", s: "fout", t: d?.error ?? "Winnaar opslaan lukte niet." });
+  };
 
   const doHandover = async () => {
     if (!reason) return;
@@ -173,12 +193,15 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     setState({ k: "roll", s: "ok", t: "Overgedragen aan Roll." }); onTask(data as RollTask);
   };
 
-  const opties: { k: Keuze; titel: string; sub: string; kan: boolean; waarom: string }[] = [
-    { k: "voorstel", titel: "Advies + offerte", sub: "Het verslag en de offerte met winkelmandje, in één keer.", kan: hasOffer && !blocked, waarom: !offer ? "Maak eerst de offerte bij Advies en offerte." : blocked ? "Kies eerst de onbekende kleuren in de editor." : "De offerte heeft nog geen kleuren." },
-    { k: "samples", titel: "Eerst kleuren testen", sub: "Sampleadvies met stickers of testers.", kan: true, waarom: "" },
-    { k: "advies", titel: "Alleen advies", sub: "Met links naar de kleuren. Voor klanten die nog even verder willen kijken.", kan: hasOffer, waarom: "Leg eerst de kleuren vast in de offerte." },
+  const opties: { k: Keuze; titel: string; sub: string; kan: boolean; waarom: string }[] = samplesRoute ? [
+    { k: "samples", titel: "Eerst kleuren testen", sub: "Sampleadvies met stickers of testers. Verf volgt als de klant eruit is.", kan: true, waarom: "" },
+    { k: "roll", titel: "Roll laten meekijken", sub: "Roll neemt contact op met de klant.", kan: true, waarom: "" },
+  ] : [
+    { k: "voorstel", titel: "Advies + offerte", sub: "Het verslag en de offerte met winkelmandje, in één keer.", kan: hasOffer && !blocked, waarom: !offer ? "Leg eerst het advies vast bij stap 2." : blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
+    { k: "advies", titel: "Alleen advies", sub: "Met links naar de kleuren. Voor klanten die nog even verder willen kijken.", kan: hasOffer, waarom: "Er zijn nog geen bevestigde kleuren." },
     { k: "roll", titel: "Roll laten meekijken", sub: "Roll belt de klant en maakt de offerte af.", kan: true, waarom: "" },
   ];
+
   const Status = ({ k }: { k: Keuze }) => state?.k !== k ? null : (
     <span role="status" style={{ fontSize: 14, fontWeight: 600, color: state.s === "fout" ? "var(--rd-pink-dark)" : undefined }}>{state.s === "busy" ? "Versturen..." : state.t}</span>
   );
@@ -189,10 +212,36 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
       <section>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
           <h2 className="kk-h2">1. Het advies</h2>
-          <button className="rd-textlink" onClick={onEditOffer}>Offerte aanpassen</button>
+          <button className="rd-textlink" onClick={onEditOffer}>Advies aanpassen</button>
         </div>
-        {loading ? <p className="rd-sub">Offerte ophalen...</p> : !offer ? (
-          <p style={{ margin: 0, fontSize: 15 }}>Er is nog geen offerte. <button className="rd-textlink" onClick={onEditOffer}>Maak de offerte vanuit de intake</button>, of kies hieronder Eerst kleuren testen of Roll laten meekijken.</p>
+        {loading ? <p className="rd-sub">Advies ophalen...</p> : !offer ? (
+          <p style={{ margin: 0, fontSize: 15 }}>Het advies is nog niet vastgelegd. <button className="rd-textlink" onClick={onEditOffer}>Leg het advies vast bij stap 2</button>, of laat Roll meekijken.</p>
+        ) : samplesRoute ? (
+          <>
+            <p style={{ margin: "0 0 6px", fontSize: 14 }}>Er wordt nog getest, dus de klant krijgt eerst samples. De verf volgt als de klant per oppervlak een winnaar heeft gekozen.</p>
+            {(offer.vlakken ?? []).map((v) => (
+              <div key={v.vid} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--rd-line)", fontSize: 14 }}>
+                <span style={{ flex: "0 0 34%", minWidth: 160 }}><strong>{v.ruimte}</strong> · {(v.type || v.soort || "").toLowerCase()}</span>
+                {v.status === "testen" ? (
+                  <span style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    {v.testKleuren.map((t) => (
+                      <span key={t.naam} style={{ display: "inline-flex", gap: 6, alignItems: "center", padding: "4px 8px 4px 4px", borderRadius: 10, border: "1px solid var(--rd-line)", background: "#fff" }}>
+                        <span aria-hidden style={{ width: 20, height: 20, borderRadius: 6, background: t.hex ?? "var(--rd-grey-light)", border: "1px solid rgba(0,0,0,.12)" }} />
+                        {t.naam}
+                        {last(["samples"]) && <button className="rd-textlink" style={{ fontSize: 12.5 }} disabled={!!winBusy} onClick={() => kiesWinnaar(v, t.kleurId, t.naam)}>{winBusy === `${v.vid}:${t.naam}` ? "..." : "Winnaar"}</button>}
+                      </span>
+                    ))}
+                    <span style={{ fontSize: 12.5, opacity: 0.7 }}>eerst testen</span>
+                  </span>
+                ) : (
+                  <span style={{ flex: 1, display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <span aria-hidden style={{ width: 14, height: 14, borderRadius: 4, background: v.kleurHex ?? "var(--rd-grey-light)", border: "1px solid rgba(0,0,0,.12)" }} />{v.kleurNaam ?? "geen kleur"} <span style={{ fontSize: 12.5, opacity: 0.7 }}>· bevestigd</span>
+                  </span>
+                )}
+              </div>
+            ))}
+            {last(["samples"]) && <p style={{ margin: "6px 0 0", fontSize: 13.5, opacity: 0.8 }}>Check-in: heeft de klant gekozen? Klik per oppervlak op de winnende kleur. Is alles bevestigd, dan verschijnt hier de offerte.</p>}
+          </>
         ) : (
           <>
             {Object.entries(byRoom).map(([room, lines]) => (
@@ -210,7 +259,9 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
             <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--rd-line)", paddingTop: 8, fontWeight: 800, fontSize: 15 }}>
               <span>Offerte {offer.nummer}{offer.korting ? ` · ${offer.korting.label}` : ""}</span><span>{eur(offer.totaal)}</span>
             </div>
-            {blocked && <div style={{ marginTop: 8, fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}><strong>Kies deze kleuren in de editor:</strong> {offer.kleurenOnbekend.join(", ")}</div>}
+            {blocked && <div style={{ marginTop: 8, fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}><strong>Kies deze kleuren in het advies:</strong> {offer.kleurenOnbekend.join(", ")}</div>}
+            <button className="rd-textlink" style={{ marginTop: 8 }} onClick={() => setShowEditor((v) => !v)}>{showEditor ? "Offerte-editor sluiten" : "Offerte bekijken en aanpassen (met prijzen)"}</button>
+            {showEditor && <div style={{ marginTop: 10 }}><OfferteEditor intake={intake} bookingId={bookingId} onIntake={onIntake} modus="offerte" /></div>}
           </>
         )}
       </section>
@@ -253,25 +304,14 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
           </div>
         )}
 
-        {gekozen === "samples" && (
+        {gekozen === "samples" && samplesRoute && (
           <div className="kk-card">
-            <span className="kk-label">Kleuren om te testen</span>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {sampleColors.map((r, i) => (
-                <span key={i} style={{ display: "inline-flex", gap: 8, alignItems: "center", padding: "6px 10px", borderRadius: 12, border: "1px solid var(--rd-line)", background: "#fff", fontSize: 14 }}>
-                  <strong>{r.color}</strong>
-                  <button className="rd-textlink" style={{ fontSize: 12.5 }} aria-label={`${r.color} weghalen`} onClick={() => saveSamples(sampleColors.filter((_, j) => j !== i), products.filter((p) => p.name !== r.color))}>×</button>
-                </span>
-              ))}
-              <button className="rd-btn rd-btn-outline" onClick={() => setPicker(true)} style={{ width: "auto", padding: "0 16px", minHeight: 44 }}>+ Testkleur</button>
-            </div>
-            {sampleColors.length > 0 && <SampleComposer colors={candidates} value={products.length ? products : candidates.map((c) => ({ kind: "sticker", ref: c.id, name: c.name }) as AdviceProduct)} onChange={(p) => saveSamples(sampleColors, p)} />}
+            <span style={{ fontSize: 14 }}>Deze testkleuren gaan als samples in de mail. Kies per kleur sticker of tester, of voeg een bundel toe.</span>
+            <SampleComposer colors={candidates} value={products} onChange={(p) => saveSamples(sampleRooms, p)} />
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <button className="rd-btn rd-btn-primary" disabled={!sampleColors.length} onClick={() => { ensureMail("samples"); setPreview("samples"); }} style={{ width: "auto", padding: "0 22px", minHeight: 44, ...(sampleColors.length ? {} : { opacity: 0.5 }) }}>Verstuur sampleadvies</button>
+              <button className="rd-btn rd-btn-primary" onClick={() => { ensureMail("samples"); setPreview("samples"); }} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{last(["samples"]) ? "Verstuur het sampleadvies opnieuw" : "Verstuur sampleadvies"}</button>
               <Status k="samples" />
             </div>
-            <ColorPicker open={picker} rollOnly title="Kleur om te testen" onClose={() => setPicker(false)}
-              onPick={(c) => { setPicker(false); if (!sampleColors.some((r) => r.color === c.name)) saveSamples([...sampleColors, { room: "", surface: "", color: c.name, status: "voorgesteld", product: "Muurverf", m2: "", liters: "", motivation: "" }], [...products, { kind: "sticker", ref: c.id, name: c.name }]); }} />
           </div>
         )}
 

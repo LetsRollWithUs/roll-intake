@@ -10,7 +10,7 @@ const ORIGIN = "https://roll.nl";
 export interface EditorInfo { id?: number; nummer?: string; versie?: number; status?: string; totaal?: number | null; kleurenOnbekend?: string[]; waarschuwingen?: string[]; bewerkbaar?: boolean; bijgewerkt?: string }
 const eur = (v?: number | null) => (v == null ? "" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(v));
 
-export function OfferteEditor({ intake, bookingId, onIntake }: { intake: IntakeRow; bookingId: string; onIntake: (p: Partial<IntakeRow>) => void }) {
+export function OfferteEditor({ intake, bookingId, onIntake, modus = "advies" }: { intake: IntakeRow; bookingId: string; onIntake: (p: Partial<IntakeRow>) => void; modus?: "advies" | "offerte" }) {
   const hasOffer = !!intake.offer_meta?.id;
   const [url, setUrl] = useState<string | null>(null);
   const [height, setHeight] = useState(900);
@@ -21,12 +21,12 @@ export function OfferteEditor({ intake, bookingId, onIntake }: { intake: IntakeR
 
   const openEditor = useCallback(async () => {
     setState("laden"); setErr(null);
-    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_editlink", intake_id: intake.id } });
+    const { data } = await supabase.functions.invoke("booking", { body: { action: "offerte_editlink", intake_id: intake.id, modus } });
     const d = data as { ok?: boolean; url?: string; skipped?: string; error?: string } | null;
     if (d?.ok && d.url) { setUrl(d.url); loadedAt.current = Date.now(); setState("idle"); return; }
     if (d?.skipped === "offerte-tool endpoint niet gekoppeld") { setState("uit"); return; }
     setState("fout"); setErr(d?.error ?? "De editor kon niet worden geopend.");
-  }, [intake.id]);
+  }, [intake.id, modus]);
 
   const maken = async () => {
     setState("maken"); setErr(null);
@@ -78,9 +78,9 @@ export function OfferteEditor({ intake, bookingId, onIntake }: { intake: IntakeR
   if (!hasOffer) {
     return (
       <div className="kk-card" style={{ alignItems: "flex-start" }}>
-        <h2 className="kk-h2">Offerte maken</h2>
-        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, maxWidth: 640 }}>We zetten de ruimtes, maten en kleuren uit de intake alvast in de offerte-tool. Daarna vul je in de editor aan wat er in het gesprek besproken is: kleuren per muur, plafond, houtwerk en tools.</p>
-        <button className="rd-btn rd-btn-primary" onClick={maken} disabled={state === "maken"} style={{ width: "auto", padding: "0 24px", minHeight: 44 }}>{state === "maken" ? "Offerte klaarzetten..." : "Offerte maken vanuit de intake"}</button>
+        <h2 className="kk-h2">Advies vastleggen</h2>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, maxWidth: 640 }}>We zetten de ruimtes en maten uit de intake alvast klaar. Kies daarna per muur, plafond en houtwerk: <strong>Bevestigd</strong> met één kleur, of <strong>Eerst testen</strong> met 1 tot 3 Roll-kleuren. Er gaat nog niets naar de klant; dat doe je bij Afronden.</p>
+        <button className="rd-btn rd-btn-primary" onClick={maken} disabled={state === "maken"} style={{ width: "auto", padding: "0 24px", minHeight: 44 }}>{state === "maken" ? "Klaarzetten..." : "Advies starten vanuit de intake"}</button>
         {err && <span role="status" style={{ fontSize: 14, color: "var(--rd-pink-dark)", fontWeight: 600 }}>{err}</span>}
       </div>
     );
@@ -90,8 +90,8 @@ export function OfferteEditor({ intake, bookingId, onIntake }: { intake: IntakeR
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
-        <strong>Offerte {info.nummer ?? intake.offer_meta?.nummer ?? ""}{info.versie && info.versie > 1 ? ` · versie ${info.versie}` : ""}</strong>
-        {info.totaal != null && <span>Totaal {eur(info.totaal)}</span>}
+        <strong>{modus === "advies" ? "Kleuren en maten per ruimte" : `Offerte ${info.nummer ?? intake.offer_meta?.nummer ?? ""}${info.versie && info.versie > 1 ? ` · versie ${info.versie}` : ""}`}</strong>
+        {modus === "offerte" && info.totaal != null && <span>Totaal {eur(info.totaal)}</span>}
         {info.bijgewerkt && <span style={{ opacity: 0.7 }}>Opgeslagen {new Date(info.bijgewerkt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}</span>}
         <button className="kk-link" onClick={openEditor} style={{ marginLeft: "auto" }}>Editor opnieuw laden</button>
       </div>

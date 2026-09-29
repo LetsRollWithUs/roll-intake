@@ -3,12 +3,14 @@
 
 export interface OfferLine { ruimte?: string; oppervlak?: string; soort?: string; product?: string; kleurNaam?: string; kleurHex?: string; variant?: string; aantal?: number; stukprijs?: number; totaal?: number; afbeelding?: string; url?: string }
 export interface OfferTool { product?: string; aantal?: number; stukprijs?: number; totaal?: number; inMandje?: boolean; afbeelding?: string; url?: string }
+export interface OfferVlak { vid: string; ruimte?: string; type?: string; soort?: string; m2?: number | null; status?: "bevestigd" | "testen" | string; kleurId?: number | null; kleurNaam?: string | null; kleurHex?: string | null; merkkleur?: boolean; testKleuren: { kleurId?: number | null; naam: string; hex?: string | null }[] }
 export interface Offer {
   id: number | null; nummer: string | null; status: string | null;
   editUrl: string | null; klantUrl: string | null; mandUrl: string | null;
   kleurenOnbekend: string[]; waarschuwingen: string[]; regels: OfferLine[]; tools: OfferTool[];
   subtotaal: number | null; korting: { label: string; bedrag: number } | null;
   extra: { label: string; bedrag: number }[]; verzending: number | null; totaal: number | null; bijgewerkt: string | null;
+  vlakken: OfferVlak[]; klaarVoorOfferte: boolean;
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
@@ -27,6 +29,12 @@ export function normalizeOffer(d: any): Offer {
     korting: d?.korting && typeof d.korting === "object" ? { label: String(d.korting.label ?? "Korting"), bedrag: num(d.korting.bedrag) ?? 0 } : null,
     extra: arr<any>(d?.extra).map((e) => ({ label: String(e?.label ?? ""), bedrag: num(e?.bedrag) ?? 0 })).filter((e) => e.label),
     verzending: num(d?.verzending), totaal: num(d?.totaal), bijgewerkt: d?.bijgewerkt ?? null,
+    vlakken: arr<any>(d?.vlakken).slice(0, 200).map((v) => ({
+      vid: String(v?.vid ?? ""), ruimte: v?.ruimte ?? "", type: v?.type ?? "", soort: v?.soort ?? "", m2: num(v?.m2), status: v?.status ?? "bevestigd",
+      kleurId: num(v?.kleurId), kleurNaam: v?.kleurNaam ?? null, kleurHex: v?.kleurHex ?? null, merkkleur: !!v?.merkkleur,
+      testKleuren: arr<any>(v?.testKleuren).slice(0, 3).map((t) => ({ kleurId: num(t?.kleurId), naam: String(t?.naam ?? t?.kleurNaam ?? ""), hex: t?.hex ?? t?.kleurHex ?? null })).filter((t) => t.naam),
+    })).filter((v) => v.vid),
+    klaarVoorOfferte: d?.klaarVoorOfferte !== false,
   };
 }
 

@@ -416,7 +416,7 @@ Deno.serve(async (req) => {
     }
 
     // Editor van roll.nl/offerte in de klantkaart: ondertekende bewerklink (styliste of Roll).
-    if (action === "offerte_editlink" || action === "offerte_koppel" || action === "offerte_get") {
+    if (action === "offerte_editlink" || action === "offerte_koppel" || action === "offerte_get" || action === "offerte_bevestig") {
       const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
       const { data: seen } = await caller.from("intake").select("id").eq("id", body.intake_id ?? "").maybeSingle();
       if (!seen) return j({ error: "Geen toegang" }, 403);
@@ -436,6 +436,15 @@ Deno.serve(async (req) => {
         return j({ ok: true, offer: o });
       }
       if (!meta.id) return j({ ok: false, skipped: "nog geen offerte" });
+      if (action === "offerte_bevestig") {
+        // Winnaar na de check-in: testvlak wordt Bevestigd met die kleur.
+        const rr = await fetch(`${OFFERTE_API_URL}/${meta.id}/vlak/${encodeURIComponent(String(body.vid ?? ""))}/bevestig`, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify({ kleurId: Number(body.kleurId) }) });
+        const d = await rr.json().catch(() => null);
+        if (!rr.ok || !d) return j({ ok: false, error: rr.status === 409 ? "De offerte is al verstuurd; maak eerst een nieuwe versie." : `offerte-tool gaf ${rr.status}` });
+        const o = normalizeOffer(d);
+        await admin.from("intake").update({ offer_meta: { ...meta, offer: o }, offer_total: o.totaal }).eq("id", body.intake_id);
+        return j({ ok: true, offer: o });
+      }
       if (action === "offerte_get") {
         const rr = await fetch(`${OFFERTE_API_URL}/${meta.id}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
         if (!rr.ok) return j({ ok: false, error: `offerte-tool gaf ${rr.status}` });
@@ -445,7 +454,7 @@ Deno.serve(async (req) => {
       }
       const { data: isAdm } = await caller.rpc("is_admin");
       const rol = isAdm === true ? "roll" : "styliste";
-      const rr = await fetch(`${OFFERTE_API_URL}/${meta.id}/editlink`, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify({ rol, uren: 8 }) });
+      const rr = await fetch(`${OFFERTE_API_URL}/${meta.id}/editlink`, { method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": OFFERTE_API_KEY }, body: JSON.stringify({ rol, uren: 8, modus: body.modus === "advies" ? "advies" : "offerte" }) });
       const d = await rr.json().catch(() => ({}));
       if (!rr.ok || !d?.url) return j({ ok: false, error: `offerte-tool gaf ${rr.status}` });
       return j({ ok: true, url: d.url, rol: d.rol ?? rol, verloopt: d.verloopt ?? null, offer_id: meta.id });

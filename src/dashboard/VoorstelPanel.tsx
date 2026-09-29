@@ -14,7 +14,9 @@ export interface Offer {
   kleurenOnbekend: string[]; waarschuwingen?: string[]; regels: Line[]; tools: Tool[];
   subtotaal: number | null; korting: { label: string; bedrag: number } | null; extra: { label: string; bedrag: number }[];
   verzending: number | null; totaal: number | null;
+  vlakken?: OfferVlak[]; klaarVoorOfferte?: boolean;
 }
+export interface OfferVlak { vid: string; ruimte?: string; type?: string; soort?: string; m2?: number | null; status?: string; kleurId?: number | null; kleurNaam?: string | null; kleurHex?: string | null; merkkleur?: boolean; testKleuren: { kleurId?: number | null; naam: string; hex?: string | null }[] }
 
 const eur = (v: number | null | undefined) => (v == null ? "" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(v));
 const GRENS = 1000;
