@@ -152,7 +152,13 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
     setSaving(false);
     const e = e1 ?? e2;
     if (e) { onError(e.message.includes("duplicate") ? "Deze kortingscode is al in gebruik." : e.message); return; }
-    onFlash("Opgeslagen."); onChanged();
+    // Eerste keer een videolink: komende afspraken krijgen de bevestiging opnieuw, nu met link.
+    let sent = 0;
+    if (!m.meet_url && meet.trim()) {
+      const { data } = await supabase.functions.invoke("booking", { body: { action: "videolink_nasturen", stylist_id: m.stylist_id } });
+      sent = (data as { sent?: number } | null)?.sent ?? 0;
+    }
+    onFlash(sent ? `Opgeslagen. ${sent} ${sent === 1 ? "klant kreeg" : "klanten kregen"} de bevestiging opnieuw, nu met videolink.` : "Opgeslagen."); onChanged();
   };
 
   const label = (t: string) => <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", opacity: 0.6 }}>{t}</span>;

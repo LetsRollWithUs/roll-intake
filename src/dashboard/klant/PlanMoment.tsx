@@ -25,7 +25,7 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
   canSelf?: boolean; onClose: () => void; onDone: (bookingId: string) => void;
 }) {
   const [wie, setWie] = useState<"klant" | "styliste">(canSelf ? "klant" : "styliste");
-  const [stylists, setStylists] = useState<{ id: string; name: string }[]>([]);
+  const [stylists, setStylists] = useState<{ id: string; name: string; meet_url: string | null }[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [stylistId, setStylistId] = useState<string>(defaultStylistId ?? "");
   const [service, setService] = useState<"pre_sample" | "post_sample">("pre_sample");
@@ -45,8 +45,8 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
     (async () => {
       const [{ data: adm }, { data: u }] = await Promise.all([supabase.rpc("is_admin"), supabase.auth.getUser()]);
       setIsAdmin(adm === true);
-      const { data: st } = await supabase.from("stylists").select("id,name,email").eq("active", true).order("name");
-      const list = ((st as { id: string; name: string; email: string }[]) ?? []);
+      const { data: st } = await supabase.from("stylists").select("id,name,email,meet_url").eq("active", true).order("name");
+      const list = ((st as { id: string; name: string; email: string; meet_url: string | null }[]) ?? []);
       const mine = list.filter((x) => adm === true || x.email?.toLowerCase() === (u?.user?.email ?? "").toLowerCase());
       setStylists(mine);
       if (!defaultStylistId && mine.length === 1) setStylistId(mine[0].id);
@@ -64,10 +64,13 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
   const byDay = useMemo(() => (slots ?? []).reduce<Record<string, string[]>>((acc, s) => { (acc[dayKey(s)] ??= []).push(s); return acc; }, {}), [slots]);
   const start = anders ? nlToIso(date, time) : pick;
   const zelf = wie === "klant";
+  const chosen = stylists.find((s) => s.id === stylistId);
+  const geenLink = !!chosen && !chosen.meet_url?.trim();
 
   const submit = async () => {
     setErr(null);
     if (!stylistId) { setErr("Kies een styliste."); return; }
+    if (geenLink) { setErr("Deze styliste heeft nog geen videolink. Vul die eerst in bij Agenda."); return; }
     if (!zelf && !start) { setErr("Kies een moment."); return; }
     setState("busy");
     const res = zelf
@@ -118,7 +121,7 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
             <span className="kk-label">Styliste</span>
             <select className="rd-input" value={stylistId} onChange={(e) => setStylistId(e.target.value)} disabled={!isAdmin && stylists.length <= 1} style={{ height: 44 }}>
               <option value="">Kies een styliste</option>
-              {stylists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {stylists.map((s) => <option key={s.id} value={s.id}>{s.name}{s.meet_url?.trim() ? "" : " (nog geen videolink)"}</option>)}
             </select>
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -130,7 +133,13 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
           </label>
         </div>
 
-        {stylistId && !zelf && (
+        {geenLink && (
+          <div role="status" style={{ fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}>
+            <strong>{chosen?.name} heeft nog geen videolink.</strong> Zonder link krijgt de klant geen knop om het gesprek te openen. Vul de link eerst in bij <a href="/beheer/agenda">Agenda</a>.
+          </div>
+        )}
+
+        {stylistId && !zelf && !geenLink && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
               <span className="kk-label">{anders ? "Ander moment" : "Vrije plekken in het rooster (3 weken)"}</span>
@@ -160,7 +169,7 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
 
         {err && <span role="status" style={{ fontSize: 14, fontWeight: 600, color: "var(--rd-pink-dark)" }}>{err}</span>}
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button className="rd-btn rd-btn-primary" onClick={submit} disabled={state === "busy"} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{state === "busy" ? "Bezig..." : zelf ? "Verstuur uitnodiging" : mode === "plan" ? "Plan en verstuur bevestiging" : "Nodig uit"}</button>
+          <button className="rd-btn rd-btn-primary" onClick={submit} disabled={state === "busy" || geenLink} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{state === "busy" ? "Bezig..." : zelf ? "Verstuur uitnodiging" : mode === "plan" ? "Plan en verstuur bevestiging" : "Nodig uit"}</button>
           <button className="rd-textlink" onClick={onClose}>Annuleren</button>
         </div>
       </div>

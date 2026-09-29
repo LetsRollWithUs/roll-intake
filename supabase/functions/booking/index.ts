@@ -175,6 +175,27 @@ Deno.serve(async (req) => {
       return j({ ok: r.ok });
     }
 
+    // Videolink net ingevuld: klanten met een komende afspraak kregen hun bevestiging zonder link.
+    // Stuur die bevestiging (C01) opnieuw, nu met videolink. Alleen de styliste zelf of een beheerder.
+    if (action === "videolink_nasturen") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: mag } = await caller.rpc("owns_stylist", { sid: body.stylist_id ?? "" });
+      if (mag !== true) return j({ error: "Geen toegang" }, 403);
+      const { data: st } = await admin.from("stylists").select("meet_url").eq("id", body.stylist_id).maybeSingle();
+      if (!(st as any)?.meet_url) return j({ ok: false, skipped: "nog geen videolink" });
+      const { data: list } = await admin.from("bookings").select("id").eq("stylist_id", body.stylist_id)
+        .eq("status", "confirmed").gt("start_at", new Date().toISOString());
+      let sent = 0;
+      for (const b of (list ?? []) as { id: string }[]) {
+        const ctx = await buildBookingContext(admin, b.id);
+        if (!ctx) continue;
+        const r = await klaviyoTrack("Advies flow", ctx.profile, { ...ctx.properties, stap: "bevestigd", videolink_nagestuurd: true },
+          appointmentProfileProps(ctx, { includeIntakeStatus: true }), `${b.id}:videolink:${Date.now()}`, admin);
+        if (r.ok) sent++;
+      }
+      return j({ ok: true, sent });
+    }
+
     if (action === "booking_changed") {
       if (!body.booking_id) return j({ ok: false, skipped: "geen booking_id" });
       const ctx = await buildBookingContext(admin, body.booking_id);
