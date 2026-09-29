@@ -141,7 +141,7 @@ export function ColorPicker({ open, initial, onPick, onClose, title = "Kies een 
                     {swatch(c.hex, 40)}
                     <span style={{ minWidth: 0, flex: 1 }}>
                       <span style={{ display: "block", fontWeight: 700, fontSize: 14 }}>{c.name}</span>
-                      <span style={{ display: "block", fontSize: 12.5, opacity: 0.7 }}>{c.brand}{c.line ? ` · ${c.line}` : ""}{c.rollCode ? ` · mengcode ${c.rollCode}` : ""}</span>
+                      <span style={{ display: "block", fontSize: 12.5, opacity: 0.7 }}>{c.brand}{c.line ? ` · ${c.line}` : ""}{c.rollCode ? ` · bij Roll ${c.rollName ?? "Roll"} - ${c.rollCode}` : ""}</span>
                     </span>
                   </button>
                 ))}

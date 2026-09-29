@@ -109,7 +109,7 @@ export function AdviesFase({ advice, setAdvice, intakeRooms, roomId, setRoomId }
                   <span aria-hidden style={{ width: 28, height: 28, borderRadius: 8, background: c.hex ?? "var(--rd-grey-light)", border: "1px solid rgba(47,33,65,.12)" }} />
                   <span style={{ fontSize: 14 }}>
                     <strong>{c.name}</strong>
-                    {c.source === "ark" && <span style={{ display: "block", fontSize: 12, opacity: 0.7 }}>Referentiekleur {c.brand}{c.roll_code ? ` · mengcode ${c.roll_code}` : ""}</span>}
+                    {c.source === "ark" && <span style={{ display: "block", fontSize: 12, opacity: 0.7 }}>Referentiekleur {c.brand}{c.roll_code ? ` · bij Roll ${c.roll_name ?? "Roll"} - ${c.roll_code}` : ""}</span>}
                   </span>
                   <button className="rd-textlink" style={{ fontSize: 12.5 }} onClick={() => setPicker({ surfaceId: s.id, replace: c.id })}>Wijzig</button>
                   <button className="rd-textlink" style={{ fontSize: 12.5, opacity: 0.7 }} aria-label={`${colorLabel(c)} weghalen`} onClick={() => updSurface(s.id, { colors: s.colors.filter((x) => x.id !== c.id) })}>×</button>
