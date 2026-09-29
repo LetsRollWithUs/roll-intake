@@ -36,6 +36,10 @@ export function SampleComposer({ colors, value, onChange }: Props) {
   const shown = allBundels ? ranked : top;
 
   const colorItems = value.filter(isColor);
+  // Losse kleur die al in een toegevoegde bundel zit: melden en makkelijk weghalen.
+  const inPack = (ref: string) => SAMPLE_PACKS.find((pk) => hasPack(pk.id) && pk.colorIds.includes(ref));
+  const dubbel = colorItems.filter((p) => inPack(p.ref));
+  const removeSingles = (refs: string[]) => onChange(value.filter((p) => !(isColor(p) && refs.includes(p.ref))));
   const packItems = value.filter((p) => p.kind === "pack");
   const total = value.reduce((s, p) => s + (PRICE[p.kind as keyof typeof PRICE] ?? 0), 0);
   const swatch = (hex?: string, size = 16) => <span style={{ width: size, height: size, borderRadius: 5, background: hex ?? "#eee", border: "1px solid rgba(0,0,0,.12)", flex: "none", display: "inline-block" }} />;
@@ -72,18 +76,25 @@ export function SampleComposer({ colors, value, onChange }: Props) {
       {/* Overzicht in de mail */}
       <div style={{ padding: "12px 14px", background: "var(--rd-grey-light)", borderRadius: 12 }}>
         {label(`In de mail (${colorItems.length + packItems.length})`)}
+        {dubbel.length > 0 && (
+          <div role="status" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", marginBottom: 8, borderRadius: 10, background: "#fff", border: "1px solid var(--rd-line)", fontSize: 13.5 }}>
+            <span style={{ flex: "1 1 240px" }}><strong>{dubbel.map((p) => p.name).join(", ")}</strong> {dubbel.length === 1 ? "zit" : "zitten"} al in {[...new Set(dubbel.map((p) => inPack(p.ref)!.displayName))].map((n) => `de ${n} Sample Pack`).join(" en ")}.</span>
+            <button className="rd-btn rd-btn-outline" onClick={() => removeSingles(dubbel.map((p) => p.ref))} style={{ width: "auto", padding: "0 14px", height: 34 }}>{dubbel.length === 1 ? "Losse weghalen" : "Losse kleuren weghalen"}</button>
+          </div>
+        )}
         {colorItems.length + packItems.length === 0 && <span style={{ fontSize: 13, opacity: 0.65 }}>Nog niets gekozen. Kleuren uit de rijen hierboven komen hier vanzelf bij.</span>}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {colorItems.map((p) => (
             <div key={`c-${p.ref}`} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {swatch(byId.get(p.ref)?.hex, 18)}
-              <span style={{ fontWeight: 700, fontSize: 13.5, flex: "1 1 110px", minWidth: 0 }}>{p.name}</span>
+              <span style={{ fontWeight: 700, fontSize: 13.5, flex: "1 1 110px", minWidth: 0 }}>{p.name}{inPack(p.ref) && <span style={{ fontWeight: 500, fontSize: 12, opacity: 0.7 }}> · zit al in de {inPack(p.ref)!.displayName} Sample Pack</span>}</span>
               <div style={{ display: "flex", gap: 3 }}>
                 {(["sticker", "tester"] as ColorKind[]).map((k) => (
                   <button key={k} className={`rd-seg${p.kind === k ? " is-on" : ""}`} onClick={() => setKind(p.ref, k)} style={{ fontSize: 12, padding: "4px 10px" }}>
                     {k === "sticker" ? `Sticker ${eur(PRICE.sticker)}` : `Verftester ${eur(PRICE.tester)}`}
                   </button>
                 ))}
+                {inPack(p.ref) && <button onClick={() => removeSingles([p.ref])} aria-label={`${p.name} weghalen`} title="Weghalen, zit al in de bundel" style={iconBtn}><TrashIcon /></button>}
               </div>
             </div>
           ))}
