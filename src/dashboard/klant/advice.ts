@@ -23,7 +23,7 @@ export interface AdviceRoomV2 { room_id: string; label: string; surfaces: Advice
 export interface AdviceV2 { rooms: AdviceRoomV2[]; message: string; updated_at?: string }
 
 export const KEUZE_LABEL: Record<Keuze, string> = { bespreken: "Nog bespreken", testen: "Eerst testen", bevestigd: "Bevestigd" };
-export const TYPE_LABEL: Record<SurfaceType, string> = { muren: "Muren", accent: "Accentwand", plafond: "Plafond", houtwerk: "Houtwerk" };
+export const TYPE_LABEL: Record<SurfaceType, string> = { muren: "Muren", accent: "Accentwand", plafond: "Plafond", houtwerk: "Hout & metaal" };
 const TYPE_ORDER: Record<SurfaceType, number> = { muren: 0, plafond: 1, houtwerk: 2, accent: 3 };
 
 const byName = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c]));
@@ -75,7 +75,8 @@ export function initialAdvice(intake: IntakeRow): AdviceV2 {
 }
 
 const sorted = (list: AdviceSurface[]) => [...list].sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
-const surfaceText = (s: AdviceSurface) => (s.type === "accent" ? `Accentwand: ${s.name}` : s.name || TYPE_LABEL[s.type]);
+// Tekst voor de oude velden; houtwerk-woorden zorgen dat de rekenkern het als lak herkent.
+const surfaceText = (s: AdviceSurface) => (s.type === "accent" ? `Accentwand: ${s.name}` : s.type === "houtwerk" ? (/hout|lak|kozijn|deur|plint|trap/i.test(s.name) ? s.name : `Houtwerk: ${s.name || "hout & metaal"}`) : s.name || TYPE_LABEL[s.type]);
 const product = (s: AdviceSurface) => (s.type === "houtwerk" ? "Lak" : "Muurverf");
 
 // Oude velden afleiden, zodat verzenden (advies_done) en het bestelvoorstel blijven werken.

@@ -53,10 +53,13 @@ interface Props {
   onSaved: (next: Record<string, RoomMeasure>) => void;
   onOffer: (url: string, meta: OfferMeta) => void;
   onIntake: (patch: Partial<IntakeRow>) => void;
+  embedded?: boolean;
+  beforeSend?: () => Promise<boolean>;
+  sendLabel?: string;
   onTask: (t: RollTask) => void;
 }
 
-export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offerUrl, colorsByRoom, task, onSaved, onOffer, onIntake, onTask }: Props) {
+export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offerUrl, colorsByRoom, task, onSaved, onOffer, onIntake, onTask, embedded, beforeSend, sendLabel }: Props) {
   const intakeId = intake.id;
   const measured = rooms.filter((r) => showWalls(r) || showCeiling(r) || showWood(r));
   const [map, setMap] = useState<Record<string, RoomMeasure>>(() => {
@@ -304,7 +307,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
             <div style={{ fontSize: 12, opacity: 0.6 }}>Deze link staat in de opvolgmail voor verf.</div>
           </div>
         )}
-        <VoorstelPanel intake={intake} bookingId={bookingId} task={task} toolsInCart={toolsInCart} notes={notes} persist={persist} createRollTask={createRollTask} onIntake={onIntake} />
+        <VoorstelPanel intake={intake} bookingId={bookingId} task={task} toolsInCart={toolsInCart} notes={notes} persist={persist} createRollTask={createRollTask} onIntake={onIntake} embedded={embedded} beforeSend={beforeSend} sendLabel={sendLabel} />
         {!intake.offer_status && !task && (
           <>
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5, cursor: "pointer" }}>
@@ -315,7 +318,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
             <p className="rd-sub" style={{ margin: 0, fontSize: 12 }}>De offerte-tool rekent de prijzen live uit de webshop. Heeft de klant samples gekocht, dan komt de Sample korting (10%) er automatisch bij.</p>
           </>
         )}
-        {linkOpen ? (
+        {embedded ? null : linkOpen ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <input className="rd-input" type="url" value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="https://roll.nl/offerte/..." autoFocus style={{ height: 38, fontSize: 13, flex: "1 1 240px" }} />
