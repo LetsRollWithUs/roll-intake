@@ -15,7 +15,9 @@ interface BookingInfo {
   status: string;
   reschedule_count: number;
   customer_name: string;
+  stylist_name: string | null;
   can_self_reschedule: boolean;
+  can_self_plan: boolean;
 }
 
 export function ManageBooking() {
@@ -34,6 +36,7 @@ export function ManageBooking() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [planned, setPlanned] = useState(false);
 
   useEffect(() => lockDocument(), []);
 
@@ -41,21 +44,25 @@ export function ManageBooking() {
     if (!token) { setNotFound(true); setLoading(false); return; }
     const { data, error } = await supabase.rpc("booking_by_token", { p_token: token });
     if (error || !data) setNotFound(true);
-    else setInfo(data as BookingInfo);
+    else {
+      const b = data as BookingInfo;
+      setInfo(b);
+      if (b.can_self_plan) startPicking(b);
+    }
     setLoading(false);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  const startPicking = async () => {
-    if (!info) return;
+  const startPicking = async (b: BookingInfo | null = info) => {
+    if (!b) return;
     setPicking(true);
     setSlotsLoading(true);
-    const { data } = await supabase.rpc("available_slots", {
-      p_service_key: info.service_key,
-      p_from: isoDate(new Date()),
-      p_to: isoDate(new Date(Date.now() + 56 * 864e5)),
-    });
+    const range = { p_from: isoDate(new Date()), p_to: isoDate(new Date(Date.now() + 56 * 864e5)) };
+    // Uitgenodigd: alleen de agenda van de eigen styliste. Anders: alle stylisten.
+    const { data } = b.can_self_plan
+      ? await supabase.rpc("slots_by_token", { p_token: token, ...range })
+      : await supabase.rpc("available_slots", { p_service_key: b.service_key, ...range });
     setSlots((data as Slot[]) ?? []);
     setSlotsLoading(false);
   };
@@ -63,6 +70,29 @@ export function ManageBooking() {
   const availDays = useMemo(() => new Set(slots.map((s) => dateKey(s.start_at))), [slots]);
   const todayKey = dateKey(new Date().toISOString());
   const maxKey = dateKey(new Date(Date.now() + 56 * 864e5).toISOString());
+
+  // Uitgenodigde klant kiest zelf het eerste moment.
+  const confirmPlan = async () => {
+    if (!slot) return;
+    setBusy(true);
+    setErr(null);
+    const { error } = await supabase.rpc("plan_by_token", { p_token: token, p_start: slot });
+    if (error) {
+      setBusy(false);
+      setErr(error.message || "Plannen lukte niet. Probeer een ander moment.");
+      startPicking();
+      return;
+    }
+    try {
+      await supabase.functions.invoke("booking", { body: { action: "gepland_door_klant", token } });
+    } catch {
+      /* stil: de afspraak staat, de mail is niet kritiek voor de klant */
+    }
+    setBusy(false);
+    setPlanned(true);
+    setPicking(false);
+    load();
+  };
 
   const confirmReschedule = async () => {
     if (!slot) return;
@@ -114,10 +144,41 @@ export function ManageBooking() {
       </>,
     );
 
+  if (info.can_self_plan)
+    return shell(
+      <>
+        <h1 style={{ font: "800 26px/1.1 Figtree", letterSpacing: "-.02em", margin: "8px 0 6px" }}>Plan je kleuradvies</h1>
+        <p style={{ fontSize: 15, color: "rgba(47,33,65,.7)", marginTop: 0 }}>
+          {info.stylist_name ? `${info.stylist_name} nodigt je uit voor een online kleuradvies.` : "Je bent uitgenodigd voor een online kleuradvies."} Kies een moment dat jou uitkomt. Het gesprek duurt 30 minuten en is via video.
+        </p>
+        {slotsLoading ? (
+          <p style={{ fontSize: 14, color: "rgba(47,33,65,.6)" }}>Beschikbaarheid laden...</p>
+        ) : availDays.size === 0 ? (
+          <p style={{ fontSize: 14, color: "rgba(47,33,65,.6)" }}>
+            Er staan nu geen vrije momenten in de agenda. Stuur even een berichtje naar{" "}
+            <a href="mailto:hallo@roll.nl" style={{ color: PINK }}>hallo@roll.nl</a>, dan plannen we samen een moment.
+          </p>
+        ) : (
+          <>
+            <Calendar availDays={availDays} todayKey={todayKey} maxKey={maxKey} value={day}
+              onSelect={(k) => { setDay(k); setSlot(""); }} />
+            <TimePicker slots={slots} day={day} value={slot} onSelect={setSlot} />
+          </>
+        )}
+        {err && <p style={{ color: PINK, fontWeight: 600, fontSize: 14, marginTop: 14 }}>{err}</p>}
+        {availDays.size > 0 && (
+          <button onClick={confirmPlan} disabled={!slot || busy}
+            style={{ width: "100%", marginTop: 18, height: 52, border: 0, borderRadius: 99, background: slot && !busy ? AUB : AUB_DIM, color: "#fff", font: "700 16px Figtree", cursor: slot && !busy ? "pointer" : "default" }}>
+            {busy ? "Bezig..." : "Plan dit moment"}
+          </button>
+        )}
+      </>,
+    );
+
   return shell(
     <>
       <h1 style={{ font: "800 26px/1.1 Figtree", letterSpacing: "-.02em", margin: "8px 0 6px" }}>
-        {done ? "Je afspraak is verzet" : "Je afspraak"}
+        {planned ? "Je afspraak staat" : done ? "Je afspraak is verzet" : "Je afspraak"}
       </h1>
 
       {/* Huidige afspraak */}
@@ -131,14 +192,14 @@ export function ManageBooking() {
         )}
       </div>
 
-      {!done && !picking && (
+      {!done && !planned && !picking && (
         <>
           {info.can_self_reschedule ? (
             <>
               <p style={{ fontSize: 15, color: "rgba(47,33,65,.7)", marginTop: 0 }}>
                 Komt het toch niet uit? Je kunt zelf een nieuw moment kiezen.
               </p>
-              <button onClick={startPicking}
+              <button onClick={() => startPicking()}
                 style={{ width: "100%", height: 52, border: 0, borderRadius: 99, background: AUB, color: "#fff", font: "700 16px Figtree", cursor: "pointer" }}>
                 Afspraak verzetten
               </button>
@@ -178,6 +239,12 @@ export function ManageBooking() {
             </button>
           </div>
         </>
+      )}
+
+      {planned && (
+        <p style={{ fontSize: 14, color: "rgba(47,33,65,.6)", marginTop: 4 }}>
+          Je ontvangt een bevestiging per mail met de videolink.
+        </p>
       )}
 
       {done && (

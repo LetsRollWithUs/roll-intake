@@ -161,6 +161,20 @@ Deno.serve(async (req) => {
     }
 
     // Afspraak gewijzigd (verzet of overgedragen): nieuwe tijd/videolink mailen.
+    // Klant koos zelf een moment na een uitnodiging (publiek, met token): bevestiging + melding styliste.
+    if (action === "gepland_door_klant") {
+      const { data: b } = await admin.from("bookings").select("id,status,confirmed_at,invited_at").eq("manage_token", body.token ?? "").maybeSingle();
+      if (!b || (b as any).status !== "confirmed" || !(b as any).invited_at) return j({ ok: false, skipped: "niet gepland" });
+      // Alleen direct na het plannen (voorkomt dubbele mails bij opnieuw aanroepen).
+      if (Date.now() - new Date((b as any).confirmed_at).getTime() > 10 * 60e3) return j({ ok: true, skipped: "al bevestigd" });
+      const ctx = await buildBookingContext(admin, (b as any).id);
+      if (!ctx) return j({ ok: false, skipped: "boeking niet gevonden" });
+      const r = await klaviyoTrack("Advies flow", ctx.profile, { ...ctx.properties, stap: "bevestigd", gratis: true },
+        appointmentProfileProps(ctx, { includeIntakeStatus: true }), `${(b as any).id}:bevestigd:zelf`, admin);
+      await notifyStylist(admin, (b as any).id, "nieuwe_boeking");
+      return j({ ok: r.ok });
+    }
+
     if (action === "booking_changed") {
       if (!body.booking_id) return j({ ok: false, skipped: "geen booking_id" });
       const ctx = await buildBookingContext(admin, body.booking_id);
@@ -375,11 +389,21 @@ Deno.serve(async (req) => {
     // met moment, videolink, intakelink en verzetlink, plus een melding aan de styliste.
     if (action === "uitnodiging_verstuur") {
       const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
-      const { data: seen } = await caller.from("bookings").select("id,status").eq("id", body.booking_id ?? "").maybeSingle();
+      const { data: seen } = await caller.from("bookings").select("id,status,invited_at").eq("id", body.booking_id ?? "").maybeSingle();
       if (!seen) return j({ error: "Geen toegang" }, 403);
-      if ((seen as any).status !== "confirmed") return j({ ok: false, error: "nog geen moment gepland" });
       const ctx = await buildBookingContext(admin, body.booking_id);
       if (!ctx) return j({ ok: false, error: "afspraak niet gevonden" });
+      // Klant kiest zelf: plan-mail (C06) met de link naar de agenda van de styliste.
+      if ((seen as any).status === "manual" && (seen as any).invited_at) {
+        const p = ctx.properties;
+        const r = await klaviyoTrack("Advies flow", ctx.profile, {
+          stap: "plan_je_afspraak", uitnodiging: true, gratis: true, booking_id: p.booking_id,
+          plan_url: `${p.manage_url}&plan=1`, stylist_name: p.stylist_name, intake_ingevuld: p.intake_ingevuld,
+          intake_url: p.intake_url, service_label: p.service_label,
+        }, {}, `${body.booking_id}:uitnodiging_plan:${Date.now()}`, admin);
+        return j({ ok: r.ok });
+      }
+      if ((seen as any).status !== "confirmed") return j({ ok: false, error: "nog geen moment gepland" });
       const r = await klaviyoTrack("Advies flow", ctx.profile, { ...ctx.properties, stap: "bevestigd", gratis: true },
         appointmentProfileProps(ctx, { includeIntakeStatus: true }), `${body.booking_id}:uitnodiging:${Date.now()}`, admin);
       await notifyStylist(admin, body.booking_id, "nieuwe_boeking");

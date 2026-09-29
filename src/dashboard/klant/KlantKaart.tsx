@@ -22,14 +22,14 @@ interface Booking {
   id: string; start_at: string; end_at: string | null; created_at: string; status: string;
   customer_name: string | null; customer_email: string | null; customer_phone: string | null;
   intake_id: string | null; stylist_id: string | null; kanban_stage: string; samples_besteld: boolean;
-  opgevolgd_at: string | null; gesprek_gevoerd_at: string | null; archived_at: string | null; gratis: boolean;
+  opgevolgd_at: string | null; gesprek_gevoerd_at: string | null; archived_at: string | null; gratis: boolean; invited_at: string | null;
   stylists: { name: string; meet_url: string | null } | null; services: { key: string } | null;
 }
 interface Commission { id: string; woo_order_id: string; amount: number; status: string; created_at: string }
 type Fase = "voorbereiden" | "advies" | "afronden";
 type Save = "idle" | "saving" | "saved" | "error";
 
-const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis, stylists(name,meet_url), services(key)";
+const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis,invited_at, stylists(name,meet_url), services(key)";
 const TZ = "Europe/Amsterdam";
 const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 const time = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(":", ".");
@@ -40,6 +40,7 @@ const STAGES = [["ingepland", "Ingepland"], ["advies", "Advies gegeven"], ["opvo
 const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies" }, { key: "afronden", label: "Afronden" }];
 
 function afspraakLabel(b: Booking): string {
+  if (b.status === "manual" && b.invited_at) return "Uitgenodigd, klant kiest een moment";
   if (b.status === "manual" || b.status === "paid_unplaced") return "Afspraak nog niet gepland";
   const d = new Date(b.start_at);
   const today = dayKey(new Date());
@@ -373,7 +374,7 @@ export function KlantKaart() {
       </div>
 
       {plannen && (
-        <PlanMoment mode="plan" bookingId={b.id} defaultStylistId={b.stylist_id} customerName={name} onClose={() => setPlannen(false)}
+        <PlanMoment mode="plan" bookingId={b.id} defaultStylistId={b.stylist_id} customerName={name} canSelf={b.status === "manual"} onClose={() => setPlannen(false)}
           onDone={() => { setPlannen(false); window.location.reload(); }} />
       )}
 

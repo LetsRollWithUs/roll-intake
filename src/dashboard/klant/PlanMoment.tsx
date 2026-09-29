@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
 
-// Gratis advies of via via: een moment plannen voor een bestaande klant zonder afspraak (mode "plan"),
-// of een nieuwe klant direct uitnodigen (mode "invite"). Vrije plekken komen uit het rooster van de
-// styliste; met "Ander moment" kan ook een tijd daarbuiten. De klant krijgt de bevestigingsmail (C01).
+// Gratis advies of via via: een bestaande klant zonder afspraak (mode "plan") of een nieuwe klant
+// (mode "invite") uitnodigen. Twee manieren: de klant kiest zelf een moment uit de agenda van de
+// styliste (plan-mail C06), of de styliste legt het moment vast (bevestigingsmail C01). Vrije plekken
+// komen uit het rooster; met "Ander moment" kan ook een tijd daarbuiten.
 
 const TZ = "Europe/Amsterdam";
 const dayLabel = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" }).format(new Date(iso));
@@ -19,10 +20,11 @@ function nlToIso(date: string, time: string): string | null {
   return new Date(guess.getTime() - offset).toISOString();
 }
 
-export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, onClose, onDone }: {
+export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, canSelf = true, onClose, onDone }: {
   mode: "plan" | "invite"; bookingId?: string; defaultStylistId?: string | null; customerName?: string;
-  onClose: () => void; onDone: (bookingId: string) => void;
+  canSelf?: boolean; onClose: () => void; onDone: (bookingId: string) => void;
 }) {
+  const [wie, setWie] = useState<"klant" | "styliste">(canSelf ? "klant" : "styliste");
   const [stylists, setStylists] = useState<{ id: string; name: string }[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [stylistId, setStylistId] = useState<string>(defaultStylistId ?? "");
@@ -61,20 +63,25 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, on
 
   const byDay = useMemo(() => (slots ?? []).reduce<Record<string, string[]>>((acc, s) => { (acc[dayKey(s)] ??= []).push(s); return acc; }, {}), [slots]);
   const start = anders ? nlToIso(date, time) : pick;
+  const zelf = wie === "klant";
 
   const submit = async () => {
     setErr(null);
     if (!stylistId) { setErr("Kies een styliste."); return; }
-    if (!start) { setErr("Kies een moment."); return; }
+    if (!zelf && !start) { setErr("Kies een moment."); return; }
     setState("busy");
-    const res = mode === "plan"
-      ? await supabase.rpc("plan_moment", { p_booking_id: bookingId, p_stylist_id: stylistId, p_start: start, p_service_key: service })
-      : await supabase.rpc("invite_customer", { p_name: name, p_email: email, p_phone: phone, p_stylist_id: stylistId, p_start: start, p_service_key: service });
+    const res = zelf
+      ? mode === "plan"
+        ? await supabase.rpc("booking_invite_self", { p_booking_id: bookingId, p_stylist_id: stylistId, p_service_key: service })
+        : await supabase.rpc("invite_customer", { p_name: name, p_email: email, p_phone: phone, p_stylist_id: stylistId, p_start: null, p_service_key: service })
+      : mode === "plan"
+        ? await supabase.rpc("plan_moment", { p_booking_id: bookingId, p_stylist_id: stylistId, p_start: start, p_service_key: service })
+        : await supabase.rpc("invite_customer", { p_name: name, p_email: email, p_phone: phone, p_stylist_id: stylistId, p_start: start, p_service_key: service });
     if (res.error) { setState("idle"); setErr(res.error.message); return; }
     const id = (res.data as string) ?? bookingId!;
     const { data } = await supabase.functions.invoke("booking", { body: { action: "uitnodiging_verstuur", booking_id: id } });
     setState("idle");
-    if (!(data as { ok?: boolean } | null)?.ok) { setErr("Het moment staat vast, maar de uitnodiging kon niet worden verstuurd. Probeer het via de klantkaart opnieuw."); onDone(id); return; }
+    if (!(data as { ok?: boolean } | null)?.ok) { setErr(zelf ? "De klant staat klaar, maar de uitnodiging kon niet worden verstuurd. Probeer het via de klantkaart opnieuw." : "Het moment staat vast, maar de uitnodiging kon niet worden verstuurd. Probeer het via de klantkaart opnieuw."); onDone(id); return; }
     onDone(id);
   };
 
@@ -83,8 +90,20 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, on
       <div className="rd-card-white" onClick={(e) => e.stopPropagation()} style={{ width: "min(640px, 100%)", maxHeight: "92vh", overflow: "auto", padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <strong style={{ fontSize: 18 }}>{mode === "plan" ? `Plan een moment${customerName ? ` met ${customerName}` : ""}` : "Klant uitnodigen"}</strong>
-          <p className="rd-sub" style={{ margin: "4px 0 0", fontSize: 14 }}>Voor gratis advies of een klant via via. De klant krijgt een uitnodiging met het moment, de videolink en de link naar de intake.</p>
+          <p className="rd-sub" style={{ margin: "4px 0 0", fontSize: 14 }}>Voor gratis advies of een klant via via.</p>
         </div>
+
+        {canSelf && (
+          <div role="radiogroup" aria-label="Wie kiest het moment?" style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+            {([["klant", "Klant kiest zelf een moment", "De klant krijgt een mail met een link naar jouw agenda."], ["styliste", "Ik kies een moment", "De klant krijgt een bevestiging met het moment en de videolink."]] as const).map(([k, t, sub]) => (
+              <button key={k} role="radio" aria-checked={wie === k} className={`rd-plan-chip${wie === k ? " is-on" : ""}`} onClick={() => setWie(k)}
+                style={{ textAlign: "left", padding: "10px 14px", minHeight: 44, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2, borderRadius: 14 }}>
+                <strong style={{ fontSize: 14 }}>{t}</strong>
+                <span style={{ fontSize: 12.5, opacity: 0.75, fontWeight: 400 }}>{sub}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {mode === "invite" && (
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
@@ -111,7 +130,7 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, on
           </label>
         </div>
 
-        {stylistId && (
+        {stylistId && !zelf && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
               <span className="kk-label">{anders ? "Ander moment" : "Vrije plekken in het rooster (3 weken)"}</span>
@@ -141,7 +160,7 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, on
 
         {err && <span role="status" style={{ fontSize: 14, fontWeight: 600, color: "var(--rd-pink-dark)" }}>{err}</span>}
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button className="rd-btn rd-btn-primary" onClick={submit} disabled={state === "busy"} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{state === "busy" ? "Bezig..." : mode === "plan" ? "Plan en verstuur uitnodiging" : "Nodig uit"}</button>
+          <button className="rd-btn rd-btn-primary" onClick={submit} disabled={state === "busy"} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{state === "busy" ? "Bezig..." : zelf ? "Verstuur uitnodiging" : mode === "plan" ? "Plan en verstuur bevestiging" : "Nodig uit"}</button>
           <button className="rd-textlink" onClick={onClose}>Annuleren</button>
         </div>
       </div>
