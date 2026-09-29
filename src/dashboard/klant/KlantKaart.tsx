@@ -209,7 +209,9 @@ export function KlantKaart() {
     if (intake.offer_status === "verstuurd") return { t: "Advies en offerte verstuurd · wacht op de bestelling", f: "afronden" as Fase };
     const vl = ((intake.offer_meta as { offer?: { vlakken?: { status?: string }[] } } | null)?.offer?.vlakken ?? []);
     const testen = vl.some((v) => v.status === "testen");
+    const kiezen = vl.some((v) => v.status === "kiezen");
     if (!intake.offer_meta?.id) return { t: "Leg het advies vast: per oppervlak bevestigd of eerst testen", f: "advies" as Fase };
+    if (!testen && kiezen) return { t: "Kies per oppervlak: eerst testen of bevestigd", f: "advies" as Fase };
     if (testen && !sent.has("samples")) return { t: "Verstuur het sampleadvies", f: "afronden" as Fase };
     if (testen) return { t: "Check-in: kies per oppervlak de winnende kleur", f: "afronden" as Fase };
     if (!sent.has("roll") && !sent.has("zelf")) return { t: "Verstuur advies en offerte", f: "afronden" as Fase };

@@ -106,6 +106,9 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
   }, [offer]);
   const testVlakken: OfferVlak[] = (offer?.vlakken ?? []).filter((v) => v.status === "testen");
   const samplesRoute = testVlakken.length > 0;
+  // Nog geen keuze gemaakt voor een oppervlak (status "kiezen"): nog geen route, eerst het advies afmaken.
+  const kiezenVlakken: OfferVlak[] = (offer?.vlakken ?? []).filter((v) => v.status === "kiezen");
+  const nogKiezen = !samplesRoute && kiezenVlakken.length > 0;
   const hasOffer = !!offer && verfRooms.length > 0 && !samplesRoute && offer.klaarVoorOfferte !== false;
   const blocked = !!offer && offer.kleurenOnbekend.length > 0;
   // Samplekleuren uit de testvlakken (alleen Roll-kleuren; de editor controleert dat).
@@ -197,8 +200,8 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     { k: "samples", titel: "Eerst kleuren testen", sub: "Sampleadvies met stickers of testers. Verf volgt als de klant eruit is.", kan: true, waarom: "" },
     { k: "roll", titel: "Roll laten meekijken", sub: "Roll neemt contact op met de klant.", kan: true, waarom: "" },
   ] : [
-    { k: "voorstel", titel: "Advies + offerte", sub: "Het verslag en de offerte met winkelmandje, in één keer.", kan: hasOffer && !blocked, waarom: !offer ? "Leg eerst het advies vast bij stap 2." : blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
-    { k: "advies", titel: "Alleen advies", sub: "Met links naar de kleuren. Voor klanten die nog even verder willen kijken.", kan: hasOffer, waarom: "Er zijn nog geen bevestigde kleuren." },
+    { k: "voorstel", titel: "Advies + offerte", sub: "Het verslag en de offerte met winkelmandje, in één keer.", kan: hasOffer && !blocked && !nogKiezen, waarom: !offer ? "Leg eerst het advies vast bij stap 2." : nogKiezen ? "Kies eerst per oppervlak: eerst testen of bevestigd." : blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
+    { k: "advies", titel: "Alleen advies", sub: "Met links naar de kleuren. Voor klanten die nog even verder willen kijken.", kan: hasOffer && !nogKiezen, waarom: nogKiezen ? "Kies eerst per oppervlak: eerst testen of bevestigd." : "Er zijn nog geen bevestigde kleuren." },
     { k: "roll", titel: "Roll laten meekijken", sub: "Roll belt de klant en maakt de offerte af.", kan: true, waarom: "" },
   ];
 
@@ -216,6 +219,8 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
         </div>
         {loading ? <p className="rd-sub">Advies ophalen...</p> : !offer ? (
           <p style={{ margin: 0, fontSize: 15 }}>Het advies is nog niet vastgelegd. <button className="rd-textlink" onClick={onEditOffer}>Leg het advies vast bij stap 2</button>, of laat Roll meekijken.</p>
+        ) : nogKiezen ? (
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>Voor {kiezenVlakken.length === 1 ? "één oppervlak" : `${kiezenVlakken.length} oppervlakken`} is nog niets gekozen: {kiezenVlakken.map((v) => `${v.ruimte} (${(v.type || v.soort || "").toLowerCase()})`).join(", ")}. <button className="rd-textlink" onClick={onEditOffer}>Kies bij Advies</button> of het eerst getest wordt of bevestigd is.</p>
         ) : samplesRoute ? (
           <>
             <p style={{ margin: "0 0 6px", fontSize: 14 }}>Er wordt nog getest, dus de klant krijgt eerst samples. De verf volgt als de klant per oppervlak een winnaar heeft gekozen.</p>
@@ -233,6 +238,8 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
                     ))}
                     <span style={{ fontSize: 12.5, opacity: 0.7 }}>eerst testen</span>
                   </span>
+                ) : v.status === "kiezen" ? (
+                  <span style={{ flex: 1, fontSize: 13.5, opacity: 0.7 }}>nog kiezen</span>
                 ) : (
                   <span style={{ flex: 1, display: "inline-flex", gap: 6, alignItems: "center" }}>
                     <span aria-hidden style={{ width: 14, height: 14, borderRadius: 4, background: v.kleurHex ?? "var(--rd-grey-light)", border: "1px solid rgba(0,0,0,.12)" }} />{v.kleurNaam ?? "geen kleur"} <span style={{ fontSize: 12.5, opacity: 0.7 }}>· bevestigd</span>
