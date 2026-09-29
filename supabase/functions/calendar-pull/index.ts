@@ -1,6 +1,6 @@
-// Haalt per styliste haar iCal-feed op en schrijft de bezette tijden naar busy_blocks.
-// Zo blokkeren eigen agenda-afspraken de beschikbaarheid.
-// - cron (header x-cron-secret): synct alle stylisten met een feed.
+// Haalt per styliste haar iCal-feeds op (max 5 agenda's, tabel stylist_calendars) en schrijft de
+// bezette tijden naar busy_blocks. Zo blokkeren afspraken uit al haar agenda's de beschikbaarheid.
+// - cron (header x-cron-secret): synct alle agenda's van actieve stylisten.
 // - adviseur (JWT) met body.stylist_id: synct één styliste (voor "sync nu" in het dashboard).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import ical from "npm:node-ical@0.20.1";
@@ -72,29 +72,33 @@ async function fetchFeed(url: string): Promise<string> {
   }
 }
 
-async function syncStylist(admin: any, stylist: { id: string; ical_feed_url: string }) {
+interface Cal { id: string; stylist_id: string; url: string }
+
+async function syncCalendar(admin: any, cal: Cal) {
   const winStart = new Date();
   const winEnd = new Date(Date.now() + WINDOW_DAYS * 864e5);
-  const text = await fetchFeed(stylist.ical_feed_url); // gooit bij fout -> caller vangt
+  const text = await fetchFeed(cal.url); // gooit bij fout -> caller vangt
   const parsed = ical.parseICS(text);
 
-  const rows: { stylist_id: string; start_at: string; end_at: string; source: string; external_uid: string | null }[] = [];
+  const rows: { stylist_id: string; calendar_id: string; start_at: string; end_at: string; source: string; external_uid: string | null }[] = [];
   for (const k of Object.keys(parsed)) {
     for (const iv of eventIntervals(parsed[k], winStart, winEnd)) {
       if (new Date(iv.end) < winStart) continue;
-      rows.push({ stylist_id: stylist.id, start_at: iv.start, end_at: iv.end, source: "ical", external_uid: iv.uid });
+      rows.push({ stylist_id: cal.stylist_id, calendar_id: cal.id, start_at: iv.start, end_at: iv.end, source: "ical", external_uid: iv.uid });
     }
   }
 
-  // Alleen bij een geslaagde ophaal/parse vervangen we de toekomstige blokken.
+  // Alleen bij een geslaagde ophaal/parse vervangen we de toekomstige blokken van déze agenda.
   await admin.from("busy_blocks").delete()
-    .eq("stylist_id", stylist.id).eq("source", "ical").gte("end_at", winStart.toISOString());
+    .eq("calendar_id", cal.id).gte("end_at", winStart.toISOString());
   if (rows.length) {
     for (let i = 0; i < rows.length; i += 500) {
       await admin.from("busy_blocks").insert(rows.slice(i, i + 500));
     }
   }
-  await admin.from("stylists").update({ ical_synced_at: new Date().toISOString() }).eq("id", stylist.id);
+  const now = new Date().toISOString();
+  await admin.from("stylist_calendars").update({ synced_at: now, last_error: null }).eq("id", cal.id);
+  await admin.from("stylists").update({ ical_synced_at: now }).eq("id", cal.stylist_id);
   return rows.length;
 }
 
@@ -105,7 +109,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({} as any));
     const isCron = CRON_SECRET && req.headers.get("x-cron-secret") === CRON_SECRET;
 
-    let query = admin.from("stylists").select("id,ical_feed_url").eq("active", true).not("ical_feed_url", "is", null);
+    let query = admin.from("stylist_calendars").select("id,stylist_id,url, stylists!inner(active)").eq("stylists.active", true);
 
     if (!isCron) {
       const caller = createClient(SB_URL, SB_ANON, {
@@ -115,17 +119,19 @@ Deno.serve(async (req) => {
       const { data: isAdv } = await caller.rpc("is_advisor");
       if (isAdv !== true) return j({ error: "Geen toegang" }, 403);
       if (!body.stylist_id) return j({ error: "stylist_id vereist" }, 400);
-      query = query.eq("id", body.stylist_id);
+      query = query.eq("stylist_id", body.stylist_id);
     }
 
-    const { data: stylists } = await query;
+    const { data: cals } = await query;
     const results: Record<string, unknown>[] = [];
-    for (const st of (stylists ?? []) as { id: string; ical_feed_url: string }[]) {
+    for (const cal of (cals ?? []) as Cal[]) {
       try {
-        const n = await syncStylist(admin, st);
-        results.push({ stylist_id: st.id, blocks: n });
+        const n = await syncCalendar(admin, cal);
+        results.push({ calendar_id: cal.id, stylist_id: cal.stylist_id, blocks: n });
       } catch (e) {
-        results.push({ stylist_id: st.id, error: String(e) });
+        // Mislukt: oude blokken blijven staan, de fout is zichtbaar bij de agenda in het dashboard.
+        await admin.from("stylist_calendars").update({ last_error: String(e).slice(0, 200) }).eq("id", cal.id);
+        results.push({ calendar_id: cal.id, stylist_id: cal.stylist_id, error: String(e) });
       }
     }
     return j({ ok: true, synced: results.length, results });

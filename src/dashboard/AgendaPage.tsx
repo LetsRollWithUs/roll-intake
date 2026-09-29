@@ -44,6 +44,12 @@ const WEEKDAYS = [
 
 const hm = (t: string) => t.slice(0, 5); // 'HH:MM:SS' -> 'HH:MM'
 
+interface Cal { id: string; url: string; label: string | null; synced_at: string | null; last_error: string | null }
+const loadCals = async (stylistId: string): Promise<Cal[]> => {
+  const { data } = await supabase.rpc("stylist_calendars_list", { p_stylist_id: stylistId });
+  return (data as Cal[]) ?? [];
+};
+
 export function AgendaPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [myEmail, setMyEmail] = useState("");
@@ -65,8 +71,9 @@ export function AgendaPage() {
   const [savingMeet, setSavingMeet] = useState(false);
 
   // eigen agenda blokkeren (iCal)
-  const [icalUrl, setIcalUrl] = useState("");
-  const [icalSyncedAt, setIcalSyncedAt] = useState<string | null>(null);
+  // Eigen agenda's die de beschikbaarheid blokkeren (max 5 per medewerker).
+  const [cals, setCals] = useState<Cal[]>([]);
+  const [newCal, setNewCal] = useState<{ url: string; label: string } | null>(null);
   const [savingIcal, setSavingIcal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -131,8 +138,8 @@ export function AgendaPage() {
     setMeetUrl(s?.meet_url ?? "");
     // Geheimen (feed-token, agenda-link) alleen via RPC: eigen styliste of admin krijgt ze, anderen niets.
     setSecrets(null);
-    setIcalUrl("");
-    setIcalSyncedAt(null);
+    setCals([]);
+    setNewCal(null);
     if (!selectedId) return;
     let stale = false;
     supabase.rpc("stylist_secrets", { p_stylist_id: selectedId }).then(({ data }) => {
@@ -140,9 +147,8 @@ export function AgendaPage() {
       const row = (Array.isArray(data) ? data[0] : data) as Secrets | undefined;
       if (!row) return;
       setSecrets(row);
-      setIcalUrl(row.ical_feed_url ?? "");
-      setIcalSyncedAt(row.ical_synced_at ?? null);
     });
+    loadCals(selectedId).then((list) => { if (!stale) setCals(list); });
     return () => {
       stale = true;
     };
@@ -166,32 +172,38 @@ export function AgendaPage() {
     setStylists((prev) => prev.map((s) => (s.id === selectedId ? { ...s, meet_url: meetUrl.trim() || null } : s)));
   };
 
-  const saveIcalUrl = async () => {
+  const addCal = async () => {
+    if (!newCal) return;
     setSavingIcal(true);
     setErr(null);
-    const { error } = await supabase.rpc("set_ical_feed_url", { p_stylist_id: selectedId, p_url: icalUrl.trim() });
+    const { error } = await supabase.rpc("stylist_calendar_add", { p_stylist_id: selectedId, p_url: newCal.url.trim(), p_label: newCal.label.trim() || null });
     setSavingIcal(false);
     if (error) return setErr(error.message);
-    setSecrets((p) => (p ? { ...p, ical_feed_url: icalUrl.trim() || null } : p));
-    if (icalUrl.trim()) {
-      flash("Agenda-link opgeslagen. Ik synchroniseer nu je afspraken.");
-      syncIcal();
-    } else {
-      setIcalSyncedAt(null);
-      flash("Agenda-link verwijderd.");
-    }
+    setNewCal(null);
+    flash("Agenda toegevoegd. Ik synchroniseer nu je afspraken.");
+    syncIcal();
+  };
+
+  const removeCal = async (c: Cal) => {
+    if (!window.confirm(`${c.label || "Deze agenda"} ontkoppelen? Afspraken uit deze agenda blokkeren dan niet meer.`)) return;
+    setErr(null);
+    const { error } = await supabase.rpc("stylist_calendar_remove", { p_id: c.id });
+    if (error) return setErr(error.message);
+    setCals((prev) => prev.filter((x) => x.id !== c.id));
+    flash("Agenda ontkoppeld.");
   };
 
   const syncIcal = async () => {
     setSyncing(true);
     setErr(null);
     const { data, error } = await supabase.functions.invoke("calendar-pull", { body: { stylist_id: selectedId } });
+    const list = await loadCals(selectedId);
+    setCals(list);
     setSyncing(false);
-    if (error || !(data as { ok?: boolean } | null)?.ok) return setErr("Synchroniseren lukte niet. Controleer de agenda-link.");
-    const now = new Date().toISOString();
-    setIcalSyncedAt(now);
-    setSecrets((p) => (p ? { ...p, ical_synced_at: now } : p));
-    flash("Agenda gesynchroniseerd.");
+    const failed = ((data as { results?: { error?: string }[] } | null)?.results ?? []).filter((r) => r.error).length;
+    if (error || !(data as { ok?: boolean } | null)?.ok) return setErr("Synchroniseren lukte niet. Controleer de agenda-links.");
+    if (failed) return setErr(`${failed === 1 ? "Eén agenda kon" : `${failed} agenda's konden`} niet worden opgehaald. Controleer de link.`);
+    flash(list.length > 1 ? "Agenda's gesynchroniseerd." : "Agenda gesynchroniseerd.");
   };
 
   const canEdit = useMemo(() => {
@@ -497,8 +509,8 @@ export function AgendaPage() {
               Blokkeer met je eigen agenda
             </div>
             <p className="rd-sub" style={{ marginTop: 0 }}>
-              Plak de geheime iCal-link van je agenda. Afspraken daarin maken die momenten automatisch
-              onbeschikbaar voor klanten. We bewaren alleen bezet-tijden, geen titels, en verversen elke 10 minuten.
+              Koppel tot 5 agenda's met hun geheime iCal-link, bijvoorbeeld je werk- en privé-agenda. Afspraken
+              daarin maken die momenten automatisch onbeschikbaar voor klanten. We bewaren alleen bezet-tijden, geen titels, en verversen elke 10 minuten.
             </p>
             <details style={{ marginBottom: 10 }}>
               <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--rd-pink-dark)", fontWeight: 600 }}>
@@ -510,38 +522,51 @@ export function AgendaPage() {
                 <li><b>Apple iCloud:</b> maak de agenda "openbaar" en kopieer de webcal-link.</li>
               </ul>
             </details>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <input
-                className="rd-input"
-                type="url"
-                placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
-                value={icalUrl}
-                disabled={!canEdit}
-                onChange={(e) => setIcalUrl(e.target.value)}
-                style={{ flex: "1 1 260px", height: 44 }}
-              />
-              {canEdit && (
-                <button
-                  className="rd-btn rd-btn-primary"
-                  onClick={saveIcalUrl}
-                  disabled={savingIcal || syncing}
-                  style={{ width: "auto", padding: "0 20px", minHeight: 44, ...(savingIcal || syncing ? { opacity: 0.5 } : {}) }}
-                >
-                  {savingIcal ? "Opslaan..." : "Opslaan"}
-                </button>
-              )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {cals.map((c, i) => (
+                <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", borderRadius: 12, border: "1px solid var(--rd-line)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{c.label || `Agenda ${i + 1}`}</div>
+                    <div style={{ fontSize: 12, opacity: 0.6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.url}</div>
+                    <div style={{ fontSize: 12, marginTop: 2, ...(c.last_error ? { color: "var(--rd-pink-dark)", fontWeight: 600 } : { opacity: 0.6 }) }}>
+                      {c.last_error ? "Ophalen lukte niet. Controleer de link." : c.synced_at ? `Gesynchroniseerd ${new Date(c.synced_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}` : "Nog niet gesynchroniseerd"}
+                    </div>
+                  </div>
+                  {canEdit && <button className="rd-textlink" onClick={() => removeCal(c)} aria-label={`${c.label || `Agenda ${i + 1}`} ontkoppelen`}>Ontkoppelen</button>}
+                </div>
+              ))}
+              {cals.length === 0 && !newCal && <p className="rd-sub" style={{ margin: 0 }}>Nog geen agenda gekoppeld.</p>}
             </div>
-            {canEdit && icalUrl.trim() && (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
-                <button className="rd-btn rd-btn-outline" onClick={syncIcal} disabled={syncing}
-                  style={{ width: "auto", padding: "0 16px", minHeight: 40, ...(syncing ? { opacity: 0.5 } : {}) }}>
-                  {syncing ? "Synchroniseren..." : "Synchroniseer nu"}
+
+            {canEdit && newCal && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+                <input className="rd-input" placeholder="Naam, bijv. Werk" value={newCal.label} maxLength={40}
+                  onChange={(e) => setNewCal({ ...newCal, label: e.target.value })} style={{ flex: "0 1 160px", height: 44 }} />
+                <input className="rd-input" type="url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" value={newCal.url} autoFocus
+                  onChange={(e) => setNewCal({ ...newCal, url: e.target.value })} style={{ flex: "1 1 260px", height: 44 }} />
+                <button className="rd-btn rd-btn-primary" onClick={addCal} disabled={savingIcal || syncing || !newCal.url.trim()}
+                  style={{ width: "auto", padding: "0 20px", minHeight: 44, ...(savingIcal || syncing || !newCal.url.trim() ? { opacity: 0.5 } : {}) }}>
+                  {savingIcal ? "Toevoegen..." : "Toevoegen"}
                 </button>
-                {icalSyncedAt && (
-                  <span style={{ fontSize: 12, opacity: 0.6 }}>
-                    Laatst gesynchroniseerd {new Date(icalSyncedAt).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}
-                  </span>
+                <button className="rd-textlink" onClick={() => setNewCal(null)}>Annuleren</button>
+              </div>
+            )}
+
+            {canEdit && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+                {!newCal && cals.length < 5 && (
+                  <button className="rd-btn rd-btn-outline" onClick={() => setNewCal({ url: "", label: "" })}
+                    style={{ width: "auto", padding: "0 16px", minHeight: 40 }}>
+                    + Agenda toevoegen
+                  </button>
                 )}
+                {cals.length > 0 && (
+                  <button className="rd-btn rd-btn-outline" onClick={syncIcal} disabled={syncing}
+                    style={{ width: "auto", padding: "0 16px", minHeight: 40, ...(syncing ? { opacity: 0.5 } : {}) }}>
+                    {syncing ? "Synchroniseren..." : "Synchroniseer nu"}
+                  </button>
+                )}
+                <span style={{ fontSize: 12, opacity: 0.6 }}>{cals.length} van 5 agenda's</span>
               </div>
             )}
           </div>
