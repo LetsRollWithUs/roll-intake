@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { deriveExpected, leadScore, TEMP_LABEL, todayKey, planningLabel } from "./lead";
 import { bookLinkMail, planLinkMail } from "./bookingLink";
+import { PlanMoment } from "./klant/PlanMoment";
 
 interface Card {
   id: string;
@@ -23,6 +24,7 @@ interface Card {
   expected_purchase_at: string | null;
   toolkit_offered_at: string | null;
   archived_at: string | null;
+  gratis: boolean;
   stylists: { name: string } | null;
   services: { key: string } | null;
   // uit de intake
@@ -76,6 +78,7 @@ export function KanbanPage() {
   const [loose, setLoose] = useState<Loose[]>([]);
   const [pickStylist, setPickStylist] = useState<Record<string, string>>({});
   const [reloadKey, setReloadKey] = useState(0);
+  const [invite, setInvite] = useState(false);
 
   // Afgeronde trajecten (verf gekocht / afgehaakt) ouder dan 30 dagen gaan in het archief.
   const ARCHIVE_DAYS = 30;
@@ -92,7 +95,7 @@ export function KanbanPage() {
       }
       const { data } = await supabase
         .from("bookings")
-        .select("id,start_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at,archived_at, stylists(name), services(key)")
+        .select("id,start_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at,archived_at,gratis, stylists(name), services(key)")
         .in("status", ["confirmed", "paid_unplaced", "manual"])
         .order("start_at", { ascending: true });
       const list = (data as unknown as Card[]) ?? [];
@@ -254,6 +257,7 @@ export function KanbanPage() {
           {overdue && <Badge tone="warn">verwachte datum verstreken</Badge>}
           {c.status === "paid_unplaced" && <Badge tone="warn">plan nog in</Badge>}
           {c.status === "manual" && <Badge tone="warn">niet betaald · geen afspraak</Badge>}
+          {c.gratis && c.status === "confirmed" && <Badge>gratis advies</Badge>}
         </div>
 
         {!showArchive && (
@@ -353,6 +357,7 @@ export function KanbanPage() {
           <p className="rd-sub" style={{ marginTop: 0 }}>Sleep een kaartje naar een andere fase, of gebruik het keuzemenu. Klik op een kaartje voor het klantdossier.</p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className="rd-btn rd-btn-primary" onClick={() => setInvite(true)} style={{ width: "auto", padding: "0 16px", height: 38 }}>Klant uitnodigen</button>
         <button className={`rd-plan-chip${showArchive ? " is-on" : ""}`} onClick={() => setShowArchive((v) => !v)}>
           {showArchive ? "Terug naar het bord" : `Archief (${archivedCards.length + (isAdmin ? archivedLoose.length : 0)})`}
         </button>
@@ -364,6 +369,8 @@ export function KanbanPage() {
         )}
         </div>
       </div>
+
+      {invite && <PlanMoment mode="invite" onClose={() => setInvite(false)} onDone={(id) => { setInvite(false); navigate(`/beheer/gesprek/${id}`); }} />}
 
       {showArchive && (
         <div style={{ marginTop: 14 }}>

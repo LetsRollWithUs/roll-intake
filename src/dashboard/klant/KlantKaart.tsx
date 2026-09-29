@@ -11,6 +11,7 @@ import { formatDate } from "../ui";
 import { derive, initialAdvice, summarize, type AdviceV2 } from "./advice";
 import { Voorbereiden, nogBespreken } from "./Voorbereiden";
 import { OfferteEditor } from "./OfferteEditor";
+import { PlanMoment } from "./PlanMoment";
 import { Afronden, type Sent } from "./Afronden";
 
 // Klantkaart: één rustige werkplek in drie vaste fases (Voorbereiden, Advies en offerte, Afronden).
@@ -21,14 +22,14 @@ interface Booking {
   id: string; start_at: string; end_at: string | null; created_at: string; status: string;
   customer_name: string | null; customer_email: string | null; customer_phone: string | null;
   intake_id: string | null; stylist_id: string | null; kanban_stage: string; samples_besteld: boolean;
-  opgevolgd_at: string | null; gesprek_gevoerd_at: string | null; archived_at: string | null;
+  opgevolgd_at: string | null; gesprek_gevoerd_at: string | null; archived_at: string | null; gratis: boolean;
   stylists: { name: string; meet_url: string | null } | null; services: { key: string } | null;
 }
 interface Commission { id: string; woo_order_id: string; amount: number; status: string; created_at: string }
 type Fase = "voorbereiden" | "advies" | "afronden";
 type Save = "idle" | "saving" | "saved" | "error";
 
-const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at, stylists(name,meet_url), services(key)";
+const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis, stylists(name,meet_url), services(key)";
 const TZ = "Europe/Amsterdam";
 const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 const time = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(":", ".");
@@ -46,7 +47,7 @@ function afspraakLabel(b: Booking): string {
   return `${d.getTime() < Date.now() ? "Gesprek was " : ""}${day(b.start_at)} om ${time(b.start_at)}`;
 }
 function betaalLabel(b: Booking): { t: string; tone: "ok" | "warn" | "muted" } {
-  if (b.status === "manual") return { t: "Gratis advies", tone: "muted" };
+  if (b.status === "manual" || b.gratis) return { t: "Gratis advies", tone: "muted" };
   if (b.status === "paid_unplaced") return { t: "Betaling ontvangen · nog inplannen", tone: "warn" };
   return { t: "Betaling ontvangen", tone: "ok" };
 }
@@ -108,6 +109,22 @@ export function KlantKaart() {
   const [orders, setOrders] = useState<OrdersResp | null>(null);
   const [drawer, setDrawer] = useState<null | "klant" | "historie" | "notities" | "taken">(null);
   const [meer, setMeer] = useState(false);
+  const [plannen, setPlannen] = useState(false);
+  const [adminStylists, setAdminStylists] = useState<{ id: string; name: string }[] | null>(null);
+  useEffect(() => {
+    supabase.rpc("is_admin").then(async ({ data }) => {
+      if (data !== true) return;
+      const { data: st } = await supabase.from("stylists").select("id,name").eq("active", true).order("name");
+      setAdminStylists((st as { id: string; name: string }[]) ?? []);
+    });
+  }, []);
+  const koppelStyliste = async (sid: string) => {
+    if (!b || !sid) return;
+    const { error } = await supabase.rpc("booking_set_stylist", { p_booking_id: b.id, p_stylist_id: sid });
+    if (error) { window.alert("Koppelen lukte niet: " + error.message); return; }
+    const naam = adminStylists?.find((x) => x.id === sid)?.name ?? "";
+    setB({ ...b, stylist_id: sid, stylists: { name: naam, meet_url: b.stylists?.meet_url ?? null } });
+  };
   const [loading, setLoading] = useState(true);
   const storeKey = `klantkaart:${bookingId}`;
   const [fase, setFaseState] = useState<Fase>(() => { try { return (JSON.parse(localStorage.getItem(`klantkaart:${bookingId}`) ?? "{}").fase as Fase) || "voorbereiden"; } catch { return "voorbereiden"; } });
@@ -263,6 +280,7 @@ export function KlantKaart() {
             <h1 className="rd-h2" style={{ margin: 0 }}>{name}</h1>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 15, marginTop: 4 }}>
               <span style={{ fontWeight: 700 }}>{afspraakLabel(b)}</span>
+              {(b.status === "manual" || b.status === "paid_unplaced") && <button className="kk-link" onClick={() => setPlannen(true)}>Plan een moment</button>}
               <span style={{ opacity: 0.5 }}>·</span>
               <span>{b.stylists?.name ?? "Nog geen styliste"}</span>
               <span className="rd-chip" style={{ fontWeight: 700, ...(pay.tone === "ok" ? { background: "#C9E6CE", color: "#1e4429" } : pay.tone === "warn" ? { background: "var(--rd-pink)", color: "var(--rd-aubergine)" } : {}) }}>{pay.t}</span>
@@ -284,6 +302,15 @@ export function KlantKaart() {
                     {STAGES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                   </select>
                 </label>
+                {adminStylists && (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span className="kk-label">Styliste</span>
+                    <select className="rd-input" value={b.stylist_id ?? ""} onChange={(e) => koppelStyliste(e.target.value)} style={{ height: 40 }}>
+                      <option value="">Nog geen styliste</option>
+                      {adminStylists.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </label>
+                )}
                 {b.gesprek_gevoerd_at
                   ? <button className="kk-link" style={{ textAlign: "left" }} onClick={() => { patchBooking({ gesprek_gevoerd: false }, { gesprek_gevoerd_at: null }); setMeer(false); }}>Gesprek gevoerd ongedaan maken</button>
                   : <button className="kk-link" style={{ textAlign: "left" }} onClick={() => { patchBooking({ gesprek_gevoerd: true }, { gesprek_gevoerd_at: new Date().toISOString() }); setMeer(false); }}>Markeer gesprek als gevoerd</button>}
@@ -344,6 +371,11 @@ export function KlantKaart() {
           </span>
         </div>
       </div>
+
+      {plannen && (
+        <PlanMoment mode="plan" bookingId={b.id} defaultStylistId={b.stylist_id} customerName={name} onClose={() => setPlannen(false)}
+          onDone={() => { setPlannen(false); window.location.reload(); }} />
+      )}
 
       {/* Zijpanelen */}
       {drawer === "klant" && (

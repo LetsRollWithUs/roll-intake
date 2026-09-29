@@ -371,6 +371,21 @@ Deno.serve(async (req) => {
       return j({ ok: true, offer_url: klantUrl, edit_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null, kleuren_onbekend: onbekend });
     }
 
+    // Gratis afspraak of uitnodiging (plan_moment / invite_customer): dezelfde bevestigingsmail (C01)
+    // met moment, videolink, intakelink en verzetlink, plus een melding aan de styliste.
+    if (action === "uitnodiging_verstuur") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: seen } = await caller.from("bookings").select("id,status").eq("id", body.booking_id ?? "").maybeSingle();
+      if (!seen) return j({ error: "Geen toegang" }, 403);
+      if ((seen as any).status !== "confirmed") return j({ ok: false, error: "nog geen moment gepland" });
+      const ctx = await buildBookingContext(admin, body.booking_id);
+      if (!ctx) return j({ ok: false, error: "afspraak niet gevonden" });
+      const r = await klaviyoTrack("Advies flow", ctx.profile, { ...ctx.properties, stap: "bevestigd", gratis: true },
+        appointmentProfileProps(ctx, { includeIntakeStatus: true }), `${body.booking_id}:uitnodiging:${Date.now()}`, admin);
+      await notifyStylist(admin, body.booking_id, "nieuwe_boeking");
+      return j({ ok: r.ok });
+    }
+
     // Dossier definitief verwijderen (alleen beheerders): afspraak, intake, taken, verzendlog en foto's.
     // Offertes in roll.nl/offerte en bestellingen in WooCommerce blijven bestaan.
     if (action === "dossier_delete") {
