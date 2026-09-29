@@ -16,7 +16,7 @@ export interface PickedColor {
   brand?: string | null; // extern: merk (bijv. "Farrow & Ball")
   line?: string | null;  // extern: lijn of waaier
   roll_name?: string | null; // extern: bijpassende Roll-basis
-  roll_code?: string | null; // extern: mengcode
+  roll_code?: string | null; // extern: eigen Roll-nummer (geen mengcode), mag naar de klant
 }
 export interface AdviceSurface { id: string; type: SurfaceType; name: string; status: Keuze; colors: PickedColor[]; note: string }
 export interface AdviceRoomV2 { room_id: string; label: string; surfaces: AdviceSurface[] }
