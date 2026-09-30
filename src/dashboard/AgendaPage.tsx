@@ -512,15 +512,45 @@ export function AgendaPage() {
               Koppel tot 5 agenda's met hun geheime iCal-link, bijvoorbeeld je werk- en privé-agenda. Afspraken
               daarin maken die momenten automatisch onbeschikbaar voor klanten. We bewaren alleen bezet-tijden, geen titels, en verversen elke 10 minuten.
             </p>
-            <details style={{ marginBottom: 10 }}>
+            <details open={cals.length === 0 || cals.some((c) => c.last_error) || !!newCal} style={{ marginBottom: 10 }}>
               <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--rd-pink-dark)", fontWeight: 600 }}>
                 Waar vind ik die link?
               </summary>
-              <ul className="rd-sub" style={{ margin: "8px 0 0", paddingLeft: 18, lineHeight: 1.5 }}>
-                <li><b>Google Agenda:</b> Instellingen → je agenda → "Geheim adres in iCal-indeling".</li>
-                <li><b>Outlook / Microsoft 365:</b> Agenda → Delen → Publiceren → ICS-link.</li>
-                <li><b>Apple iCloud:</b> maak de agenda "openbaar" en kopieer de webcal-link.</li>
-              </ul>
+              <div className="rd-sub" style={{ margin: "8px 0 0", lineHeight: 1.55, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <b>Google Agenda</b> (op de computer, niet in de app)
+                  <ol style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    <li>Ga naar calendar.google.com en klik rechtsboven op het tandwiel, dan <b>Instellingen</b>.</li>
+                    <li>Klik links onder "Instellingen voor mijn agenda's" op de agenda die je wilt koppelen.</li>
+                    <li>Scrol naar <b>"Geheim adres in iCal-indeling"</b> en kopieer die link. Hij bevat <code>/private-</code>.</li>
+                  </ol>
+                  <div style={{ marginTop: 4 }}>Let op: neem niet het <b>"Openbaar adres in iCal-indeling"</b> (met <code>/public/</code>). Dat werkt alleen als je agenda openbaar is, en anders komen er geen afspraken door.</div>
+                </div>
+                <div>
+                  <b>Outlook / Microsoft 365</b>
+                  <ol style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    <li>Open Outlook op het web en ga naar <b>Instellingen</b>, dan <b>Agenda</b>, dan <b>Gedeelde agenda's</b>.</li>
+                    <li>Kies bij "Een agenda publiceren" je agenda en "Kan zien wanneer ik bezet ben", en klik op <b>Publiceren</b>.</li>
+                    <li>Kopieer de <b>ICS</b>-link (niet de HTML-link).</li>
+                  </ol>
+                </div>
+                <div>
+                  <b>Apple iCloud</b>
+                  <ol style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    <li>Open de Agenda-app, klik met rechts op de agenda en kies <b>Deel agenda</b>.</li>
+                    <li>Zet <b>Openbare agenda</b> aan en kopieer de link (begint met <code>webcal://</code>).</li>
+                  </ol>
+                </div>
+                <div>
+                  <b>Tips</b>
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                    <li>Meerdere agenda's, zoals werk, privé en gezin? Voeg ze apart toe, tot 5 stuks.</li>
+                    <li>Klanten zien alleen dat een moment bezet is. Titels en details van je afspraken bewaren we niet.</li>
+                    <li>Een nieuwe afspraak in je agenda telt binnen ongeveer 10 minuten mee. Direct nodig? Klik op "Synchroniseer nu".</li>
+                    <li>Staat er in rood "Ophalen lukte niet"? Dan klopt de link niet. Ontkoppel de agenda en voeg hem opnieuw toe met de juiste link.</li>
+                  </ul>
+                </div>
+              </div>
             </details>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {cals.map((c, i) => (
@@ -529,7 +559,7 @@ export function AgendaPage() {
                     <div style={{ fontSize: 14, fontWeight: 700 }}>{c.label || `Agenda ${i + 1}`}</div>
                     <div style={{ fontSize: 12, opacity: 0.6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.url}</div>
                     <div style={{ fontSize: 12, marginTop: 2, ...(c.last_error ? { color: "var(--rd-pink-dark)", fontWeight: 600 } : { opacity: 0.6 }) }}>
-                      {c.last_error ? "Ophalen lukte niet. Controleer de link." : c.synced_at ? `Gesynchroniseerd ${new Date(c.synced_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}` : "Nog niet gesynchroniseerd"}
+                      {c.last_error ? (/calendar\.google\.com/i.test(c.url) && /\/public\//i.test(c.url) ? "Ophalen lukte niet: dit is het openbare Google-adres. Ontkoppel en voeg het geheime adres toe." : "Ophalen lukte niet. Controleer de link.") : c.synced_at ? `Gesynchroniseerd ${new Date(c.synced_at).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}` : "Nog niet gesynchroniseerd"}
                     </div>
                   </div>
                   {canEdit && <button className="rd-textlink" onClick={() => removeCal(c)} aria-label={`${c.label || `Agenda ${i + 1}`} ontkoppelen`}>Ontkoppelen</button>}
@@ -544,6 +574,11 @@ export function AgendaPage() {
                   onChange={(e) => setNewCal({ ...newCal, label: e.target.value })} style={{ flex: "0 1 160px", height: 44 }} />
                 <input className="rd-input" type="url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" value={newCal.url} autoFocus
                   onChange={(e) => setNewCal({ ...newCal, url: e.target.value })} style={{ flex: "1 1 260px", height: 44 }} />
+                {/calendar\.google\.com/i.test(newCal.url) && /\/public\//i.test(newCal.url) && (
+                  <div role="status" style={{ flexBasis: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 10, background: "var(--rd-lavender)" }}>
+                    Dit is het <b>openbare</b> adres van je Google Agenda. Dat werkt alleen als je agenda openbaar is. Neem liever het <b>"Geheim adres in iCal-indeling"</b> (met <code>/private-</code>).
+                  </div>
+                )}
                 <button className="rd-btn rd-btn-primary" onClick={addCal} disabled={savingIcal || syncing || !newCal.url.trim()}
                   style={{ width: "auto", padding: "0 20px", minHeight: 44, ...(savingIcal || syncing || !newCal.url.trim() ? { opacity: 0.5 } : {}) }}>
                   {savingIcal ? "Toevoegen..." : "Toevoegen"}
