@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { SURFACES, SUN_MOMENTS, USAGE_TIMES, PLANNING, PAINTERS, MOODS } from "@/data/intake-options";
 import type { IntakeRow } from "../types";
+import { supabase } from "@/lib/supabase";
 import { Photos } from "../Photos";
 import { AddPhotos } from "../AddPhotos";
 import { ConceptPanel } from "../ConceptPanel";
@@ -91,7 +93,7 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
           )}
         </Row>
         <Row k="Inspiratie">
-          {intake.inspiration_note && <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.5 }}>"{intake.inspiration_note.trim()}"</p>}
+          {intake.inspiration_note && <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.5, whiteSpace: "pre-line" }}>"{intake.inspiration_note.trim()}"</p>}
           {(intake.inspiration_likes?.length ?? 0) > 0 && (
             <div style={{ marginBottom: 10 }}>
               <span className="kk-label">Gekozen sfeerbeelden</span>
@@ -119,6 +121,10 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
             {safeUrl(intake.other_inspiration_url) && <a href={safeUrl(intake.other_inspiration_url)!} target="_blank" rel="noreferrer" className="rd-textlink">Inspiratielink</a>}
           </div>
           {!intake.inspiration_note && !(intake.inspiration_likes?.length) && !(intake.inspiration_images?.length) && !safeUrl(intake.pinterest_url) && !safeUrl(intake.other_inspiration_url) && <span style={{ opacity: 0.6 }}>Geen inspiratie gedeeld</span>}
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <AddPhotos intake={intake} onDone={onIntake} />
+            <AddNote intake={intake} onDone={onIntake} />
+          </div>
         </Row>
         <Row k="Overwogen kleuren">{(intake.colors?.length ?? 0) > 0 ? (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{intake.colors!.map((c, i) => <span key={i} className="rd-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span aria-hidden style={{ width: 12, height: 12, borderRadius: 99, background: c.hex, border: "1px solid rgba(0,0,0,.1)" }} />{c.name}</span>)}</div>
@@ -158,6 +164,43 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
           <ConceptPanel intake={intake} />
         </details>
       </aside>
+    </div>
+  );
+}
+
+// Nagestuurde tekst van de klant toevoegen aan de inspiratie, met datum. Komt ook in de AI-prompt.
+function AddNote({ intake, onDone }: { intake: IntakeRow; onDone: (next: IntakeRow) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = async () => {
+    const t = text.trim();
+    if (!t) return;
+    setBusy(true); setMsg(null);
+    const dag = new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+    const inspiration_note = [intake.inspiration_note?.trim(), `Aanvulling (${dag}): ${t}`].filter(Boolean).join("\n\n");
+    const { error } = await supabase.from("intake").update({ inspiration_note }).eq("id", intake.id);
+    setBusy(false);
+    if (error) { setMsg("Opslaan lukte niet. Probeer het opnieuw."); return; }
+    onDone({ ...intake, inspiration_note });
+    setText(""); setOpen(false); setMsg("Tekst toegevoegd.");
+  };
+  if (!open) return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+      <button className="rd-textlink" onClick={() => { setOpen(true); setMsg(null); }}>+ Tekst toevoegen</button>
+      {msg && <span style={{ fontSize: 13, fontWeight: 600 }}>{msg}</span>}
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, flex: "1 1 320px" }}>
+      <textarea className="rd-input" value={text} onChange={(e) => setText(e.target.value)} autoFocus rows={4} maxLength={4000}
+        placeholder="Plak hier wat de klant nastuurde, bijv. uit de mail of WhatsApp" style={{ minHeight: 96, paddingTop: 10, lineHeight: 1.5 }} />
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <button className="rd-btn rd-btn-primary" onClick={save} disabled={busy || !text.trim()} style={{ width: "auto", padding: "0 18px", minHeight: 40 }}>{busy ? "Opslaan..." : "Toevoegen"}</button>
+        <button className="rd-textlink" onClick={() => { setOpen(false); setText(""); }}>Annuleren</button>
+        {msg && <span role="status" style={{ fontSize: 13, fontWeight: 600, color: "var(--rd-pink-dark)" }}>{msg}</span>}
+      </div>
     </div>
   );
 }
