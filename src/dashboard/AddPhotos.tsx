@@ -5,9 +5,9 @@ import type { DbPhoto, DbRoom, IntakeRow } from "./types";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-// Achteraf foto's toevoegen aan een ruimte (bijv. per mail nagestuurd door de klant).
-// Vervangt meteen de meldingen van foto's die bij het insturen niet doorkwamen.
-export function AddPhotos({ intake, room, onDone }: { intake: IntakeRow; room: DbRoom; onDone: (next: IntakeRow) => void }) {
+// Achteraf foto's toevoegen (bijv. per mail nagestuurd door de klant): aan een ruimte, of zonder
+// ruimte als eigen inspiratiefoto's. Vervangt meteen de meldingen van foto's die bij het insturen niet doorkwamen.
+export function AddPhotos({ intake, room, onDone }: { intake: IntakeRow; room?: DbRoom; onDone: (next: IntakeRow) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -21,12 +21,19 @@ export function AddPhotos({ intake, room, onDone }: { intake: IntakeRow; room: D
     for (const f of Array.from(files)) {
       const file = await compressImage(f);
       const id = uid();
-      const path = `${intake.id}/rooms/${room.id}/${id}.jpg`;
+      const path = room ? `${intake.id}/rooms/${room.id}/${id}.jpg` : `${intake.id}/inspiration/${id}.jpg`;
       const { error } = await supabase.storage.from(INTAKE_PHOTOS_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
       if (error) failed++;
       else added.push({ id, name: f.name, url: null, path });
     }
-    if (added.length > 0) {
+    if (added.length > 0 && !room) {
+      const inspiration_images = [...(intake.inspiration_images ?? []).filter((p) => p?.path || p?.url), ...added];
+      const pl = intake.payload as { inspirationImages?: unknown } | null;
+      const payload = pl && Array.isArray(pl.inspirationImages) ? { ...intake.payload, inspirationImages: [...(pl.inspirationImages as DbPhoto[]), ...added] } : intake.payload;
+      const { error } = await supabase.from("intake").update({ inspiration_images, payload }).eq("id", intake.id);
+      if (error) { setBusy(false); setMsg("Foto's staan klaar, maar opslaan in het dossier lukte niet. Probeer het opnieuw."); return; }
+      onDone({ ...intake, inspiration_images, payload });
+    } else if (added.length > 0 && room) {
       const withPhotos = (r: DbRoom): DbRoom =>
         r.id !== room.id ? r : { ...r, photos: [...(r.photos ?? []).filter((p) => p?.path || p?.url), ...added] };
       const rooms = (intake.rooms ?? []).map(withPhotos);
