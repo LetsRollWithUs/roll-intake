@@ -26,6 +26,7 @@ interface Card {
   archived_at: string | null;
   gratis: boolean;
   invited_at: string | null;
+  format: string;
   stylists: { name: string } | null;
   services: { key: string } | null;
   // uit de intake
@@ -96,8 +97,8 @@ export function KanbanPage() {
       }
       const { data } = await supabase
         .from("bookings")
-        .select("id,start_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at,archived_at,gratis,invited_at, stylists(name), services(key)")
-        .in("status", ["confirmed", "paid_unplaced", "manual"])
+        .select("id,start_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,upsell_offered,upsell_booked,upsell_value,expected_purchase_at,toolkit_offered_at,archived_at,gratis,invited_at,format, stylists(name), services(key)")
+        .in("status", ["confirmed", "paid_unplaced", "manual", "requested"])
         .order("start_at", { ascending: true });
       const list = (data as unknown as Card[]) ?? [];
       const ids = list.map((c) => c.intake_id).filter((x): x is string => !!x);
@@ -231,7 +232,7 @@ export function KanbanPage() {
           <div style={{ width: 34, height: 34, borderRadius: 99, background: "var(--rd-lavender)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flex: "none" }}>{initials(name)}</div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-            <div style={{ fontSize: 12, color: "var(--rd-pink-dark)", fontWeight: 700 }}>{c.status === "manual" ? (c.invited_at ? "Kiest zelf een moment" : "Geen afspraak") : `${past ? "Gesprek " : ""}${fmt(c.start_at)}`}</div>
+            <div style={{ fontSize: 12, color: "var(--rd-pink-dark)", fontWeight: 700 }}>{c.status === "requested" ? "Thuis: nog bellen en inplannen" : c.status === "manual" ? (c.invited_at ? "Kiest zelf een moment" : "Geen afspraak") : `${past ? "Gesprek " : ""}${fmt(c.start_at)}`}</div>
           </div>
           {c.intake_id && (
             <span className="rd-chip" style={{ fontSize: 11, padding: "2px 8px", background: t.bg, color: t.ink, fontWeight: 700, flex: "none" }} title={`Omvang ${lead.rooms} ruimte(s), ${lead.surfaces} oppervlak(ken)`}>{t.label}</span>
@@ -257,6 +258,7 @@ export function KanbanPage() {
           {c.painter === "deels" && <Badge>deels schilder</Badge>}
           {overdue && <Badge tone="warn">verwachte datum verstreken</Badge>}
           {c.status === "paid_unplaced" && <Badge tone="warn">plan nog in</Badge>}
+          {c.format === "thuis" && <Badge tone={c.status === "requested" ? "warn" : undefined}>{c.status === "requested" ? "thuisaanvraag" : "thuis"}</Badge>}
           {c.status === "manual" && (c.invited_at ? <Badge>gratis advies · uitgenodigd</Badge> : <Badge tone="warn">niet betaald · geen afspraak</Badge>)}
           {c.gratis && c.status === "confirmed" && <Badge>gratis advies</Badge>}
         </div>

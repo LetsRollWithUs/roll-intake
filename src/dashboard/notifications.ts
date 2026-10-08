@@ -35,7 +35,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
   let q = supabase
     .from("bookings")
     .select("id,start_at,status,customer_name,intake_id,kanban_stage,samples_besteld,opgevolgd_at,expected_purchase_at,stylist_id, stylists(name)")
-    .in("status", ["confirmed", "paid_unplaced", "manual"])
+    .in("status", ["confirmed", "paid_unplaced", "manual", "requested"])
     .is("archived_at", null);
   if (opts.stylistId) q = q.eq("stylist_id", opts.stylistId);
   const { data } = await q;
@@ -58,6 +58,10 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     const it = r.intake_id ? intakeById.get(r.intake_id) : null;
     const gesprek = `/beheer/gesprek/${r.id}`;
 
+    if (r.status === "requested") {
+      out.push({ id: `thuis-${r.id}`, kind: "plan", title: `${name} vroeg thuisadvies aan (betaald)`, sub: "Bel de klant en leg het moment vast in de klantkaart", to: gesprek });
+      continue;
+    }
     if (r.status === "paid_unplaced") {
       out.push({ id: `plan-${r.id}`, kind: "plan", title: `${name} heeft betaald maar staat nog niet ingepland`, sub: "Plaats de afspraak via Boekingen" + who(r), to: "/beheer/boekingen" });
       continue;

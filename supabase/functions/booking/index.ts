@@ -5,7 +5,7 @@
 // - setup_webhook / delete_order (alleen @roll.nl-admin): beheer/opruimen.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { buildBookingContext, klaviyoTrack, appointmentProfileProps, notifyStylist } from "../_shared/klaviyo.ts";
-import { confirmPaid, createCreditFromOrder } from "../_shared/confirm.ts";
+import { confirmPaid, createCreditFromOrder, cancelBooking } from "../_shared/confirm.ts";
 import { SAMPLE_STICKER_IDS, SAMPLE_POUCH_IDS, PACK_PRODUCT_IDS, PRICE, colorNameToId, multiAddUrl, sampleImage, SHOP_BASE } from "../_shared/roll-products.ts";
 import { ROLL_COLORS } from "../_shared/roll-collection.ts";
 import { buildOfferPayload } from "../_shared/offerte.ts";
@@ -32,6 +32,9 @@ const OFFERTE_API_KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 // Tot dan gaat een voorstel als Roll-taak, zodat de oude versie geen losse offertes aanmaakt.
 const OFFERTE_V2 = Deno.env.get("OFFERTE_V2") === "1";
 const PRODUCT_ID = 14753; // online kleuradvies
+// Thuisadvies: eigen product (of variatie van het kleuradviesproduct). Zonder deze secrets staat thuis uit.
+const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
+const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
 const wooAuth = "Basic " + btoa(`${WOO_KEY}:${WOO_SECRET}`);
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -82,15 +85,123 @@ Deno.serve(async (req) => {
       return j({ booking_id: bookingId, order_id: order.id, pay_url: payUrl });
     }
 
+    // ── Thuisadvies ────────────────────────────────────────────────────────────
+    // Staat thuisadvies open? (dienst actief + product gekoppeld)
+    if (action === "thuis_status") {
+      const { data: svc } = await admin.from("services").select("active,price,duration_min").eq("key", "thuis").maybeSingle();
+      return j({ enabled: !!(svc as any)?.active && THUIS_PRODUCT_ID > 0, price: (svc as any)?.price ?? 175, duration: (svc as any)?.duration_min ?? 60 });
+    }
+
+    // Postcodecheck (anon): alleen een status en de plaatsnaam.
+    if (action === "thuis_check") {
+      const [{ data: status }, { data: info }] = await Promise.all([
+        admin.rpc("thuis_check", { p_country: body.country ?? "NL", p_pc4: body.postcode ?? "" }),
+        admin.rpc("postcode_info", { p_country: body.country ?? "NL", p_pc4: body.postcode ?? "" }),
+      ]);
+      return j({ status: status ?? "twijfel", place: (info as any)?.place ?? null });
+    }
+
+    // Thuisaanvraag (anon): boeking zonder moment + Woo-order voor thuisadvies, geeft de betaal-URL terug.
+    if (action === "checkout_thuis") {
+      if (!(await turnstileGate(admin, req, body.turnstile_token, "booking_checkout"))) return j({ error: TURNSTILE_BLOCKED_MSG }, 403);
+      const { data: svc } = await admin.from("services").select("id,active").eq("key", "thuis").maybeSingle();
+      if (!(svc as any)?.active || !THUIS_PRODUCT_ID) return j({ error: "Thuisadvies is nog niet te boeken." }, 409);
+      const name = String(body.name ?? "").trim().slice(0, 120);
+      const email = String(body.email ?? "").trim().toLowerCase().slice(0, 200);
+      const phone = String(body.phone ?? "").trim().slice(0, 40);
+      const a = body.address ?? {};
+      const address = {
+        straat: String(a.straat ?? "").trim().slice(0, 120), huisnummer: String(a.huisnummer ?? "").trim().slice(0, 20),
+        postcode: String(a.postcode ?? "").trim().toUpperCase().slice(0, 10), plaats: String(a.plaats ?? "").trim().slice(0, 80),
+        country: a.country === "BE" ? "BE" : "NL",
+      };
+      const pr = body.preferences ?? {};
+      const momenten = Array.isArray(pr.momenten) ? pr.momenten.filter((m: any) => typeof m === "string").slice(0, 21) : [];
+      const preferences = { wanneer: String(pr.wanneer ?? "").slice(0, 40), momenten, toelichting: String(pr.toelichting ?? "").trim().slice(0, 1000) };
+      if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j({ error: "Vul je naam en een geldig e-mailadres in." }, 400);
+      if (!phone) return j({ error: "Vul je telefoonnummer in, dan kan de styliste je bellen." }, 400);
+      if (!address.straat || !address.huisnummer || !address.postcode || !address.plaats) return j({ error: "Vul je volledige adres in." }, 400);
+      if (momenten.length < 2) return j({ error: "Kies minstens twee momenten die je goed uitkomen." }, 400);
+      const { data: check } = await admin.rpc("thuis_check", { p_country: address.country, p_pc4: address.postcode });
+      if (check === "buiten" || check === "ongeldig") return j({ error: "Thuisadvies kan op dit adres helaas nog niet. Online kleuradvies kan wel." }, 409);
+      const { data: ins, error: insErr } = await admin.from("bookings").insert({
+        service_id: (svc as any).id, status: "pending_payment", format: "thuis", start_at: new Date().toISOString(), end_at: new Date().toISOString(),
+        customer_name: name, customer_email: email, customer_phone: phone, address, preferences,
+        hold_expires_at: new Date(Date.now() + 2 * 3600e3).toISOString(), kanban_stage: "ingepland",
+      }).select("id").single();
+      if (insErr || !ins) return j({ error: "Kon de aanvraag niet opslaan." }, 500);
+      const bookingId = (ins as any).id as string;
+      const parts = name.split(/\s+/);
+      const orderRes = await fetch(`${WOO_URL}/wp-json/wc/v3/orders`, {
+        method: "POST",
+        headers: { Authorization: wooAuth, "content-type": "application/json" },
+        body: JSON.stringify({
+          status: "pending",
+          billing: { first_name: parts[0], last_name: parts.slice(1).join(" ") || undefined, email, phone,
+            address_1: `${address.straat} ${address.huisnummer}`, postcode: address.postcode, city: address.plaats, country: address.country },
+          line_items: [{ product_id: THUIS_PRODUCT_ID, ...(THUIS_VARIATION_ID ? { variation_id: THUIS_VARIATION_ID } : {}), quantity: 1 }],
+          coupon_lines: body.coupon ? [{ code: String(body.coupon) }] : undefined,
+          meta_data: [{ key: "_booking_id", value: bookingId }, { key: "_booking_source", value: "intake" }, { key: "_booking_format", value: "thuis" }],
+        }),
+      });
+      const order = await orderRes.json();
+      if (!orderRes.ok) {
+        await admin.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
+        return j({ error: "Kon de order niet aanmaken.", detail: order }, 502);
+      }
+      await admin.from("bookings").update({ woo_order_id: String(order.id) }).eq("id", bookingId);
+      return j({ booking_id: bookingId, order_id: order.id, pay_url: `${WOO_URL}/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}` });
+    }
+
+    // Beheer: moment vastleggen, omzetten naar online, of annuleren (alleen beheerders).
+    if (action === "thuis_plan" || action === "thuis_to_online" || action === "thuis_cancel") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const { data: isAdm } = await caller.rpc("is_admin");
+      if (isAdm !== true) return j({ error: "Geen toegang" }, 403);
+      const bid = String(body.booking_id ?? "");
+      if (action === "thuis_plan") {
+        const { error } = await caller.rpc("thuis_plan", { p_booking_id: bid, p_stylist_id: body.stylist_id, p_start: body.start });
+        if (error) return j({ ok: false, error: error.message });
+        const ctx = await buildBookingContext(admin, bid);
+        if (ctx) await klaviyoTrack("Advies flow", ctx.profile, { ...ctx.properties, stap: "bevestigd" },
+          appointmentProfileProps(ctx, { includeIntakeStatus: true }), `${bid}:bevestigd:thuis:${Date.now()}`, admin);
+        await notifyStylist(admin, bid, "nieuwe_boeking");
+        return j({ ok: true });
+      }
+      if (action === "thuis_to_online") {
+        const { error } = await caller.rpc("thuis_to_online", { p_booking_id: bid, p_stylist_id: body.stylist_id });
+        if (error) return j({ ok: false, error: error.message });
+        const ctx = await buildBookingContext(admin, bid);
+        if (ctx) {
+          const p = ctx.properties;
+          await klaviyoTrack("Advies flow", ctx.profile, {
+            stap: "plan_je_afspraak", uitnodiging: true, omgezet_van_thuis: true, booking_id: p.booking_id,
+            plan_url: `${p.manage_url}&plan=1`, stylist_name: p.stylist_name, intake_ingevuld: p.intake_ingevuld,
+            intake_url: p.intake_url, service_label: p.service_label,
+          }, {}, `${bid}:thuis_naar_online:${Date.now()}`, admin);
+        }
+        const { data: b } = await admin.from("bookings").select("woo_order_id").eq("id", bid).maybeSingle();
+        const { data: on } = await admin.from("services").select("price").eq("key", "pre_sample").maybeSingle();
+        const { data: th } = await admin.from("services").select("price").eq("key", "thuis").maybeSingle();
+        const verschil = Number((th as any)?.price ?? 175) - Number((on as any)?.price ?? 30);
+        return j({ ok: true, refund: verschil, order_url: (b as any)?.woo_order_id ? `${WOO_URL}/wp-admin/post.php?post=${(b as any).woo_order_id}&action=edit` : null });
+      }
+      const { data: b } = await admin.from("bookings").select("woo_order_id,format").eq("id", bid).maybeSingle();
+      if (!b || (b as any).format !== "thuis") return j({ ok: false, error: "thuisaanvraag niet gevonden" });
+      const r = await cancelBooking(admin, bid, "thuis_buiten_werkgebied");
+      return j({ ok: true, outcome: r.outcome, order_url: (b as any).woo_order_id ? `${WOO_URL}/wp-admin/post.php?post=${(b as any).woo_order_id}&action=edit` : null });
+    }
+
     if (action === "status") {
       const { data: b } = await admin
         .from("bookings")
-        .select("id,status,woo_order_id,start_at,customer_email, services(key)")
+        .select("id,status,format,woo_order_id,start_at,customer_email, services(key)")
         .eq("id", body.booking_id)
         .maybeSingle();
       if (!b) return j({ error: "Niet gevonden" }, 404);
       const mode = (b as any).services?.key ?? null;
       const email = (b as any).customer_email ?? null;
+      if ((b as any).format === "thuis" && ["requested", "confirmed"].includes(b.status as string)) return j({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
       if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at, mode, customer_email: email });
       if (b.status === "paid_unplaced") return j({ status: "paid_unplaced", start_at: b.start_at, mode, customer_email: email });
       if (b.woo_order_id) {
@@ -100,7 +211,8 @@ Deno.serve(async (req) => {
         const o = await r.json();
         if (r.ok && ["processing", "completed", "on-hold"].includes(o.status)) {
           await confirmPaid(admin, b.id as string);
-          const { data: after } = await admin.from("bookings").select("status,start_at").eq("id", b.id).maybeSingle();
+          const { data: after } = await admin.from("bookings").select("status,start_at,format").eq("id", b.id).maybeSingle();
+          if ((after as any)?.format === "thuis") return j({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
           return j({ status: (after as any)?.status ?? b.status, start_at: (after as any)?.start_at ?? b.start_at, mode });
         }
       }

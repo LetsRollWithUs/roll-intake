@@ -12,6 +12,7 @@ import { derive, initialAdvice, summarize, type AdviceV2 } from "./advice";
 import { Voorbereiden, nogBespreken } from "./Voorbereiden";
 import { OfferteEditor } from "./OfferteEditor";
 import { PlanMoment } from "./PlanMoment";
+import { ThuisPanel, type ThuisBooking } from "./ThuisPanel";
 import { Afronden, type Sent } from "./Afronden";
 
 // Klantkaart: één rustige werkplek in drie vaste fases (Voorbereiden, Advies en offerte, Afronden).
@@ -23,13 +24,14 @@ interface Booking {
   customer_name: string | null; customer_email: string | null; customer_phone: string | null;
   intake_id: string | null; stylist_id: string | null; kanban_stage: string; samples_besteld: boolean;
   opgevolgd_at: string | null; gesprek_gevoerd_at: string | null; archived_at: string | null; gratis: boolean; invited_at: string | null;
+  format: string; address: ThuisBooking["address"]; preferences: ThuisBooking["preferences"]; woo_order_id: string | null; converted_from: string | null;
   stylists: { name: string; meet_url: string | null } | null; services: { key: string } | null;
 }
 interface Commission { id: string; woo_order_id: string; amount: number; status: string; created_at: string }
 type Fase = "voorbereiden" | "advies" | "afronden";
 type Save = "idle" | "saving" | "saved" | "error";
 
-const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis,invited_at, stylists(name,meet_url), services(key)";
+const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis,invited_at,format,address,preferences,woo_order_id,converted_from, stylists(name,meet_url), services(key)";
 const TZ = "Europe/Amsterdam";
 const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 const time = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(":", ".");
@@ -40,6 +42,8 @@ const STAGES = [["ingepland", "Ingepland"], ["advies", "Advies gegeven"], ["opvo
 const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies" }, { key: "afronden", label: "Afronden" }];
 
 function afspraakLabel(b: Booking): string {
+  if (b.format === "thuis" && b.status === "requested") return "Thuisadvies aangevraagd · nog geen moment";
+  if (b.format === "thuis" && b.status === "cancelled") return "Thuisaanvraag geannuleerd";
   if (b.status === "manual" && b.invited_at) return "Uitgenodigd, klant kiest een moment";
   if (b.status === "manual" || b.status === "paid_unplaced") return "Afspraak nog niet gepland";
   const d = new Date(b.start_at);
@@ -48,6 +52,8 @@ function afspraakLabel(b: Booking): string {
   return `${d.getTime() < Date.now() ? "Gesprek was " : ""}${day(b.start_at)} om ${time(b.start_at)}`;
 }
 function betaalLabel(b: Booking): { t: string; tone: "ok" | "warn" | "muted" } {
+  if (b.converted_from === "thuis") return { t: "Betaald (omgezet van thuis)", tone: "ok" };
+  if (b.status === "requested") return { t: "Betaling ontvangen", tone: "ok" };
   if (b.status === "manual" || b.gratis) return { t: "Gratis advies", tone: "muted" };
   if (b.status === "paid_unplaced") return { t: "Betaling ontvangen · nog inplannen", tone: "warn" };
   return { t: "Betaling ontvangen", tone: "ok" };
@@ -219,6 +225,7 @@ export function KlantKaart() {
 
   const next = useMemo(() => {
     if (!b) return null;
+    if (b.format === "thuis" && b.status === "requested") return { t: "Bel de klant en leg het thuisbezoek vast", f: "voorbereiden" as Fase };
     const sent = new Set(sends.map((x) => x.route));
     if (!intake) return { t: "Wacht op de intake van de klant", f: "voorbereiden" as Fase };
     if (task && (task.status === "aangevraagd" || task.status === "opgepakt")) return { t: task.owner ? `Roll pakt dit op: ${task.owner}` : "Bij Roll, nog geen eigenaar", f: "afronden" as Fase };
@@ -338,6 +345,13 @@ export function KlantKaart() {
           ))}
         </div>
       </header>
+
+      {b.format === "thuis" && (
+        <ThuisPanel b={b as unknown as ThuisBooking} onChanged={async () => {
+          const { data } = await supabase.from("bookings").select(SEL).eq("id", b.id).maybeSingle();
+          if (data) setB(data as unknown as Booking);
+        }} />
+      )}
 
       {/* Werkvlak */}
       <main style={{ marginTop: 22 }}>

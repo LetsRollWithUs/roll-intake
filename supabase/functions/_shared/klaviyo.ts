@@ -12,17 +12,26 @@ const EVENT_TITLE = "Kleuradvies met Roll";
 const icsUtc = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
 // Bouwt "zet in agenda"-links (Google, Outlook, en een .ics voor Apple/overig).
+// Voorkeursmomenten van een thuisaanvraag als leesbare tekst, bijv. "Binnen 2 weken · vrijdag middag, zaterdag ochtend".
+const WANNEER: Record<string, string> = { zsm: "Zo snel mogelijk", "2wk": "Binnen 2 weken", maand: "Binnen een maand", later: "Later" };
+export function voorkeurenTekst(p: any): string | null {
+  if (!p) return null;
+  const m = (p.momenten ?? []).map((x: string) => x.replace("_", " ")).join(", ");
+  return [WANNEER[p.wanneer] ?? null, m || null, p.toelichting ? `"${p.toelichting}"` : null].filter(Boolean).join(" · ") || null;
+}
+
 function calendarLinks(opts: {
   bookingId: string; token: string; start: string; end: string;
   stylist?: string | null; meetUrl?: string | null; intakeUrl: string; manageUrl: string;
+  location?: string | null; thuis?: boolean;
 }) {
   const details = [
-    `Online kleuradvies${opts.stylist ? ` met ${opts.stylist}` : ""}.`,
+    `${opts.thuis ? "Kleuradvies thuis" : "Online kleuradvies"}${opts.stylist ? ` met ${opts.stylist}` : ""}.`,
     opts.meetUrl ? `Videogesprek: ${opts.meetUrl}` : "",
     `Vul je intake in: ${opts.intakeUrl}`,
-    `Afspraak verzetten: ${opts.manageUrl}`,
+    opts.thuis ? "Verzetten in overleg: WhatsApp 085 369 62 44" : `Afspraak verzetten: ${opts.manageUrl}`,
   ].filter(Boolean).join("\n");
-  const loc = opts.meetUrl ?? "";
+  const loc = opts.location ?? opts.meetUrl ?? "";
   const e = encodeURIComponent;
   const gcal =
     `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${e(EVENT_TITLE)}` +
@@ -59,7 +68,7 @@ export async function buildBookingContext(
   const { data: b } = await admin
     .from("bookings")
     .select(
-      "id,start_at,end_at,customer_name,customer_email,customer_phone,manage_token,intake_id, services(key), stylists(name,meet_url)",
+      "id,start_at,end_at,customer_name,customer_email,customer_phone,manage_token,intake_id,format,address,preferences, services(key), stylists(name,meet_url)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -70,9 +79,13 @@ export async function buildBookingContext(
   const intakeUrl = `${INTAKE_BASE}/?booking=${row.id}&mode=${mode}`;
   const manageUrl = `${INTAKE_BASE}/boek/beheer?token=${row.manage_token}`;
   const endAt = row.end_at ?? new Date(new Date(row.start_at).getTime() + 30 * 60000).toISOString();
+  const thuis = row.format === "thuis";
+  const a = row.address ?? {};
+  const adresRegel = thuis ? [`${a.straat ?? ""} ${a.huisnummer ?? ""}`.trim(), `${a.postcode ?? ""} ${a.plaats ?? ""}`.trim()].filter(Boolean).join(", ") : null;
   const cal = calendarLinks({
     bookingId: row.id, token: row.manage_token, start: row.start_at, end: endAt,
-    stylist: row.stylists?.name, meetUrl: row.stylists?.meet_url, intakeUrl, manageUrl,
+    stylist: row.stylists?.name, meetUrl: thuis ? null : row.stylists?.meet_url, intakeUrl, manageUrl,
+    location: adresRegel, thuis,
   });
   const properties: Record<string, unknown> = {
     booking_id: row.id,
@@ -85,6 +98,10 @@ export async function buildBookingContext(
     intake_url: intakeUrl,
     manage_url: manageUrl,
     intake_ingevuld: !!row.intake_id,
+    vorm: thuis ? "thuis" : "online",
+    adres_regel: adresRegel,
+    voorkeuren: thuis ? voorkeurenTekst(row.preferences) : null,
+    whatsapp: "085 369 62 44",
     ...cal,
   };
   return {
@@ -104,7 +121,7 @@ export async function buildBookingContext(
 export async function notifyStylist(admin: any, bookingId: string, soort: string): Promise<void> {
   const { data: b } = await admin
     .from("bookings")
-    .select("id,start_at,customer_name,customer_email,customer_phone,intake_id, services(key), stylists(name,email)")
+    .select("id,start_at,customer_name,customer_email,customer_phone,intake_id,format,address, services(key), stylists(name,email)")
     .eq("id", bookingId)
     .maybeSingle();
   if (!b) return;
@@ -120,6 +137,8 @@ export async function notifyStylist(admin: any, bookingId: string, soort: string
     start_at_local: fmtLocal(row.start_at),
     service_label: serviceLabel(row.services?.key),
     intake_ingevuld: !!row.intake_id,
+    vorm: row.format === "thuis" ? "thuis" : "online",
+    adres_regel: row.format === "thuis" && row.address ? `${row.address.straat ?? ""} ${row.address.huisnummer ?? ""}, ${row.address.postcode ?? ""} ${row.address.plaats ?? ""}` : null,
     boekingen_url: `${INTAKE_BASE}/beheer/boekingen`,
     intake_dashboard_url: row.intake_id ? `${INTAKE_BASE}/beheer/${row.intake_id}` : null,
   };

@@ -12,7 +12,7 @@ const timeLabel = (iso: string) =>
 export function BookDone() {
   const [params] = useSearchParams();
   const bookingId = params.get("booking") ?? "";
-  const [state, setState] = useState<"loading" | "confirmed" | "paid_unplaced" | "pending" | "error">("loading");
+  const [state, setState] = useState<"loading" | "confirmed" | "paid_unplaced" | "requested" | "pending" | "error">("loading");
   const [startAt, setStartAt] = useState<string | null>(null);
   const [mode, setMode] = useState<string | null>(null);
   const tries = useRef(0);
@@ -42,6 +42,10 @@ export function BookDone() {
       setMode(data.mode ?? null);
       if (data.status === "confirmed") {
         setState("confirmed");
+        return;
+      }
+      if (data.status === "requested") {
+        setState("requested");
         return;
       }
       if (data.status === "paid_unplaced") {
@@ -102,6 +106,29 @@ export function BookDone() {
               <p className="rd-sub" style={{ marginTop: 0, marginBottom: 12 }}>
                 Vul de korte intake in, dan kan je adviseur zich voorbereiden en gebruiken jullie het
                 gesprek om echt keuzes te maken.
+              </p>
+              <a href={intakeUrl} className="rd-btn rd-btn-primary rd-btn-lg" style={{ textDecoration: "none" }}>
+                Naar mijn intake
+              </a>
+            </div>
+          </div>
+        )}
+
+        {state === "requested" && (
+          <div className="rd-rise">
+            <h1 className="rd-h2" style={{ marginBottom: 8 }}>
+              Je aanvraag is binnen!
+            </h1>
+            <div className="rd-card-white" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>Kleuradvies thuis · 60 minuten</div>
+              <p className="rd-sub" style={{ marginTop: 8 }}>
+                We nemen binnen 2 werkdagen contact met je op om samen een moment te kiezen. Vragen? Stuur een berichtje via WhatsApp: 085 369 62 44.
+              </p>
+            </div>
+            <div className="rd-card-white" style={{ marginTop: 12, background: "var(--rd-lime)" }}>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Vul alvast je intake in</div>
+              <p className="rd-sub" style={{ marginTop: 0, marginBottom: 12 }}>
+                Vertel over je ruimtes, je maten en wat je mooi vindt. Dan kan de styliste zich goed voorbereiden op het bezoek.
               </p>
               <a href={intakeUrl} className="rd-btn rd-btn-primary rd-btn-lg" style={{ textDecoration: "none" }}>
                 Naar mijn intake

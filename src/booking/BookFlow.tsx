@@ -8,6 +8,7 @@ import {
   AUB, AUB_DIM, PINK, CREME,
   dateKey, dayFull, timeLabel, isoDate,
 } from "./slots";
+import { ThuisFlow } from "./ThuisFlow";
 
 function normalizeType(t: string | null): string {
   if (!t) return "";
@@ -21,7 +22,57 @@ const SERVICES = [
   { key: "post_sample", title: "Al samples getest", sub: "We kiezen de definitieve kleur.", icon: "🖌️", chip: "#E7EFE3" },
 ];
 
+// Eerste keuze: online of thuis. Zonder thuisadvies (nog niet actief) gaat de flow direct naar online.
 export function BookFlow() {
+  const [params, setParams] = useSearchParams();
+  const vormParam = params.get("vorm");
+  const [thuis, setThuis] = useState<{ enabled: boolean; price: number } | null>(null);
+  useEffect(() => {
+    supabase.functions.invoke("booking", { body: { action: "thuis_status" } })
+      // Lokaal bekijken: ?thuis=1 forceert de thuiskeuze (alleen in de ontwikkelomgeving).
+      .then(({ data }) => setThuis({ enabled: !!data?.enabled || (import.meta.env.DEV && params.get("thuis") === "1"), price: Number(data?.price ?? 175) }))
+      .catch(() => setThuis({ enabled: false, price: 175 }));
+  }, []);
+  const setVorm = (v: string | null) => { const n = new URLSearchParams(params); if (v) n.set("vorm", v); else n.delete("vorm"); setParams(n); };
+
+  if (!thuis) return <div className="rd-root" style={{ background: CREME }} />;
+  if (thuis.enabled && vormParam === "thuis") return <ThuisFlow price={thuis.price} onOnline={() => setVorm("online")} onBack={() => setVorm(null)} />;
+  if (thuis.enabled && !vormParam && !params.get("type")) return <VormKeuze price={thuis.price} onPick={setVorm} />;
+  return <OnlineFlow onBack={thuis.enabled ? () => setVorm(null) : undefined} />;
+}
+
+function VormKeuze({ price, onPick }: { price: number; onPick: (v: string) => void }) {
+  useEffect(() => lockDocument(), []);
+  const opts = [
+    { key: "online", title: "Online", sub: "Videogesprek van 30 minuten. Kies direct een moment.", prijs: "€30", icon: "💻", chip: "#EDE7F2" },
+    { key: "thuis", title: "Bij jou thuis", sub: "Een styliste komt 60 minuten langs. Je geeft je voorkeuren op, wij bellen je voor een moment.", prijs: `€${price}`, icon: "🏠", chip: "#E7EFE3" },
+  ];
+  return (
+    <div className="rd-root rd-lock" style={{ background: CREME, color: AUB, fontFamily: "Figtree, system-ui, sans-serif" }}>
+      <div className="rd-col" style={{ maxWidth: 440 }}>
+        <div className="rd-hide-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 22px 24px" }}>
+          <div style={{ fontWeight: 600, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: PINK }}>Roll · Kleuradvies</div>
+          <h1 style={{ font: "800 27px/1.05 Figtree", letterSpacing: "-.02em", margin: "8px 0 4px" }}>Hoe wil je het advies?</h1>
+          <p style={{ fontSize: 14, color: "rgba(47,33,65,.65)", margin: "0 0 18px" }}>Allebei met een Roll-styliste, die met je meekijkt naar je licht, je vloer en je meubels.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {opts.map((o) => (
+              <button key={o.key} onClick={() => onPick(o.key)}
+                style={{ textAlign: "left", padding: 18, borderRadius: 18, cursor: "pointer", border: "2px solid rgba(47,33,65,.12)", background: "#fff", display: "flex", gap: 14, alignItems: "center", color: AUB }}>
+                <span style={{ width: 44, height: 44, borderRadius: 12, background: o.chip, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{o.icon}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: "flex", justifyContent: "space-between", gap: 8, font: "700 16px Figtree" }}><span>{o.title}</span><span>{o.prijs}</span></span>
+                  <span style={{ display: "block", fontSize: 13, color: "rgba(47,33,65,.6)", marginTop: 2, lineHeight: 1.4 }}>{o.sub}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OnlineFlow({ onBack }: { onBack?: () => void }) {
   const [params] = useSearchParams();
   const coupon = params.get("coupon") ?? "";
   const preType = normalizeType(params.get("type"));
@@ -106,8 +157,8 @@ export function BookFlow() {
 
   // Voortgang + CTA per stap
   const prog = ["33%", "66%", "100%"][step - 1];
-  const canBack = step > 1;
-  const back = () => setStep((s) => Math.max(1, s - 1));
+  const canBack = step > 1 || !!onBack;
+  const back = () => (step > 1 ? setStep((s) => Math.max(1, s - 1)) : onBack?.());
 
   let ctaLabel = "Verder";
   let ctaOk = false;
