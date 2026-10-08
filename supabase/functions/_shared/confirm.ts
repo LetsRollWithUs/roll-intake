@@ -84,7 +84,7 @@ export async function createCreditFromOrder(admin: any, order: any): Promise<{ m
 }
 
 export interface ConfirmResult {
-  outcome: "confirmed" | "reassigned" | "already_confirmed" | "paid_unplaced" | "not_found" | "error";
+  outcome: "confirmed" | "reassigned" | "already_confirmed" | "paid_unplaced" | "requested" | "not_found" | "error";
   booking_id?: string;
   stylist_id?: string;
   confirmed_at?: string | null;
@@ -114,6 +114,23 @@ export async function confirmPaid(admin: any, bookingId: string): Promise<Confir
       );
     }
     await notifyStylist(admin, bookingId, "nieuwe_boeking");
+  } else if ((r.outcome as string) === "requested" && !r.already) {
+    // Thuisaanvraag betaald: bevestiging van de aanvraag (C06, variant thuis) + melding voor beheer.
+    const ctx = await buildBookingContext(admin, bookingId);
+    if (ctx) {
+      const p = ctx.properties;
+      await klaviyoTrack("Advies flow", ctx.profile, {
+        stap: "plan_je_afspraak", vorm: "thuis", thuis_aanvraag: true, booking_id: bookingId,
+        intake_url: p.intake_url, intake_ingevuld: p.intake_ingevuld, adres_regel: p.adres_regel,
+        voorkeuren: p.voorkeuren, whatsapp: "085 369 62 44", service_label: "Kleuradvies thuis",
+      }, { intake_url: p.intake_url }, `${bookingId}:thuis_aanvraag`, admin);
+    }
+    await admin.from("system_alerts").insert({
+      kind: "thuis_aanvraag",
+      message: "Nieuwe aanvraag voor thuisadvies (betaald). Neem contact op en leg het moment vast in de klantkaart.",
+      payload: { booking_id: bookingId },
+    });
+    await postAlertWebhook("thuis_aanvraag", "Nieuwe aanvraag voor thuisadvies (betaald).", { booking_id: bookingId });
   } else if (r.outcome === "paid_unplaced" && !r.already) {
     await postAlertWebhook(
       "paid_unplaced",
@@ -140,9 +157,9 @@ export async function cancelBooking(admin: any, bookingId: string, reason: strin
   const prev = b.status as string;
   await admin.from("bookings").update({ status: "cancelled", hold_expires_at: null }).eq("id", bookingId);
 
-  const wasReal = prev === "confirmed" || prev === "paid_unplaced";
+  const wasReal = prev === "confirmed" || prev === "paid_unplaced" || prev === "requested";
   if (wasReal) {
-    const ctx = await buildBookingContext(admin, bookingId);
+    const ctx = prev === "requested" ? null : await buildBookingContext(admin, bookingId);
     if (ctx) {
       await klaviyoTrack("Afspraak geannuleerd", ctx.profile, ctx.properties, {}, `${bookingId}:cancelled:${Date.now()}`, admin);
     }

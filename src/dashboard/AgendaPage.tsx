@@ -1,3 +1,4 @@
+import { ThuisArea } from "./ThuisArea";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -504,6 +505,8 @@ export function AgendaPage() {
           })()}
 
           {/* Eigen agenda blokkeren (iCal) */}
+          {selectedId && <ThuisArea stylistId={selectedId} canEdit={!!canEdit} isAdmin={isAdmin} onFlash={flash} />}
+
           <div className="rd-card-white" style={{ marginTop: 12 }}>
             <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>
               Blokkeer met je eigen agenda
