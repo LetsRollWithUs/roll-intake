@@ -127,7 +127,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
               )}
               {check === "twijfel" && (
                 <div role="status" style={{ marginTop: 14, padding: "14px 16px", borderRadius: 14, background: "#fff", lineHeight: 1.5 }}>
-                  <strong>Dat bekijken we graag even.</strong> Je kunt de aanvraag gewoon doen. Past het toch niet, dan bieden we je online advies aan of krijg je je geld terug.
+                  <strong>Je kunt je aanvraag gewoon doen.</strong> Na je aanvraag nemen we contact met je op om samen een moment te kiezen.
                 </div>
               )}
               {check === "buiten" && (
@@ -203,7 +203,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
             {ctaLabel}
           </button>
           <div style={{ textAlign: "center", fontSize: 11, color: "rgba(47,33,65,.5)", marginTop: 8 }}>
-            Past het toch niet? Dan krijg je je geld terug of kies je online advies.
+            Na je aanvraag bellen we je binnen 2 werkdagen voor een moment.
           </div>
         </div>
       </div>
