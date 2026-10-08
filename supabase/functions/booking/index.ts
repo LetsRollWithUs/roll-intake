@@ -31,7 +31,8 @@ const OFFERTE_API_KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 // Bestelvoorstellen (concept/ophalen/verstuurd) pas aan zodra de offerte-tool v2 live is (secret OFFERTE_V2=1).
 // Tot dan gaat een voorstel als Roll-taak, zodat de oude versie geen losse offertes aanmaakt.
 const OFFERTE_V2 = Deno.env.get("OFFERTE_V2") === "1";
-const PRODUCT_ID = 14753; // online kleuradvies
+const PRODUCT_ID = 14753; // kleuradvies (variabel product: online / thuis)
+const ONLINE_VARIATION_ID = Number(Deno.env.get("ONLINE_VARIATION_ID") ?? 0);
 // Thuisadvies: eigen product (of variatie van het kleuradviesproduct). Zonder deze secrets staat thuis uit.
 const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
 const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           status: "pending",
           billing: { first_name: name, email, phone: phone || undefined },
-          line_items: [{ product_id: PRODUCT_ID, quantity: 1 }],
+          line_items: [{ product_id: PRODUCT_ID, ...(ONLINE_VARIATION_ID ? { variation_id: ONLINE_VARIATION_ID } : {}), quantity: 1 }],
           coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [
             { key: "_booking_id", value: bookingId },
