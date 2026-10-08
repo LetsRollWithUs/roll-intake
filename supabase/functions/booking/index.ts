@@ -35,7 +35,6 @@ const PRODUCT_ID = 14753; // online kleuradvies
 // Thuisadvies: eigen product (of variatie van het kleuradviesproduct). Zonder deze secrets staat thuis uit.
 const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
 const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
-const INTAKE_BASE = "https://intake.roll.nl";
 const wooAuth = "Basic " + btoa(`${WOO_KEY}:${WOO_SECRET}`);
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;

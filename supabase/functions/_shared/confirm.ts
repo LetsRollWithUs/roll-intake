@@ -10,6 +10,55 @@ const ADVICE_PRODUCT_IDS: number[] = (Deno.env.get("ADVICE_PRODUCT_IDS") ?? "147
 const GIFT_PRODUCT_IDS: number[] = (Deno.env.get("GIFT_PRODUCT_IDS") ?? "")
   .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
 
+// Thuisadvies: variatie van het kleuradviesproduct (THUIS_VARIATION_ID) of een eigen product (THUIS_PRODUCT_ID).
+const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
+const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
+export function isThuisLine(li: any): boolean {
+  if (THUIS_VARIATION_ID) return Number(li.variation_id) === THUIS_VARIATION_ID;
+  return !!THUIS_PRODUCT_ID && Number(li.product_id) === THUIS_PRODUCT_ID;
+}
+
+// Thuisaanvraag binnen (betaald): bevestiging van de aanvraag (C06, variant thuis) + melding voor beheer.
+export async function notifyThuisAanvraag(admin: any, bookingId: string) {
+  const ctx = await buildBookingContext(admin, bookingId);
+  if (ctx) {
+    const p = ctx.properties;
+    await klaviyoTrack("Advies flow", ctx.profile, {
+      stap: "plan_je_afspraak", vorm: "thuis", thuis_aanvraag: true, booking_id: bookingId,
+      intake_url: p.intake_url, intake_ingevuld: p.intake_ingevuld, adres_regel: p.adres_regel,
+      voorkeuren: p.voorkeuren, whatsapp: "085 369 62 44", service_label: "Kleuradvies thuis",
+    }, { intake_url: p.intake_url }, `${bookingId}:thuis_aanvraag`, admin);
+  }
+  await admin.from("system_alerts").insert({
+    kind: "thuis_aanvraag",
+    message: "Nieuwe aanvraag voor thuisadvies (betaald). Neem contact op en leg het moment vast in de klantkaart.",
+    payload: { booking_id: bookingId },
+  });
+  await postAlertWebhook("thuis_aanvraag", "Nieuwe aanvraag voor thuisadvies (betaald).", { booking_id: bookingId });
+}
+
+// Thuisadvies direct op roll.nl gekocht (zonder boekingstool): maak de aanvraag aan met het factuuradres.
+// Voorkeursmomenten vraagt de styliste dan telefonisch. Idempotent op woo_order_id.
+export async function createThuisFromOrder(admin: any, order: any): Promise<boolean> {
+  if (!(order.line_items ?? []).some(isThuisLine)) return false;
+  const wooId = String(order.id);
+  const { data: existing } = await admin.from("bookings").select("id").eq("woo_order_id", wooId).maybeSingle();
+  if (existing) return true;
+  const { data: svc } = await admin.from("services").select("id").eq("key", "thuis").maybeSingle();
+  const bl = order.shipping?.address_1 ? order.shipping : (order.billing ?? {});
+  const billing = order.billing ?? {};
+  const now = new Date().toISOString();
+  const { data: ins } = await admin.from("bookings").insert({
+    service_id: svc?.id ?? null, status: "requested", format: "thuis", start_at: now, end_at: now,
+    customer_name: [billing.first_name, billing.last_name].filter(Boolean).join(" ").trim() || null,
+    customer_email: (billing.email ?? "").toLowerCase() || null, customer_phone: billing.phone || null,
+    address: { straat: [bl.address_1, bl.address_2].filter(Boolean).join(" "), huisnummer: "", postcode: bl.postcode ?? "", plaats: bl.city ?? "", country: bl.country === "BE" ? "BE" : "NL" },
+    woo_order_id: wooId, kanban_stage: "ingepland",
+  }).select("id").single();
+  if (ins?.id) await notifyThuisAanvraag(admin, ins.id);
+  return true;
+}
+
 // Leest de gelegenheid + een persoonlijk bericht uit de order (cadeauproduct).
 function readGift(order: any): { occasion: string | null; message: string | null } {
   let occasion: string | null = null;
@@ -39,7 +88,7 @@ function genRedeemCode(): string {
 // Route 2: bij een directe aankoop (order met het advies-product, zonder _booking_id) maken we
 // een advies-tegoed en sturen we de klant de "plan je afspraak"-link. Idempotent op woo_order_id.
 export async function createCreditFromOrder(admin: any, order: any): Promise<{ manage_token: string } | null> {
-  const hasAdvice = (order.line_items ?? []).some((li: any) => ADVICE_PRODUCT_IDS.includes(Number(li.product_id)));
+  const hasAdvice = (order.line_items ?? []).some((li: any) => ADVICE_PRODUCT_IDS.includes(Number(li.product_id)) && !isThuisLine(li));
   if (!hasAdvice) return null;
   const wooId = String(order.id);
   const billing = order.billing ?? {};
@@ -115,22 +164,7 @@ export async function confirmPaid(admin: any, bookingId: string): Promise<Confir
     }
     await notifyStylist(admin, bookingId, "nieuwe_boeking");
   } else if ((r.outcome as string) === "requested" && !r.already) {
-    // Thuisaanvraag betaald: bevestiging van de aanvraag (C06, variant thuis) + melding voor beheer.
-    const ctx = await buildBookingContext(admin, bookingId);
-    if (ctx) {
-      const p = ctx.properties;
-      await klaviyoTrack("Advies flow", ctx.profile, {
-        stap: "plan_je_afspraak", vorm: "thuis", thuis_aanvraag: true, booking_id: bookingId,
-        intake_url: p.intake_url, intake_ingevuld: p.intake_ingevuld, adres_regel: p.adres_regel,
-        voorkeuren: p.voorkeuren, whatsapp: "085 369 62 44", service_label: "Kleuradvies thuis",
-      }, { intake_url: p.intake_url }, `${bookingId}:thuis_aanvraag`, admin);
-    }
-    await admin.from("system_alerts").insert({
-      kind: "thuis_aanvraag",
-      message: "Nieuwe aanvraag voor thuisadvies (betaald). Neem contact op en leg het moment vast in de klantkaart.",
-      payload: { booking_id: bookingId },
-    });
-    await postAlertWebhook("thuis_aanvraag", "Nieuwe aanvraag voor thuisadvies (betaald).", { booking_id: bookingId });
+    await notifyThuisAanvraag(admin, bookingId);
   } else if (r.outcome === "paid_unplaced" && !r.already) {
     await postAlertWebhook(
       "paid_unplaced",

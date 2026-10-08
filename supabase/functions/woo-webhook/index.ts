@@ -2,7 +2,7 @@
 // Betaald (processing/completed/on-hold) -> confirmed. Geannuleerd/mislukt -> cancelled.
 // Verifieert de handtekening met WOO_WEBHOOK_SECRET.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { confirmPaid, cancelBooking, createCreditFromOrder } from "../_shared/confirm.ts";
+import { confirmPaid, cancelBooking, createCreditFromOrder, createThuisFromOrder } from "../_shared/confirm.ts";
 import { attributeCommission, voidCommission, flagSamplesOrdered } from "../_shared/commission.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
       await confirmPaid(admin, existing.id as string);
     } else if (!existing && !bookingId) {
       // Directe aankoop (route 2): geen boeking bij deze order -> maak een advies-tegoed + plan-mail.
+      // Thuisadvies (direct gekocht) wordt een thuisaanvraag; online advies een tegoed met plan-mail.
+      await createThuisFromOrder(admin, order);
       await createCreditFromOrder(admin, order);
     }
     // Verfcommissie toeschrijven (elke betaalde order kan verf bevatten, ook los van een boeking).
