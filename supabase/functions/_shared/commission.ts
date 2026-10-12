@@ -5,8 +5,10 @@
 
 const RATE = Number(Deno.env.get("COMMISSION_RATE") ?? "0.10");
 const WINDOW_DAYS = Number(Deno.env.get("COMMISSION_WINDOW_DAYS") ?? "60");
-const ADVICE_IDS: number[] = (Deno.env.get("ADVICE_PRODUCT_IDS") ?? "14753")
-  .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
+const ADVICE_IDS: number[] = [
+  ...(Deno.env.get("ADVICE_PRODUCT_IDS") ?? "14753").split(",").map((s) => Number(s.trim())),
+  Number(Deno.env.get("ONLINE_PRODUCT_ID") ?? 0), Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0),
+].filter((n) => Number.isFinite(n) && n > 0);
 const GIFT_IDS: number[] = (Deno.env.get("GIFT_PRODUCT_IDS") ?? "")
   .split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
 

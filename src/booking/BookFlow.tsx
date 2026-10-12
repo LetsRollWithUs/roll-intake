@@ -9,6 +9,7 @@ import {
   dateKey, dayFull, timeLabel, isoDate,
 } from "./slots";
 import { ThuisFlow } from "./ThuisFlow";
+import { isEmbed, postToParent, goToPayment, utmParams } from "./embed";
 
 function normalizeType(t: string | null): string {
   if (!t) return "";
@@ -33,16 +34,22 @@ export function BookFlow() {
       .then(({ data }) => setThuis({ enabled: !!data?.enabled || (import.meta.env.DEV && params.get("thuis") === "1"), price: Number(data?.price ?? 175) }))
       .catch(() => setThuis({ enabled: false, price: 175 }));
   }, []);
-  const setVorm = (v: string | null) => { const n = new URLSearchParams(params); if (v) n.set("vorm", v); else n.delete("vorm"); setParams(n); };
+  // Vorm vooraf gekozen via de URL (bijv. vanaf de productpagina)? Dan is "terug" vanaf de eerste stap: sluiten.
+  const [vormVast] = useState(() => !!vormParam);
+  const setVorm = (v: string | null) => {
+    if (!v && vormVast && isEmbed()) { postToParent("close"); return; }
+    const n = new URLSearchParams(params); if (v) n.set("vorm", v); else n.delete("vorm"); setParams(n);
+  };
 
   if (!thuis) return <div className="rd-root" style={{ background: CREME }} />;
   if (thuis.enabled && vormParam === "thuis") return <ThuisFlow price={thuis.price} onOnline={() => setVorm("online")} onBack={() => setVorm(null)} />;
   if (thuis.enabled && !vormParam && !params.get("type")) return <VormKeuze price={thuis.price} onPick={setVorm} />;
-  return <OnlineFlow onBack={thuis.enabled ? () => setVorm(null) : undefined} />;
+  return <OnlineFlow onBack={thuis.enabled && !(vormVast && !isEmbed()) ? () => setVorm(null) : isEmbed() ? () => postToParent("close") : undefined} />;
 }
 
 function VormKeuze({ price, onPick }: { price: number; onPick: (v: string) => void }) {
   useEffect(() => lockDocument(), []);
+  useEffect(() => { postToParent("step", { step: "vorm", vorm: null }); }, []);
   const opts = [
     { key: "online", title: "Online", sub: "Videogesprek van 30 minuten. Kies direct een moment.", prijs: "€30", icon: "💻", chip: "#EDE7F2" },
     { key: "thuis", title: "Bij jou thuis", sub: "Een styliste komt 60 minuten langs. Je geeft je voorkeuren op, wij bellen je voor een moment.", prijs: `€${price}`, icon: "🏠", chip: "#E7EFE3" },
@@ -66,6 +73,9 @@ function VormKeuze({ price, onPick }: { price: number; onPick: (v: string) => vo
               </button>
             ))}
           </div>
+          {isEmbed() && (
+            <button onClick={() => postToParent("close")} style={{ display: "block", margin: "18px auto 0", background: "none", border: 0, font: "600 14px Figtree", color: "rgba(47,33,65,.6)", textDecoration: "underline", cursor: "pointer", minHeight: 44 }}>Sluiten</button>
+          )}
         </div>
       </div>
     </div>
@@ -90,6 +100,8 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => lockDocument(), []);
+  // Verloop meten op roll.nl (pop-up): elke stap een bericht naar de ouderpagina.
+  useEffect(() => { postToParent("step", { step: ["", "type", "moment", "gegevens"][step], vorm: "online" }); }, [step]);
 
   const loadSlots = async (svc: string) => {
     setLoading(true);
@@ -129,7 +141,7 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
     setErr(null);
     const turnstile_token = await getTurnstileToken("booking_checkout");
     const { data, error } = await supabase.functions.invoke("booking", {
-      body: { action: "checkout", service_key: service, start: slot, name, email, phone, coupon: coupon || undefined, turnstile_token },
+      body: { action: "checkout", service_key: service, start: slot, name, email, phone, coupon: coupon || undefined, turnstile_token, utm: utmParams() },
     });
     setBusy(false);
     if (error || !data?.pay_url) {
@@ -152,7 +164,7 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
       loadSlots(service);
       return;
     }
-    window.location.href = data.pay_url as string;
+    goToPayment(data.pay_url as string, { vorm: "online" });
   };
 
   // Voortgang + CTA per stap
