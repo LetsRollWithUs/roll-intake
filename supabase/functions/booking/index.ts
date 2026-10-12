@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
           coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [
             { key: "_booking_id", value: bookingId },
-            { key: "_booking_source", value: "intake" },
+            { key: "_booking_source", value: "roll-intake" },
             { key: "_booking_format", value: "online" },
             ...utmMeta(body.utm),
           ],
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
             address_1: `${address.straat} ${address.huisnummer}`, postcode: address.postcode, city: address.plaats, country: address.country },
           line_items: [{ product_id: THUIS_PRODUCT_ID, ...(THUIS_VARIATION_ID ? { variation_id: THUIS_VARIATION_ID } : {}), quantity: 1 }],
           coupon_lines: body.coupon ? [{ code: String(body.coupon) }] : undefined,
-          meta_data: [{ key: "_booking_id", value: bookingId }, { key: "_booking_source", value: "intake" }, { key: "_booking_format", value: "thuis" }, ...utmMeta(body.utm)],
+          meta_data: [{ key: "_booking_id", value: bookingId }, { key: "_booking_source", value: "roll-intake" }, { key: "_booking_format", value: "thuis" }, ...utmMeta(body.utm)],
         }),
       });
       const order = await orderRes.json();
