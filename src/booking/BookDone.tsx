@@ -122,7 +122,7 @@ export function BookDone() {
             <div className="rd-card-white" style={{ marginTop: 12 }}>
               <div style={{ fontWeight: 800, fontSize: 18 }}>Kleuradvies thuis · 60 minuten</div>
               <p className="rd-sub" style={{ marginTop: 8 }}>
-                We nemen binnen 2 werkdagen contact met je op om samen een moment te kiezen. Vragen? Stuur een berichtje via WhatsApp: 085 369 62 44.
+                We nemen contact met je op om een afspraak te maken. Vragen? Stuur een berichtje via WhatsApp: 085 369 62 44.
               </p>
             </div>
             <div className="rd-card-white" style={{ marginTop: 12, background: "var(--rd-lime)" }}>

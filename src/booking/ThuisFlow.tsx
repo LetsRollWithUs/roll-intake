@@ -151,7 +151,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
           {step === 2 && (
             <div>
               <h1 style={{ font: "800 27px/1.05 Figtree", letterSpacing: "-.02em", margin: "8px 0 4px" }}>Wanneer komt het je uit?</h1>
-              <p style={{ fontSize: 14, color: "rgba(47,33,65,.65)", margin: "0 0 14px" }}>De styliste belt je om samen een moment te kiezen. Geef alvast aan wat in het algemeen goed uitkomt.</p>
+              <p style={{ fontSize: 14, color: "rgba(47,33,65,.65)", margin: "0 0 14px" }}>We nemen contact met je op om een afspraak te maken. Geef alvast aan wat in het algemeen goed uitkomt.</p>
               <div style={{ font: "700 14px Figtree", marginBottom: 8 }}>Wanneer wil je het advies?</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
                 {WANNEER.map((w) => <button key={w.key} onClick={() => setWanneer(w.key)} style={chip(wanneer === w.key)}>{w.label}</button>)}
@@ -183,7 +183,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
               <p style={{ fontSize: 14, color: "rgba(47,33,65,.65)", margin: "0 0 14px" }}>Hierna reken je veilig af.</p>
               <div style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 14 }}>
                 <div style={{ font: "700 15px Figtree" }}>Kleuradvies thuis · 60 min · €{price}</div>
-                <div style={{ fontSize: 13, color: "rgba(47,33,65,.6)", marginTop: 2 }}>Inclusief reistijd. Na je betaling nemen we binnen 2 werkdagen contact met je op.</div>
+                <div style={{ fontSize: 13, color: "rgba(47,33,65,.6)", marginTop: 2 }}>Inclusief reistijd. Na je betaling nemen we contact met je op om een afspraak te maken.</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", gap: 10 }}>
@@ -198,7 +198,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
                 <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Je e-mailadres" type="email" autoComplete="email" style={input} />
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Je telefoonnummer" type="tel" autoComplete="tel" style={input} />
               </div>
-              <p style={{ fontSize: 12, color: "rgba(47,33,65,.5)", margin: "8px 2px 0" }}>De styliste belt je op dit nummer om het moment af te spreken.</p>
+              <p style={{ fontSize: 12, color: "rgba(47,33,65,.5)", margin: "8px 2px 0" }}>Op dit nummer nemen we contact met je op om een afspraak te maken.</p>
             </div>
           )}
 
@@ -211,7 +211,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
             {ctaLabel}
           </button>
           <div style={{ textAlign: "center", fontSize: 11, color: "rgba(47,33,65,.5)", marginTop: 8 }}>
-            Na je aanvraag bellen we je binnen 2 werkdagen voor een moment.
+            Na je aanvraag nemen we contact met je op om een afspraak te maken.
           </div>
         </div>
       </div>

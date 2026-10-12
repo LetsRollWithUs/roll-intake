@@ -52,7 +52,7 @@ function VormKeuze({ price, onPick }: { price: number; onPick: (v: string) => vo
   useEffect(() => { postToParent("step", { step: "vorm", vorm: null }); }, []);
   const opts = [
     { key: "online", title: "Online", sub: "Videogesprek van 30 minuten. Kies direct een moment.", prijs: "€30", icon: "💻", chip: "#EDE7F2" },
-    { key: "thuis", title: "Bij jou thuis", sub: "Een styliste komt 60 minuten langs. Je geeft je voorkeuren op, wij bellen je voor een moment.", prijs: `€${price}`, icon: "🏠", chip: "#E7EFE3" },
+    { key: "thuis", title: "Bij jou thuis", sub: "Een styliste komt 60 minuten langs. Je geeft je voorkeuren op, wij nemen contact met je op om een afspraak te maken.", prijs: `€${price}`, icon: "🏠", chip: "#E7EFE3" },
   ];
   return (
     <div className="rd-root rd-lock" style={{ background: CREME, color: AUB, fontFamily: "Figtree, system-ui, sans-serif" }}>
