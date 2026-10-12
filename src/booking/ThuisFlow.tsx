@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getTurnstileToken, preloadTurnstile } from "@/lib/turnstile";
 import { AUB, AUB_DIM, PINK, CREME } from "./slots";
+import { postToParent, goToPayment, utmParams } from "./embed";
 
 // Thuisadvies aanvragen: postcodecheck, algemene voorkeursmomenten, adres en gegevens, dan betalen.
 // Na betaling neemt een styliste contact op en spreken jullie samen het moment af.
@@ -24,8 +25,10 @@ type Check = "ok" | "twijfel" | "buiten" | "ongeldig";
 
 export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline: () => void; onBack: () => void }) {
   const [step, setStep] = useState(1);
-  const [country, setCountry] = useState<"NL" | "BE">("NL");
-  const [postcode, setPostcode] = useState("");
+  // Voorinvullen vanaf roll.nl: ?postcode=1234AB&land=NL|BE (de check start dan direct).
+  const q0 = new URLSearchParams(window.location.search);
+  const [country, setCountry] = useState<"NL" | "BE">(q0.get("land")?.toUpperCase() === "BE" ? "BE" : "NL");
+  const [postcode, setPostcode] = useState(q0.get("postcode") ?? "");
   const [check, setCheck] = useState<Check | null>(null);
   const [place, setPlace] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -42,8 +45,13 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => { preloadTurnstile(); }, []);
+  useEffect(() => { postToParent("step", { step: ["", "postcode", "voorkeuren", "gegevens"][step], vorm: "thuis" }); }, [step]);
+  // Postcode meegegeven? Dan meteen controleren.
+  useEffect(() => { if (pcOk && postcode) doCheck(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  const pcOk = country === "NL" ? /^\d{4}\s?[a-zA-Z]{2}$/.test(postcode.trim()) : /^\d{4}$/.test(postcode.trim());
+  // Voor de check zijn 4 cijfers genoeg; voor het adres vragen we in Nederland de volledige postcode.
+  const pcOk = country === "NL" ? /^\d{4}(\s?[a-zA-Z]{2})?$/.test(postcode.trim()) : /^\d{4}$/.test(postcode.trim());
+  const pcVolledig = country === "NL" ? /^\d{4}\s?[a-zA-Z]{2}$/.test(postcode.trim()) : /^\d{4}$/.test(postcode.trim());
   const doCheck = async () => {
     setChecking(true); setErr(null);
     const { data } = await supabase.functions.invoke("booking", { body: { action: "thuis_check", country, postcode } });
@@ -66,7 +74,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
       body: {
         action: "checkout_thuis", turnstile_token, name, email, phone,
         address: { straat, huisnummer, postcode: postcode.trim().toUpperCase(), plaats, country },
-        preferences: { wanneer, momenten, toelichting },
+        preferences: { wanneer, momenten, toelichting }, utm: utmParams(),
       },
     });
     if (error || !data?.pay_url) {
@@ -76,14 +84,14 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
       setErr(msg ?? "Er ging iets mis. Probeer het opnieuw.");
       return;
     }
-    window.location.href = data.pay_url as string;
+    goToPayment(data.pay_url as string, { vorm: "thuis" });
   };
 
   let ctaOk = false, ctaLabel = "Verder", onCta = () => {};
   if (step === 1) { ctaOk = check === "ok" || check === "twijfel"; onCta = () => ctaOk && setStep(2); }
   else if (step === 2) { ctaOk = momenten.length >= 2 && !!wanneer; onCta = () => ctaOk && setStep(3); }
   else {
-    ctaOk = !!name.trim() && emailOk && phoneOk && !!straat.trim() && !!huisnummer.trim() && !!plaats.trim() && !busy;
+    ctaOk = !!name.trim() && emailOk && phoneOk && !!straat.trim() && !!huisnummer.trim() && !!plaats.trim() && pcVolledig && !busy;
     ctaLabel = busy ? "Bezig..." : `Naar betalen (€${price})`;
     onCta = submit;
   }
@@ -183,7 +191,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
                   <input value={huisnummer} onChange={(e) => setHuisnummer(e.target.value)} placeholder="Nr." style={{ ...input, flex: 1 }} />
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <input value={postcode} readOnly aria-label="Postcode" style={{ ...input, flex: 1, opacity: .7 }} />
+                  <input value={postcode} onChange={(e) => setPostcode(e.target.value)} aria-label="Postcode" placeholder={country === "NL" ? "1234 AB" : "1000"} autoComplete="postal-code" style={{ ...input, flex: 1, ...(pcVolledig ? {} : { borderColor: PINK }) }} />
                   <input value={plaats} onChange={(e) => setPlaats(e.target.value)} placeholder="Plaats" autoComplete="address-level2" style={{ ...input, flex: 2 }} />
                 </div>
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Je naam" autoComplete="name" style={input} />

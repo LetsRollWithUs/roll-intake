@@ -31,8 +31,23 @@ const OFFERTE_API_KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 // Bestelvoorstellen (concept/ophalen/verstuurd) pas aan zodra de offerte-tool v2 live is (secret OFFERTE_V2=1).
 // Tot dan gaat een voorstel als Roll-taak, zodat de oude versie geen losse offertes aanmaakt.
 const OFFERTE_V2 = Deno.env.get("OFFERTE_V2") === "1";
-const PRODUCT_ID = 14753; // kleuradvies (variabel product: online / thuis)
+// Online kleuradvies: eigen product (ONLINE_PRODUCT_ID) of een variatie (ONLINE_VARIATION_ID) van het kleuradviesproduct.
+const PRODUCT_ID = Number(Deno.env.get("ONLINE_PRODUCT_ID") ?? 14753);
 const ONLINE_VARIATION_ID = Number(Deno.env.get("ONLINE_VARIATION_ID") ?? 0);
+
+// UTM uit de boekingstool (iframe-URL) als ordermeta, ook in de velden van WooCommerce Order Attribution.
+function utmMeta(u: any): { key: string; value: string }[] {
+  if (!u || typeof u !== "object") return [];
+  const keys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+  const out: { key: string; value: string }[] = [];
+  for (const k of keys) {
+    const v = typeof u[k] === "string" ? u[k].slice(0, 120) : "";
+    if (!v) continue;
+    out.push({ key: `_${k}`, value: v }, { key: `_wc_order_attribution_${k}`, value: v });
+  }
+  if (out.length) out.push({ key: "_wc_order_attribution_source_type", value: "utm" });
+  return out;
+}
 // Thuisadvies: eigen product (of variatie van het kleuradviesproduct). Zonder deze secrets staat thuis uit.
 const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
 const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
@@ -72,7 +87,9 @@ Deno.serve(async (req) => {
           coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [
             { key: "_booking_id", value: bookingId },
-            { key: "_booking_source", value: "intake" },
+            { key: "_booking_source", value: "roll-intake" },
+            { key: "_booking_format", value: "online" },
+            ...utmMeta(body.utm),
           ],
         }),
       });
@@ -84,6 +101,20 @@ Deno.serve(async (req) => {
       await admin.from("bookings").update({ woo_order_id: String(order.id) }).eq("id", bookingId);
       const payUrl = `${WOO_URL}/checkout/order-pay/${order.id}/?pay_for_order=true&key=${order.order_key}`;
       return j({ booking_id: bookingId, order_id: order.id, pay_url: payUrl });
+    }
+
+    // Eerstvolgend vrij online moment (openbaar), voor de productpagina: "Eerstvolgend moment: dinsdag 14 oktober".
+    if (action === "next_slot") {
+      const from = new Date().toISOString().slice(0, 10);
+      const to = new Date(Date.now() + 56 * 864e5).toISOString().slice(0, 10);
+      const { data } = await admin.rpc("available_slots", { p_service_key: body.service_key === "post_sample" ? "post_sample" : "pre_sample", p_from: from, p_to: to });
+      const first = ((data as { start_at: string }[]) ?? [])[0]?.start_at ?? null;
+      const tz = "Europe/Amsterdam";
+      return j({
+        start_at: first,
+        dag: first ? new Intl.DateTimeFormat("nl-NL", { timeZone: tz, weekday: "long", day: "numeric", month: "long" }).format(new Date(first)) : null,
+        tijd: first ? new Intl.DateTimeFormat("nl-NL", { timeZone: tz, hour: "2-digit", minute: "2-digit" }).format(new Date(first)) : null,
+      });
     }
 
     // ── Thuisadvies ────────────────────────────────────────────────────────────
@@ -142,7 +173,7 @@ Deno.serve(async (req) => {
             address_1: `${address.straat} ${address.huisnummer}`, postcode: address.postcode, city: address.plaats, country: address.country },
           line_items: [{ product_id: THUIS_PRODUCT_ID, ...(THUIS_VARIATION_ID ? { variation_id: THUIS_VARIATION_ID } : {}), quantity: 1 }],
           coupon_lines: body.coupon ? [{ code: String(body.coupon) }] : undefined,
-          meta_data: [{ key: "_booking_id", value: bookingId }, { key: "_booking_source", value: "intake" }, { key: "_booking_format", value: "thuis" }],
+          meta_data: [{ key: "_booking_id", value: bookingId }, { key: "_booking_source", value: "roll-intake" }, { key: "_booking_format", value: "thuis" }, ...utmMeta(body.utm)],
         }),
       });
       const order = await orderRes.json();
