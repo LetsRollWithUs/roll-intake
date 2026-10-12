@@ -15,9 +15,10 @@ const GIFT_PRODUCT_IDS: number[] = (Deno.env.get("GIFT_PRODUCT_IDS") ?? "")
 // Thuisadvies: variatie van het kleuradviesproduct (THUIS_VARIATION_ID) of een eigen product (THUIS_PRODUCT_ID).
 const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
 const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
+// Zowel het losse thuisproduct als de oude variatie van het kleuradviesproduct (overgangsperiode).
 export function isThuisLine(li: any): boolean {
-  if (THUIS_VARIATION_ID) return Number(li.variation_id) === THUIS_VARIATION_ID;
-  return !!THUIS_PRODUCT_ID && Number(li.product_id) === THUIS_PRODUCT_ID;
+  if (THUIS_VARIATION_ID && Number(li.variation_id) === THUIS_VARIATION_ID) return true;
+  return !!THUIS_PRODUCT_ID && THUIS_PRODUCT_ID !== 14753 && Number(li.product_id) === THUIS_PRODUCT_ID;
 }
 
 // Thuisaanvraag binnen (betaald): bevestiging van de aanvraag (C06, variant thuis) + melding voor beheer.

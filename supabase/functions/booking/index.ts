@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           status: "pending",
           billing: { first_name: name, email, phone: phone || undefined },
-          line_items: [{ product_id: PRODUCT_ID, ...(ONLINE_VARIATION_ID ? { variation_id: ONLINE_VARIATION_ID } : {}), quantity: 1 }],
+          line_items: [{ product_id: PRODUCT_ID, ...(ONLINE_VARIATION_ID && PRODUCT_ID === 14753 ? { variation_id: ONLINE_VARIATION_ID } : {}), quantity: 1 }],
           coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [
             { key: "_booking_id", value: bookingId },
@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
           status: "pending",
           billing: { first_name: parts[0], last_name: parts.slice(1).join(" ") || undefined, email, phone,
             address_1: `${address.straat} ${address.huisnummer}`, postcode: address.postcode, city: address.plaats, country: address.country },
-          line_items: [{ product_id: THUIS_PRODUCT_ID, ...(THUIS_VARIATION_ID ? { variation_id: THUIS_VARIATION_ID } : {}), quantity: 1 }],
+          line_items: [{ product_id: THUIS_PRODUCT_ID, ...(THUIS_VARIATION_ID && THUIS_PRODUCT_ID === 14753 ? { variation_id: THUIS_VARIATION_ID } : {}), quantity: 1 }],
           coupon_lines: body.coupon ? [{ code: String(body.coupon) }] : undefined,
           meta_data: [{ key: "_booking_id", value: bookingId }, { key: "_booking_source", value: "roll-intake" }, { key: "_booking_format", value: "thuis" }, ...utmMeta(body.utm)],
         }),
