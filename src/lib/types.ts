@@ -104,6 +104,8 @@ export interface IntakeState {
   // Woont nog niet in de woning: maten, foto's en lichtinval volgen later.
   // Wordt gezet zodra de klant dat aangeeft; de intake vraagt er daarna niet meer verplicht naar.
   nogNietInWoning?: boolean;
+  /** Antwoord op "Woon je al in de woning?" (alleen gevraagd als de klant iets niet weet). */
+  woontErAl?: boolean;
 
   // Context
   hasOtherChanges?: boolean; // verandert er iets aan vloer/meubels/gordijnen?

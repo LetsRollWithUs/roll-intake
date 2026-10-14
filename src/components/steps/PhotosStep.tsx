@@ -58,6 +58,11 @@ export function PhotosStep({ room, index, total, patch, onNogNiet }: Props) {
           Kan nog geen foto's maken
         </label>
       )}
+      {!enough && room.noPhotos && (
+        <span style={{ display: "block", fontSize: 12, opacity: 0.65, marginTop: 6 }}>
+          Nu niet in de buurt? Je antwoorden blijven bewaard, dus je kunt de foto's ook later op dit apparaat toevoegen voordat je de intake verstuurt.
+        </span>
+      )}
       {!enough && room.noPhotos && onNogNiet && (
         <button className="rd-textlink" onClick={onNogNiet} style={{ display: "block", fontSize: 13, marginTop: 6, textAlign: "left" }}>
           Woon je er nog niet? Sla foto's en lichtinval dan voor alle ruimtes over

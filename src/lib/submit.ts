@@ -209,6 +209,7 @@ export async function submitIntake(
       otherChangesNote: state.otherChangesNote || null,
       questionScope: state.questionScope ?? null,
       nogNietInWoning: !!state.nogNietInWoning,
+      woontErAl: state.woontErAl ?? null,
     },
   };
 

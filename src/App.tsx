@@ -210,6 +210,7 @@ export function App() {
   const zetNogNiet = (aan: boolean) =>
     update((prev) => ({
       nogNietInWoning: aan,
+      woontErAl: !aan,
       rooms: aan
         ? prev.rooms.map((r) => ({
             ...r,
@@ -544,13 +545,13 @@ export function App() {
     >
       {screen === "rooms" && <RoomsStep rooms={state.rooms} setRooms={setRooms} />}
       {screen === "surfaces" && <SurfacesStep rooms={state.rooms} setRooms={setRooms} />}
-      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} nogNiet={nogNiet} onNogNiet={zetNogNiet} />}
+      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} nogNiet={nogNiet} woontErAl={state.woontErAl} onNogNiet={zetNogNiet} onWoontErAl={() => update({ woontErAl: true, nogNietInWoning: false })} />}
       {screen === "photos" && nogNiet && (
         <PhotosLaterStep rooms={state.rooms} patch={patchRoom} onTochAl={() => zetNogNiet(false)} />
       )}
       {screen === "photos" && !nogNiet && currentRoom && (
         <PhotosStep room={currentRoom} index={photoIdx} total={state.rooms.length} patch={patchRoom}
-          onNogNiet={multiRoom ? () => zetNogNiet(true) : undefined} />
+          onNogNiet={multiRoom && state.woontErAl !== true ? () => zetNogNiet(true) : undefined} />
       )}
       {screen === "beelden" && (
         <SfeerBeeldenStep

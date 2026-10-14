@@ -43,6 +43,7 @@ export function nogBespreken(intake: IntakeRow | null, advice: AdviceV2 | null):
     }
     if (!mo) out.push(`Maten ${naam} ontbreken`);
     else if (mo.unknown && !summarizeMeasure(mo).length && !nogNiet) out.push(`Maten ${naam} nog onbekend (klant wist ze nog niet)`);
+    else if (mo.geschat) out.push(`Maten ${naam} zijn geschat door de klant (${mo.geschat}), even controleren`);
   }
   if (!intake.planning) out.push("Wanneer wil de klant schilderen?");
   if (!intake.painter) out.push("Schildert de klant zelf of een schilder?");
