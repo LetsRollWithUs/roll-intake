@@ -26,7 +26,10 @@ export function nogBespreken(intake: IntakeRow | null, advice: AdviceV2 | null):
       const s = a?.surfaces.filter((x) => x.type === t) ?? [];
       if (!s.length || s.every((x) => x.status === "bespreken")) out.push(`${t === "muren" ? "Muren" : t === "plafond" ? "Plafond" : "Houtwerk"} ${r.label.toLowerCase()} nog niet besproken`);
     }
-    if (!(r.photos ?? []).some((p) => p?.path || p?.url)) out.push(`Geen foto's van de ${r.label.toLowerCase()}`);
+    if (!(r.photos ?? []).some((p) => p?.path || p?.url)) out.push(r.noPhotos ? `Foto's van de ${r.label.toLowerCase()} volgen nog (klant kon nog geen foto's maken)` : `Geen foto's van de ${r.label.toLowerCase()}`);
+    const mo = intake.room_measures?.[r.id];
+    if (mo && (r.surfaces ?? []).includes("muren") && (mo.wall_substrate === "onbekend" || mo.wall_condition === "onbekend")) out.push(`Ondergrond of staat muren ${r.label.toLowerCase()} nog onbekend`);
+    if (mo && mo.wood_substrate === "onbekend" && (r.surfaces ?? []).some((s) => ["kozijnen", "deuren", "houtwerk"].includes(s))) out.push(`Staat houtwerk ${r.label.toLowerCase()} nog onbekend`);
     if (!(r.sun?.length) && !r.noWindows) out.push(`Lichtinval ${r.label.toLowerCase()} onbekend`);
     const mt = intake.room_measures?.[r.id];
     if (!mt) out.push(`Maten ${r.label.toLowerCase()} ontbreken`);

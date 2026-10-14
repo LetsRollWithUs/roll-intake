@@ -397,8 +397,9 @@ export function App() {
     }
     case "photos": {
       const sunOk = !!currentRoom && ((currentRoom.sun?.length ?? 0) > 0 || currentRoom.noWindows === true);
-      canAdvance = !!currentRoom && currentRoom.photos.length >= 1 && sunOk;
-      hint = "Voeg minimaal 1 foto toe en geef aan wanneer de zon binnenvalt.";
+      const fotoOk = !!currentRoom && (currentRoom.photos.length >= 1 || currentRoom.noPhotos === true);
+      canAdvance = fotoOk && sunOk;
+      hint = !fotoOk ? "Voeg minimaal 1 foto toe, of vink aan dat je nog geen foto's kunt maken." : "Geef aan wanneer de zon binnenvalt.";
       break;
     }
     case "beelden":

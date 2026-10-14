@@ -120,6 +120,7 @@ export async function submitIntake(
         daylight: room.daylight ?? null,
         daylightDir: room.daylightDir ?? null,
         priority: !!room.priority,
+        noPhotos: !!room.noPhotos,
         photos,
       };
     }),
