@@ -162,13 +162,17 @@ export function buildAdvicePrompt(intake: IntakeRow, photos: PromptPhotos): stri
     L.push(`- Samples al getest: ${intake.has_samples === "nee" ? "nee" : intake.has_samples ?? "onbekend"}`);
   }
   L.push("");
+  if ((intake.payload as { nogNietInWoning?: boolean } | null)?.nogNietInWoning) {
+    L.push("Let op: de klant woont nog niet in de woning. Maten, foto's en lichtinval zijn deels onbekend; benoem aannames en wat in het gesprek nog nagevraagd moet worden.");
+    L.push("");
+  }
   L.push("## Ruimtes");
   for (const r of intake.rooms ?? []) {
     L.push(`### ${r.label}${r.priority ? " (voorrang)" : ""}`);
     L.push(`- Te verven: ${(r.surfaces ?? []).map((x) => lbl(SURFACES, x)).join(", ") || "onbekend"}`);
     if (r.noWindows) L.push("- Licht: geen ramen");
     else if ((r.sun ?? []).length) L.push(`- Licht: ${r.sun!.map((k) => SUN_DIR[k] ?? lbl(SUN_MOMENTS, k)).join("; ")}`);
-    else L.push("- Licht: onbekend");
+    else L.push(r.sunUnknown ? "- Licht: klant weet het nog niet" : "- Licht: onbekend");
     if (r.skylight) L.push("- Dakraam aanwezig");
     if (r.usage) L.push(`- Meest gebruikt: ${lbl(USAGE_TIMES, r.usage)}`);
     if (r.otherChanges) L.push(`- Verandert nog: ${r.otherChangesNote || "ja (vloer, meubels of gordijnen)"}`);

@@ -19,21 +19,30 @@ const intakeType = (k: string): SurfaceType => (k === "plafond" ? "plafond" : k 
 export function nogBespreken(intake: IntakeRow | null, advice: AdviceV2 | null): string[] {
   if (!intake) return ["De klant heeft de intake nog niet ingevuld."];
   const out: string[] = [];
+  // Woont de klant er nog niet? Dan één melding in plaats van per ruimte "onbekend".
+  const nogNiet = !!(intake.payload as { nogNietInWoning?: boolean } | null)?.nogNietInWoning;
+  if (nogNiet) out.push("Klant woont er nog niet: maten, foto's en lichtinval volgen later (vraag naar foto's van de makelaar of een plattegrond)");
   for (const r of intake.rooms ?? []) {
     const a = advice?.rooms.find((x) => x.room_id === r.id);
     const types = new Set((r.surfaces ?? []).map(intakeType));
+    const naam = r.label.toLowerCase();
     for (const t of types) {
       const s = a?.surfaces.filter((x) => x.type === t) ?? [];
-      if (!s.length || s.every((x) => x.status === "bespreken")) out.push(`${t === "muren" ? "Muren" : t === "plafond" ? "Plafond" : "Houtwerk"} ${r.label.toLowerCase()} nog niet besproken`);
+      if (!s.length || s.every((x) => x.status === "bespreken")) out.push(`${t === "muren" ? "Muren" : t === "plafond" ? "Plafond" : "Houtwerk"} ${naam} nog niet besproken`);
     }
-    if (!(r.photos ?? []).some((p) => p?.path || p?.url)) out.push(r.noPhotos ? `Foto's van de ${r.label.toLowerCase()} volgen nog (klant kon nog geen foto's maken)` : `Geen foto's van de ${r.label.toLowerCase()}`);
+    if (!(r.photos ?? []).some((p) => p?.path || p?.url)) {
+      if (!r.noPhotos) out.push(`Geen foto's van de ${naam}`);
+      else if (!nogNiet) out.push(`Foto's van de ${naam} volgen nog (klant kon nog geen foto's maken)`);
+    }
     const mo = intake.room_measures?.[r.id];
-    if (mo && (r.surfaces ?? []).includes("muren") && (mo.wall_substrate === "onbekend" || mo.wall_condition === "onbekend")) out.push(`Ondergrond of staat muren ${r.label.toLowerCase()} nog onbekend`);
-    if (mo && mo.wood_substrate === "onbekend" && (r.surfaces ?? []).some((s) => ["kozijnen", "deuren", "houtwerk"].includes(s))) out.push(`Staat houtwerk ${r.label.toLowerCase()} nog onbekend`);
-    if (!(r.sun?.length) && !r.noWindows) out.push(`Lichtinval ${r.label.toLowerCase()} onbekend`);
-    const mt = intake.room_measures?.[r.id];
-    if (!mt) out.push(`Maten ${r.label.toLowerCase()} ontbreken`);
-    else if (mt.unknown && !summarizeMeasure(mt).length) out.push(`Maten ${r.label.toLowerCase()} nog onbekend (klant wist ze nog niet)`);
+    if (mo && (r.surfaces ?? []).includes("muren") && (mo.wall_substrate === "onbekend" || mo.wall_condition === "onbekend")) out.push(`Ondergrond of staat muren ${naam} nog onbekend`);
+    if (mo && mo.wood_substrate === "onbekend" && (r.surfaces ?? []).some((s) => ["kozijnen", "deuren", "houtwerk"].includes(s))) out.push(`Staat houtwerk ${naam} nog onbekend`);
+    if (!(r.sun?.length) && !r.noWindows) {
+      if (!r.sunUnknown) out.push(`Lichtinval ${naam} onbekend`);
+      else if (!nogNiet) out.push(`Lichtinval ${naam} nog onbekend (klant weet het nog niet)`);
+    }
+    if (!mo) out.push(`Maten ${naam} ontbreken`);
+    else if (mo.unknown && !summarizeMeasure(mo).length && !nogNiet) out.push(`Maten ${naam} nog onbekend (klant wist ze nog niet)`);
   }
   if (!intake.planning) out.push("Wanneer wil de klant schilderen?");
   if (!intake.painter) out.push("Schildert de klant zelf of een schilder?");

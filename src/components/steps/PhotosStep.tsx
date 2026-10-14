@@ -7,9 +7,11 @@ interface Props {
   index: number;
   total: number;
   patch: (id: string, p: Partial<Room>) => void;
+  /** Klant woont er nog niet: foto's en lichtinval voor alle ruimtes overslaan. */
+  onNogNiet?: () => void;
 }
 
-export function PhotosStep({ room, index, total, patch }: Props) {
+export function PhotosStep({ room, index, total, patch, onNogNiet }: Props) {
   const enough = room.photos.length >= 1;
   const later = !enough && !!room.noPhotos;
   const sun = room.sun ?? [];
@@ -17,11 +19,12 @@ export function PhotosStep({ room, index, total, patch }: Props) {
   const toggleSun = (k: SunMoment) => {
     const next = sun.includes(k) ? sun.filter((x) => x !== k) : [...sun, k];
     // Zon kiezen sluit "geen ramen" uit.
-    patch(room.id, { sun: next, noWindows: next.length ? false : room.noWindows });
+    patch(room.id, { sun: next, noWindows: next.length ? false : room.noWindows, sunUnknown: next.length ? false : room.sunUnknown });
   };
   const setNoWindows = () =>
     patch(room.id, {
       noWindows: !room.noWindows,
+      sunUnknown: false,
       sun: !room.noWindows ? [] : sun,
       skylight: !room.noWindows ? false : room.skylight,
     });
@@ -54,6 +57,11 @@ export function PhotosStep({ room, index, total, patch }: Props) {
             style={{ width: 16, height: 16, margin: 0, accentColor: "var(--rd-purple, #6267AF)" }} />
           Kan nog geen foto's maken
         </label>
+      )}
+      {!enough && room.noPhotos && onNogNiet && (
+        <button className="rd-textlink" onClick={onNogNiet} style={{ display: "block", fontSize: 13, marginTop: 6, textAlign: "left" }}>
+          Woon je er nog niet? Sla foto's en lichtinval dan voor alle ruimtes over
+        </button>
       )}
 
       {/* Wanneer valt de zon binnen? */}
@@ -94,6 +102,14 @@ export function PhotosStep({ room, index, total, patch }: Props) {
             aria-pressed={!!room.noWindows}
           >
             Geen ramen
+          </button>
+          <button
+            className={`rd-plan-chip${room.sunUnknown ? " is-on" : ""}`}
+            onClick={() => patch(room.id, { sunUnknown: !room.sunUnknown, sun: !room.sunUnknown ? [] : sun, noWindows: false })}
+            aria-pressed={!!room.sunUnknown}
+            style={{ marginLeft: 8 }}
+          >
+            Weet ik nog niet
           </button>
         </div>
       </div>

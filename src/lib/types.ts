@@ -36,6 +36,8 @@ export interface Room {
   skylight?: boolean;
   /** Geen ramen in deze ruimte. */
   noWindows?: boolean;
+  /** Klant weet nog niet wanneer de zon binnenvalt (woont er bijv. nog niet). */
+  sunUnknown?: boolean;
   usage?: UsageTime;
   /** Verandert er nog iets aan vloer/meubels/gordijnen in deze ruimte? */
   otherChanges?: boolean;
@@ -99,6 +101,10 @@ export interface IntakeState {
   inspirationImages: UploadedImage[]; // max 5
   inspirationNote: string;
 
+  // Woont nog niet in de woning: maten, foto's en lichtinval volgen later.
+  // Wordt gezet zodra de klant dat aangeeft; de intake vraagt er daarna niet meer verplicht naar.
+  nogNietInWoning?: boolean;
+
   // Context
   hasOtherChanges?: boolean; // verandert er iets aan vloer/meubels/gordijnen?
   otherChangesNote: string;
@@ -133,6 +139,7 @@ export function emptyState(): IntakeState {
     otherInspirationUrl: "",
     inspirationImages: [],
     inspirationNote: "",
+    nogNietInWoning: false,
     hasOtherChanges: undefined,
     otherChangesNote: "",
     helpNeeds: [],

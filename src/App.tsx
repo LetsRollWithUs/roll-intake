@@ -5,6 +5,7 @@ import { ContactStep } from "@/components/steps/ContactStep";
 import { RoomsStep } from "@/components/steps/RoomsStep";
 import { SurfacesStep } from "@/components/steps/SurfacesStep";
 import { MatenStep } from "@/components/steps/MatenStep";
+import { PhotosLaterStep } from "@/components/steps/PhotosLaterStep";
 import { PhotosStep } from "@/components/steps/PhotosStep";
 import { SfeerBeeldenStep } from "@/components/steps/SfeerBeeldenStep";
 import { GevoelStep } from "@/components/steps/GevoelStep";
@@ -203,6 +204,21 @@ export function App() {
   const patchRoom = (id: string, p: Partial<Room>) =>
     update((prev) => ({ rooms: prev.rooms.map((r) => (r.id === id ? { ...r, ...p } : r)) }));
 
+  // Woont de klant er nog niet? Dan vragen we maten, foto's en lichtinval niet meer
+  // verplicht: wat nog niet bekend is staat op "volgt later" en de foto-stap wordt één scherm.
+  const nogNiet = !!state.nogNietInWoning;
+  const zetNogNiet = (aan: boolean) =>
+    update((prev) => ({
+      nogNietInWoning: aan,
+      rooms: aan
+        ? prev.rooms.map((r) => ({
+            ...r,
+            noPhotos: r.photos.length ? r.noPhotos : true,
+            sunUnknown: (r.sun?.length ?? 0) > 0 || r.noWindows ? r.sunUnknown : true,
+          }))
+        : prev.rooms.map((r) => ({ ...r, noPhotos: false, sunUnknown: false })),
+    }));
+
   const multiRoom = state.rooms.length > 1;
   const emailOk = /.+@.+\..+/.test(state.contactEmail.trim());
 
@@ -365,7 +381,9 @@ export function App() {
   }
 
   const idx = FLOW.indexOf(screen as StepScreen);
-  const meta = META[screen as StepScreen];
+  const meta = screen === "photos" && state.nogNietInWoning
+    ? { ...META.photos, title: "Heb je al beelden van de woning?", sub: "Je woont er nog niet, dus dit is helemaal optioneel. Foto's en licht kijken we samen na." }
+    : META[screen as StepScreen];
 
   // Validatie (soepel: kern verplicht, rest aanrader)
   let canAdvance = true;
@@ -396,7 +414,8 @@ export function App() {
       break;
     }
     case "photos": {
-      const sunOk = !!currentRoom && ((currentRoom.sun?.length ?? 0) > 0 || currentRoom.noWindows === true);
+      if (nogNiet) break; // één scherm, alles optioneel
+      const sunOk = !!currentRoom && ((currentRoom.sun?.length ?? 0) > 0 || currentRoom.noWindows === true || currentRoom.sunUnknown === true);
       const fotoOk = !!currentRoom && (currentRoom.photos.length >= 1 || currentRoom.noPhotos === true);
       canAdvance = fotoOk && sunOk;
       hint = !fotoOk ? "Voeg minimaal 1 foto toe, of vink aan dat je nog geen foto's kunt maken." : "Geef aan wanneer de zon binnenvalt.";
@@ -446,15 +465,15 @@ export function App() {
   };
 
   const goBack = () => {
-    if (screen === "photos" && photoIdx > 0) return setPhotoIdx(photoIdx - 1);
+    if (screen === "photos" && photoIdx > 0 && !nogNiet) return setPhotoIdx(photoIdx - 1);
     if (idx <= 0) return setScreen("contact");
     const prev = FLOW[idx - 1];
-    if (prev === "photos") setPhotoIdx(Math.max(0, state.rooms.length - 1));
+    if (prev === "photos") setPhotoIdx(nogNiet ? 0 : Math.max(0, state.rooms.length - 1));
     setScreen(prev);
   };
   const goNext = () => {
     if (screen === "planning") return handleSubmit();
-    if (screen === "photos" && photoIdx < state.rooms.length - 1) return setPhotoIdx(photoIdx + 1);
+    if (screen === "photos" && photoIdx < state.rooms.length - 1 && !nogNiet) return setPhotoIdx(photoIdx + 1);
     // Lege kleurregels opruimen zodat ze nergens blijven hangen.
     if (screen === "kleuren" && state.samples.some((s) => s.name.trim() === "")) {
       update({ samples: state.samples.filter((s) => s.name.trim() !== "") });
@@ -525,9 +544,13 @@ export function App() {
     >
       {screen === "rooms" && <RoomsStep rooms={state.rooms} setRooms={setRooms} />}
       {screen === "surfaces" && <SurfacesStep rooms={state.rooms} setRooms={setRooms} />}
-      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} />}
-      {screen === "photos" && currentRoom && (
-        <PhotosStep room={currentRoom} index={photoIdx} total={state.rooms.length} patch={patchRoom} />
+      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} nogNiet={nogNiet} onNogNiet={zetNogNiet} />}
+      {screen === "photos" && nogNiet && (
+        <PhotosLaterStep rooms={state.rooms} patch={patchRoom} onTochAl={() => zetNogNiet(false)} />
+      )}
+      {screen === "photos" && !nogNiet && currentRoom && (
+        <PhotosStep room={currentRoom} index={photoIdx} total={state.rooms.length} patch={patchRoom}
+          onNogNiet={multiRoom ? () => zetNogNiet(true) : undefined} />
       )}
       {screen === "beelden" && (
         <SfeerBeeldenStep

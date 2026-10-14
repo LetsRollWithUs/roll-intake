@@ -4,6 +4,9 @@ import { emptyMeasure, STANDAARD_HOOGTE, type RoomMeasure } from "@/lib/verfcalc
 interface Props {
   rooms: Room[];
   setRooms: (updater: (prev: Room[]) => Room[]) => void;
+  /** Klant woont er nog niet (vlag voor de hele intake). */
+  nogNiet?: boolean;
+  onNogNiet?: (aan: boolean) => void;
 }
 
 const hasWalls = (r: Room) => r.surfaces.includes("muren");
@@ -20,19 +23,44 @@ function seed(r: Room): RoomMeasure {
 }
 const measureOf = (r: Room): RoomMeasure => r.measure ?? seed(r);
 
-export function MatenStep({ rooms, setRooms }: Props) {
+export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
   const measured = rooms.filter((r) => hasWalls(r) || hasCeiling(r) || hasWood(r));
   const patch = (roomId: string, fn: (m: RoomMeasure) => RoomMeasure) =>
     setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, measure: fn(measureOf(r)) } : r)));
 
   // Nog niet in de woning? Per ruimte "Maten weet ik nog niet": de maatvelden verdwijnen,
   // ondergrond en staat blijven (met "Weet ik nog niet"). De styliste vult de maten later in.
-  const zetOnbekend = (r: Room, aan: boolean) =>
+  const leeg = (r: Room, x: RoomMeasure, alles: boolean): RoomMeasure => {
+    const s = seed(r);
+    // Bij "voor alle ruimtes" staan ondergrond en staat ook op "Weet ik nog niet",
+    // tenzij de klant ze al zelf had gekozen.
+    const kies = <T,>(v: T | undefined, standaard: T) => (alles && (v ?? standaard) === standaard ? "onbekend" : v ?? standaard);
+    return {
+      ...s,
+      wall_substrate: kies(x.wall_substrate, "bestaand") as RoomMeasure["wall_substrate"],
+      wall_condition: kies(x.wall_condition, "glad") as RoomMeasure["wall_condition"],
+      wood_substrate: kies(x.wood_substrate, "gelakt") as RoomMeasure["wood_substrate"],
+      woodwork: { ...s.woodwork, doors: 0 },
+      unknown: true,
+    };
+  };
+  const zetOnbekend = (r: Room, aan: boolean) => {
+    // De eerste keer "weet ik nog niet": geldt meteen voor alle ruimtes, en de rest van de
+    // intake (foto's, lichtinval) vraagt er daarna niet meer verplicht naar.
+    if (aan && !nogNiet && measured.length > 1) {
+      const ids = new Set(measured.map((x) => x.id));
+      setRooms((prev) => prev.map((x) => (ids.has(x.id) ? { ...x, measure: leeg(x, measureOf(x), true) } : x)));
+      onNogNiet?.(true);
+      return;
+    }
+    if (aan && !nogNiet) onNogNiet?.(true);
     patch(r.id, (x) => {
-      const s = seed(r);
       const keuzes = { wall_substrate: x.wall_substrate, wall_condition: x.wall_condition, wood_substrate: x.wood_substrate };
-      return aan ? { ...s, ...keuzes, woodwork: { ...s.woodwork, doors: 0 }, unknown: true } : { ...s, ...keuzes };
+      return aan ? leeg(r, x, false) : { ...seed(r), ...keuzes };
     });
+    // Alles weer uitgevinkt? Dan woont de klant er kennelijk wel; vlag eraf.
+    if (!aan && nogNiet && measured.every((x) => x.id === r.id || !x.measure?.unknown)) onNogNiet?.(false);
+  };
 
   if (measured.length === 0) {
     return (
@@ -74,6 +102,11 @@ export function MatenStep({ rooms, setRooms }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {nogNiet && measured.length > 1 && (
+        <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>
+          We hebben het voor alle ruimtes aangevinkt; de maten kijken we samen na. Weet je ze van een ruimte wel? Vink het daar uit. Foto's en lichtinval mag je straks ook overslaan.
+        </p>
+      )}
       {measured.map((r) => {
         const m = measureOf(r);
         const onb = !!m.unknown;
