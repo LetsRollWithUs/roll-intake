@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { SURFACES, DAYLIGHT, DAYLIGHT_DIRS, SUN_MOMENTS, USAGE_TIMES, PLANNING, PAINTERS } from "@/data/intake-options";
-import { INSPIRATIONS } from "@/data/inspiration";
+import { inspiratie } from "@/data/inspiration";
 import { rollColors } from "@/data/roll-colors";
 import { STATUSES, type AdvisorStatus } from "./status";
 import { OUTCOMES, BUY_MOMENTS, PRODUCTS } from "./outcome";
@@ -171,7 +171,7 @@ export function IntakeDetail() {
 
   const p = row.payload ?? {};
   const likeThumbs = (row.inspiration_likes ?? [])
-    .map((idk) => INSPIRATIONS.find((x) => x.id === idk))
+    .map((idk) => inspiratie(idk))
     .filter(Boolean) as { src: string; label: string }[];
 
   return (
