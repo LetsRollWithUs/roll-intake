@@ -114,6 +114,7 @@ export async function submitIntake(
         sun: room.sun ?? [],
         skylight: !!room.skylight,
         noWindows: !!room.noWindows,
+        sunUnknown: !!room.sunUnknown,
         usage: room.usage ?? null,
         otherChanges: room.otherChanges ?? null,
         otherChangesNote: room.otherChangesNote ?? null,
@@ -207,6 +208,7 @@ export async function submitIntake(
       hasOtherChanges: state.hasOtherChanges ?? null,
       otherChangesNote: state.otherChangesNote || null,
       questionScope: state.questionScope ?? null,
+      nogNietInWoning: !!state.nogNietInWoning,
     },
   };
 

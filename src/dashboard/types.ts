@@ -14,6 +14,7 @@ export interface DbRoom {
   sun?: string[] | null;
   skylight?: boolean | null;
   noWindows?: boolean | null;
+  sunUnknown?: boolean | null;
   usage?: string | null;
   otherChanges?: boolean | null;
   otherChangesNote?: string | null;
