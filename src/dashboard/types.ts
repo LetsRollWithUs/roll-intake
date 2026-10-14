@@ -21,6 +21,7 @@ export interface DbRoom {
   daylightDir?: string | null;
   priority?: boolean;
   photos?: DbPhoto[];
+  noPhotos?: boolean | null;
 }
 export interface DbSample {
   id: string;

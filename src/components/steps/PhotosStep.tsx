@@ -11,6 +11,7 @@ interface Props {
 
 export function PhotosStep({ room, index, total, patch }: Props) {
   const enough = room.photos.length >= 1;
+  const later = !enough && !!room.noPhotos;
   const sun = room.sun ?? [];
 
   const toggleSun = (k: SunMoment) => {
@@ -38,7 +39,7 @@ export function PhotosStep({ room, index, total, patch }: Props) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span className="rd-kicker" style={{ color: enough ? "var(--rd-pink-dark)" : "rgba(47,33,65,.5)" }}>
-          {room.photos.length} foto{room.photos.length === 1 ? "" : "'s"} {enough ? "✓" : "· min. 1"}
+          {room.photos.length} foto{room.photos.length === 1 ? "" : "'s"} {enough ? "✓" : later ? "· volgen later" : "· min. 1"}
         </span>
       </div>
 
@@ -47,6 +48,13 @@ export function PhotosStep({ room, index, total, patch }: Props) {
         Eén foto is genoeg om te starten, maar meer helpt enorm: maak er het liefst een paar vanuit
         verschillende hoeken, plus een foto richting het raam. Liefst overdag en zonder filter.
       </p>
+      {!enough && (
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.75, cursor: "pointer", marginTop: 2 }}>
+          <input type="checkbox" checked={!!room.noPhotos} onChange={(e) => patch(room.id, { noPhotos: e.target.checked })}
+            style={{ width: 16, height: 16, margin: 0, accentColor: "var(--rd-purple, #6267AF)" }} />
+          Kan nog geen foto's maken
+        </label>
+      )}
 
       {/* Wanneer valt de zon binnen? */}
       <div style={{ marginTop: 18 }}>

@@ -24,14 +24,15 @@ export function MatenStep({ rooms, setRooms }: Props) {
   const measured = rooms.filter((r) => hasWalls(r) || hasCeiling(r) || hasWood(r));
   const patch = (roomId: string, fn: (m: RoomMeasure) => RoomMeasure) =>
     setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, measure: fn(measureOf(r)) } : r)));
-  // Nog niet in de woning? Dan mag de stap zonder maten; de styliste vult ze later in.
-  const onbekend = measured.length > 0 && measured.every((r) => r.measure?.unknown);
-  const zetOnbekend = (aan: boolean) => {
-    const ids = new Set(measured.map((r) => r.id));
-    // Aan: lege maten (zonder de standaard-deur), zodat de styliste ze later invult. Uit: opnieuw beginnen.
-    const leeg = (r: Room): RoomMeasure => { const s = seed(r); return { ...s, woodwork: { ...s.woodwork, doors: 0 }, unknown: true }; };
-    setRooms((prev) => prev.map((r) => (ids.has(r.id) ? { ...r, measure: aan ? leeg(r) : seed(r) } : r)));
-  };
+
+  // Nog niet in de woning? Per ruimte "Maten weet ik nog niet": de maatvelden verdwijnen,
+  // ondergrond en staat blijven (met "Weet ik nog niet"). De styliste vult de maten later in.
+  const zetOnbekend = (r: Room, aan: boolean) =>
+    patch(r.id, (x) => {
+      const s = seed(r);
+      const keuzes = { wall_substrate: x.wall_substrate, wall_condition: x.wall_condition, wood_substrate: x.wood_substrate };
+      return aan ? { ...s, ...keuzes, woodwork: { ...s.woodwork, doors: 0 }, unknown: true } : { ...s, ...keuzes };
+    });
 
   if (measured.length === 0) {
     return (
@@ -50,18 +51,34 @@ export function MatenStep({ rooms, setRooms }: Props) {
     </label>
   );
 
+  const vinkje = (r: Room, aan: boolean) => (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.75, cursor: "pointer", alignSelf: "flex-start" }}>
+      <input type="checkbox" checked={aan} onChange={(e) => zetOnbekend(r, e.target.checked)}
+        style={{ width: 16, height: 16, margin: 0, accentColor: "var(--rd-purple, #6267AF)" }} />
+      Maten weet ik nog niet
+    </label>
+  );
+
+  const keuze = <K extends "wall_substrate" | "wall_condition" | "wood_substrate">(
+    r: Room, m: RoomMeasure, k: K, label: string, opties: [NonNullable<RoomMeasure[K]>, string][], standaard: NonNullable<RoomMeasure[K]>,
+  ) => (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+      <select className="rd-input" value={(m[k] ?? standaard) as string}
+        onChange={(e) => patch(r.id, (x) => ({ ...x, [k]: e.target.value }))} style={{ height: 46 }}>
+        {opties.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+        <option value="onbekend">Weet ik nog niet</option>
+      </select>
+    </label>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <label className="rd-card-white" style={{ display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }}>
-        <input type="checkbox" checked={onbekend} onChange={(e) => zetOnbekend(e.target.checked)} style={{ width: 20, height: 20, marginTop: 2, flex: "0 0 auto", accentColor: "var(--rd-purple, #6267AF)" }} />
-        <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span style={{ fontWeight: 700 }}>Ik weet de maten nog niet</span>
-          <span style={{ fontSize: 13, opacity: 0.7 }}>Woon je er nog niet, of kun je nu niet meten? Geen probleem, dan kijken we samen naar de maten.</span>
-        </span>
-      </label>
-
-      {!onbekend && measured.map((r) => {
+      {measured.map((r) => {
         const m = measureOf(r);
+        const onb = !!m.unknown;
+        // Het vinkje staat onder de eerste maatvelden van de ruimte.
+        const plek = hasWalls(r) ? "muren" : hasCeiling(r) ? "plafond" : "hout";
         return (
           <div key={r.id} className="rd-card-white" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="rd-row-label">{r.label}</div>
@@ -69,76 +86,70 @@ export function MatenStep({ rooms, setRooms }: Props) {
             {hasWalls(r) && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Muren</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {num("Totale breedte (m)", m.walls[0]?.w ?? 0, (n) => patch(r.id, (x) => ({ ...x, walls: [{ w: n, h: x.walls[0]?.h || STANDAARD_HOOGTE }] })), "bijv. 11", "Tel de breedtes van de te verven muren op, bijv. 4 + 3 + 4 = 11 m.")}
-                  {num("Hoogte (m)", m.walls[0]?.h ?? STANDAARD_HOOGTE, (n) => patch(r.id, (x) => ({ ...x, walls: [{ w: x.walls[0]?.w ?? 0, h: n }] })), "2,6", "Standaard 2,6 m. Anders? Pas het aan.")}
-                </div>
-                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Ondergrond muren</span>
-                  <select className="rd-input" value={m.wall_substrate} onChange={(e) => patch(r.id, (x) => ({ ...x, wall_substrate: e.target.value as RoomMeasure["wall_substrate"] }))} style={{ height: 46 }}>
-                    <option value="bestaand">Er zit al verf op</option>
-                    <option value="nieuw">Nieuw stucwerk of gipsplaat</option>
-                  </select>
-                </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Staat van de muren</span>
-                  <select className="rd-input" value={m.wall_condition ?? "glad"} onChange={(e) => patch(r.id, (x) => ({ ...x, wall_condition: e.target.value as RoomMeasure["wall_condition"] }))} style={{ height: 46 }}>
-                    <option value="glad">Glad</option>
-                    <option value="oneffen">Oneffen</option>
-                    <option value="scheuren">Scheuren, of het behang gaat eraf</option>
-                  </select>
-                </label>
+                {!onb && (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {num("Totale breedte (m)", m.walls[0]?.w ?? 0, (n) => patch(r.id, (x) => ({ ...x, walls: [{ w: n, h: x.walls[0]?.h || STANDAARD_HOOGTE }] })), "bijv. 11", "Tel de breedtes van de te verven muren op, bijv. 4 + 3 + 4 = 11 m.")}
+                    {num("Hoogte (m)", m.walls[0]?.h ?? STANDAARD_HOOGTE, (n) => patch(r.id, (x) => ({ ...x, walls: [{ w: x.walls[0]?.w ?? 0, h: n }] })), "2,6", "Standaard 2,6 m. Anders? Pas het aan.")}
+                  </div>
+                )}
+                {plek === "muren" && vinkje(r, onb)}
+                {keuze(r, m, "wall_substrate", "Ondergrond muren", [["bestaand", "Er zit al verf op"], ["nieuw", "Nieuw stucwerk of gipsplaat"]], "bestaand")}
+                {keuze(r, m, "wall_condition", "Staat van de muren", [["glad", "Glad"], ["oneffen", "Oneffen"], ["scheuren", "Scheuren, of het behang gaat eraf"]], "glad")}
               </div>
             )}
 
-            {hasCeiling(r) && (
+            {hasCeiling(r) && (!onb || plek === "plafond") && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Plafond</div>
-                {m.ceilings.map((c, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-                    {num("Lengte (m)", c.l, (n) => patch(r.id, (x) => ({ ...x, ceilings: x.ceilings.map((y, j) => j === i ? { ...y, l: n } : y) })), "5")}
-                    {num("Breedte (m)", c.b, (n) => patch(r.id, (x) => ({ ...x, ceilings: x.ceilings.map((y, j) => j === i ? { ...y, b: n } : y) })), "4")}
-                    {m.ceilings.length > 1 && <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, ceilings: x.ceilings.filter((_, j) => j !== i) }))} style={{ paddingBottom: 12, opacity: 0.6 }}>✕</button>}
-                  </div>
-                ))}
-                <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, ceilings: [...x.ceilings, { l: 0, b: 0 }] }))} style={{ alignSelf: "flex-start" }}>+ Nog een vlak (bij een L-vorm)</button>
+                {!onb && (
+                  <>
+                    {m.ceilings.map((c, i) => (
+                      <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                        {num("Lengte (m)", c.l, (n) => patch(r.id, (x) => ({ ...x, ceilings: x.ceilings.map((y, j) => j === i ? { ...y, l: n } : y) })), "5")}
+                        {num("Breedte (m)", c.b, (n) => patch(r.id, (x) => ({ ...x, ceilings: x.ceilings.map((y, j) => j === i ? { ...y, b: n } : y) })), "4")}
+                        {m.ceilings.length > 1 && <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, ceilings: x.ceilings.filter((_, j) => j !== i) }))} style={{ paddingBottom: 12, opacity: 0.6 }}>✕</button>}
+                      </div>
+                    ))}
+                    <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, ceilings: [...x.ceilings, { l: 0, b: 0 }] }))} style={{ alignSelf: "flex-start" }}>+ Nog een vlak (bij een L-vorm)</button>
+                  </>
+                )}
+                {plek === "plafond" && vinkje(r, onb)}
               </div>
             )}
 
             {hasWood(r) && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Houtwerk</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {num("Deuren (met kozijn)", m.woodwork.doors, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, doors: n } })), "1")}
-                  {num("Plinten (m)", m.woodwork.plinths_m, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, plinths_m: n } })), "bijv. 12", "Lengte van de plinten samen.")}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Raamkozijnen (breedte × hoogte)</span>
-                  {m.woodwork.windows.map((wd, i) => (
-                    <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-                      {num("Breedte (m)", wd.w, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: x.woodwork.windows.map((y, j) => j === i ? { ...y, w: n } : y) } })), "1,2")}
-                      {num("Hoogte (m)", wd.h, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: x.woodwork.windows.map((y, j) => j === i ? { ...y, h: n } : y) } })), "1,4")}
-                      <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: x.woodwork.windows.filter((_, j) => j !== i) } }))} style={{ paddingBottom: 12, opacity: 0.6 }}>✕</button>
+                {!onb && (
+                  <>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {num("Deuren (met kozijn)", m.woodwork.doors, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, doors: n } })), "1")}
+                      {num("Plinten (m)", m.woodwork.plinths_m, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, plinths_m: n } })), "bijv. 12", "Lengte van de plinten samen.")}
                     </div>
-                  ))}
-                  <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: [...x.woodwork.windows, { w: 0, h: 0 }] } }))} style={{ alignSelf: "flex-start" }}>+ Raamkozijn</button>
-                </div>
-                <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>Staat van het houtwerk</span>
-                  <select className="rd-input" value={m.wood_substrate} onChange={(e) => patch(r.id, (x) => ({ ...x, wood_substrate: e.target.value as RoomMeasure["wood_substrate"] }))} style={{ height: 46 }}>
-                    <option value="gelakt">Al gelakt</option>
-                    <option value="kaal">Kaal hout of metaal</option>
-                  </select>
-                </label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Raamkozijnen (breedte × hoogte)</span>
+                      {m.woodwork.windows.map((wd, i) => (
+                        <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                          {num("Breedte (m)", wd.w, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: x.woodwork.windows.map((y, j) => j === i ? { ...y, w: n } : y) } })), "1,2")}
+                          {num("Hoogte (m)", wd.h, (n) => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: x.woodwork.windows.map((y, j) => j === i ? { ...y, h: n } : y) } })), "1,4")}
+                          <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: x.woodwork.windows.filter((_, j) => j !== i) } }))} style={{ paddingBottom: 12, opacity: 0.6 }}>✕</button>
+                        </div>
+                      ))}
+                      <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, woodwork: { ...x.woodwork, windows: [...x.woodwork.windows, { w: 0, h: 0 }] } }))} style={{ alignSelf: "flex-start" }}>+ Raamkozijn</button>
+                    </div>
+                  </>
+                )}
+                {plek === "hout" && vinkje(r, onb)}
+                {keuze(r, m, "wood_substrate", "Staat van het houtwerk", [["gelakt", "Al gelakt"], ["kaal", "Kaal hout of metaal"]], "gelakt")}
               </div>
             )}
           </div>
         );
       })}
 
-      {!onbekend && <p className="rd-sub" style={{ margin: 0, textAlign: "center" }}>
+      <p className="rd-sub" style={{ margin: 0, textAlign: "center" }}>
         Een schatting is prima, het hoeft niet exact. We gebruiken je maten om het gesprek goed voor te bereiden; kloppen ze niet helemaal, dan passen we het samen aan.
-      </p>}
+      </p>
     </div>
   );
 }

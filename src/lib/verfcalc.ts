@@ -31,9 +31,9 @@ export interface PlafondVlak { l: number; b: number } // lengte × breedte
 export interface Raam { w: number; h: number }
 export interface Object2D { w: number; h: number }
 
-export type MuurOndergrond = "bestaand" | "nieuw"; // bestaande verflaag | nieuw stucwerk of gipsplaat
-export type HoutOndergrond = "gelakt" | "kaal"; // al gelakt | kaal hout of metaal
-export type MuurStaat = "glad" | "oneffen" | "scheuren"; // scheuren = ook "behang eraf"
+export type MuurOndergrond = "bestaand" | "nieuw" | "onbekend"; // bestaande verflaag | nieuw stucwerk of gipsplaat | klant weet het nog niet
+export type HoutOndergrond = "gelakt" | "kaal" | "onbekend"; // al gelakt | kaal hout of metaal | klant weet het nog niet
+export type MuurStaat = "glad" | "oneffen" | "scheuren" | "onbekend"; // scheuren = ook "behang eraf"
 
 // Meetgegevens per ruimte. Kleuren per vlak vult de styliste in het dashboard.
 export interface RoomMeasure {
@@ -146,8 +146,8 @@ export function summarizeMeasure(m: RoomMeasure): string[] {
   const g = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
   const out: string[] = [];
   const ws = (m.walls ?? []).filter((w) => num(w.w) > 0);
-  const staat = m.wall_condition === "oneffen" ? " · oneffen" : m.wall_condition === "scheuren" ? " · scheuren of behang eraf" : "";
-  if (ws.length) out.push(`Muren: ${ws.map((w) => `${g(num(w.w))} × ${g(num(w.h) || STANDAARD_HOOGTE)} m`).join(" + ")}${m.wall_substrate === "nieuw" ? " · nieuw stucwerk" : ""}${staat}`);
+  const staat = m.wall_condition === "oneffen" ? " · oneffen" : m.wall_condition === "scheuren" ? " · scheuren of behang eraf" : m.wall_condition === "onbekend" ? " · staat onbekend" : "";
+  if (ws.length) out.push(`Muren: ${ws.map((w) => `${g(num(w.w))} × ${g(num(w.h) || STANDAARD_HOOGTE)} m`).join(" + ")}${m.wall_substrate === "nieuw" ? " · nieuw stucwerk" : m.wall_substrate === "onbekend" ? " · ondergrond onbekend" : ""}${staat}`);
   const cs = (m.ceilings ?? []).filter((c) => num(c.l) > 0 && num(c.b) > 0);
   if (cs.length) out.push(`Plafond: ${cs.map((c) => `${g(num(c.l))} × ${g(num(c.b))} m`).join(" + ")}`);
   const w = woodOf(m);
@@ -161,7 +161,7 @@ export function summarizeMeasure(m: RoomMeasure): string[] {
   const kast = w.cabinets.filter((r) => num(r.w) > 0).length;
   if (kast) wood.push(`${kast} kast${kast === 1 ? "" : "en"}`);
   if (num(w.stairs) > 0) wood.push(`${num(w.stairs)} trap${num(w.stairs) === 1 ? "" : "pen"} (standaard, ca. ${TRAP_M2} m² per trap)`);
-  if (wood.length) out.push(`Houtwerk: ${wood.join(", ")}${m.wood_substrate === "kaal" ? " · kaal hout/metaal" : ""}`);
+  if (wood.length) out.push(`Houtwerk: ${wood.join(", ")}${m.wood_substrate === "kaal" ? " · kaal hout/metaal" : m.wood_substrate === "onbekend" ? " · staat onbekend" : ""}`);
   return out;
 }
 

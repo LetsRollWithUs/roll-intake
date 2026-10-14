@@ -198,11 +198,13 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                   <select className="rd-input" value={m.wall_substrate} onChange={(e) => setRoom(r.id, { wall_substrate: e.target.value as RoomMeasure["wall_substrate"] })} style={{ height: 34, width: 230, fontSize: 13 }}>
                     <option value="bestaand">Bestaande verflaag</option>
                     <option value="nieuw">Nieuw stucwerk / gipsplaat</option>
+                    <option value="onbekend">Ondergrond onbekend</option>
                   </select>
                   <select className="rd-input" value={m.wall_condition ?? "glad"} onChange={(e) => setRoom(r.id, { wall_condition: e.target.value as RoomMeasure["wall_condition"] })} style={{ height: 34, width: 230, fontSize: 13 }}>
                     <option value="glad">Muren glad</option>
                     <option value="oneffen">Muren oneffen</option>
                     <option value="scheuren">Scheuren / behang eraf</option>
+                    <option value="onbekend">Staat muren onbekend</option>
                   </select>
                 </div>
               </div>
@@ -259,6 +261,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                 <select className="rd-input" value={m.wood_substrate} onChange={(e) => setRoom(r.id, { wood_substrate: e.target.value as RoomMeasure["wood_substrate"] })} style={{ height: 34, width: 230, fontSize: 13, marginTop: 8 }}>
                   <option value="gelakt">Houtwerk al gelakt</option>
                   <option value="kaal">Kaal hout of metaal</option>
+                  <option value="onbekend">Staat houtwerk onbekend</option>
                 </select>
               </div>
             )}

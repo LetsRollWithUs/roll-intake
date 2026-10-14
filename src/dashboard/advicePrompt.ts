@@ -192,6 +192,8 @@ export function buildAdvicePrompt(intake: IntakeRow, photos: PromptPhotos): stri
     L.push("Formaat: foto-id | ruimte | type | bestandsnaam van de bijlage | link (7 dagen geldig, als reserve)");
     for (const x of photos) L.push(`- ${x.id} | ${x.room} | ${x.type} | ${x.file}${x.url ? ` | ${x.url}` : ""}`);
   } else L.push("- Er zijn geen foto's bij deze intake.");
+  const fotosLater = (intake.rooms ?? []).filter((r) => r.noPhotos && !(r.photos ?? []).length).map((r) => r.label);
+  if (fotosLater.length) L.push(`- Klant kon nog geen foto's maken van: ${fotosLater.join(", ")} (volgen later).`);
   L.push("");
   L.push("# Roll-collectie");
   L.push("Formaat: naam [id] | omschrijving (familie) | LRV | ondertoon (temperatuur: negatief = koel, positief = warm) | chroma | geschikt gebruik | lef | sfeer | stijl | combineert met | aandachtspunt | hex");
