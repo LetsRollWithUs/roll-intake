@@ -28,7 +28,9 @@ export function nogBespreken(intake: IntakeRow | null, advice: AdviceV2 | null):
     }
     if (!(r.photos ?? []).some((p) => p?.path || p?.url)) out.push(`Geen foto's van de ${r.label.toLowerCase()}`);
     if (!(r.sun?.length) && !r.noWindows) out.push(`Lichtinval ${r.label.toLowerCase()} onbekend`);
-    if (!intake.room_measures?.[r.id]) out.push(`Maten ${r.label.toLowerCase()} ontbreken`);
+    const mt = intake.room_measures?.[r.id];
+    if (!mt) out.push(`Maten ${r.label.toLowerCase()} ontbreken`);
+    else if (mt.unknown && !summarizeMeasure(mt).length) out.push(`Maten ${r.label.toLowerCase()} nog onbekend (klant wist ze nog niet)`);
   }
   if (!intake.planning) out.push("Wanneer wil de klant schilderen?");
   if (!intake.painter) out.push("Schildert de klant zelf of een schilder?");
@@ -72,6 +74,11 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
                 {r.skylight ? " · dakraam" : ""}{r.usage ? ` · ${lbl(USAGE_TIMES, r.usage).toLowerCase()}` : ""}
                 {r.otherChanges ? ` · verandert: ${r.otherChangesNote || "ja"}` : ""}
               </div>
+              {intake.room_measures?.[r.id]?.unknown && !summarizeMeasure(intake.room_measures[r.id]).length && (
+                <div style={{ fontSize: 14, margin: "0 0 8px" }}>
+                  <span className="kk-label">Maten volgens de klant: </span>nog onbekend, de klant wist ze nog niet
+                </div>
+              )}
               {intake.room_measures?.[r.id] && summarizeMeasure(intake.room_measures[r.id]).length > 0 && (
                 <div style={{ fontSize: 14, margin: "0 0 8px" }}>
                   <span className="kk-label">Maten volgens de klant: </span>

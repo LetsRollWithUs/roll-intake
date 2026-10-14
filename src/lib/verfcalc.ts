@@ -50,6 +50,8 @@ export interface RoomMeasure {
   wall_substrate: MuurOndergrond;
   wood_substrate: HoutOndergrond;
   wall_condition?: MuurStaat;
+  // Klant weet de maten nog niet (woont er bijv. nog niet); de styliste vult ze later in.
+  unknown?: boolean;
   coats: number; // standaard 2
   ceiling_color?: string;
   wood_color?: string;

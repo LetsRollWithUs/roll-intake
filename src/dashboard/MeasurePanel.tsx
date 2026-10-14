@@ -97,8 +97,13 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
   const project = useMemo(() => calcProject(measured.map((r) => effective[r.id])), [effective, measured]);
 
   const persist = async () => {
-    const { error } = await supabase.from("intake").update({ room_measures: effective }).eq("id", intakeId);
-    if (!error) onSaved(effective);
+    // Heeft de styliste de maten nu ingevuld, dan zijn ze niet meer "onbekend".
+    const opslaan = Object.fromEntries(Object.entries(effective).map(([id, m]) => {
+      const c = calcRoom(m);
+      return [id, m.unknown && c.wall_m2 + c.ceiling_m2 + c.woodwork_m2 > 0 ? { ...m, unknown: false } : m];
+    })) as Record<string, RoomMeasure>;
+    const { error } = await supabase.from("intake").update({ room_measures: opslaan }).eq("id", intakeId);
+    if (!error) onSaved(opslaan);
     return !error;
   };
   const save = async () => { setSaving(true); const ok = await persist(); setSaving(false); setMsg(ok ? "Opgeslagen ✓" : "Opslaan mislukte."); setTimeout(() => setMsg(null), 2500); };
@@ -171,7 +176,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
         return (
           <div key={r.id} className="rd-card-white" style={{ padding: 14, background: "var(--rd-offwhite)", border: "1px solid var(--rd-line)", display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-              <strong style={{ fontSize: 15 }}>{r.label}</strong>
+              <strong style={{ fontSize: 15 }}>{r.label}{m?.unknown && calc.wall_m2 + calc.ceiling_m2 + calc.woodwork_m2 === 0 && <span style={{ fontWeight: 400, fontSize: 12, opacity: 0.7 }}> · klant wist de maten nog niet</span>}</strong>
               <span style={{ fontSize: 12, opacity: 0.65 }}>{[calc.wall_m2 > 0 && `wand ${g(calc.wall_m2)} m²`, calc.ceiling_m2 > 0 && `plafond ${g(calc.ceiling_m2)} m²`, calc.woodwork_m2 > 0 && `houtwerk ${g(calc.woodwork_m2)} m²`].filter(Boolean).join(" · ")}</span>
             </div>
 

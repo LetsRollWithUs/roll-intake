@@ -520,6 +520,14 @@ export function IntakeDetail() {
                 const m = row.room_measures?.[r.id];
                 if (!m) return null;
                 const lines = summarizeMeasure(m);
+                if (!lines.length && m.unknown) {
+                  return (
+                    <div style={{ margin: "0 0 8px", padding: "8px 12px", background: "var(--rd-grey-light)", borderRadius: 10, fontSize: 13 }}>
+                      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Maten</div>
+                      <div style={{ opacity: 0.85 }}>Nog onbekend: de klant wist de maten nog niet.</div>
+                    </div>
+                  );
+                }
                 if (!lines.length) return null;
                 const c = calcRoom(m);
                 const areas = [

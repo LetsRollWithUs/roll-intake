@@ -386,6 +386,7 @@ export function App() {
       // Verplicht maar soepel: alleen de maat die de berekening echt nodig heeft, conditioneel.
       const need = state.rooms.find((r) => {
         const m = r.measure;
+        if (m?.unknown) return false; // "Ik weet de maten nog niet"
         if (r.surfaces.includes("muren") && !((m?.walls?.[0]?.w ?? 0) > 0)) return true;
         if (r.surfaces.includes("plafond") && !(m?.ceilings?.some((c) => c.l > 0 && c.b > 0))) return true;
         return false;
