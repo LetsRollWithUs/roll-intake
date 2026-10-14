@@ -177,6 +177,7 @@ export function buildAdvicePrompt(intake: IntakeRow, photos: PromptPhotos): stri
       const c = calcRoom(m);
       const lines = summarizeMeasure(m);
       if (lines.length) L.push(`- Maten volgens de klant: ${lines.join("; ")} (muur ${g1(c.wall_m2)} m², plafond ${g1(c.ceiling_m2)} m², houtwerk ${g1(c.woodwork_m2)} m²)`);
+      else if (m.unknown) L.push("- Maten: nog onbekend, de klant wist ze nog niet (reken niet met 0 m²)");
     }
     const fotos = photos.filter((x) => x.type === "ruimtefoto" && x.room === r.label);
     L.push(`- Foto's: ${fotos.length ? fotos.map((x) => x.id).join(", ") : "geen"}`);

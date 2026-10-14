@@ -24,6 +24,14 @@ export function MatenStep({ rooms, setRooms }: Props) {
   const measured = rooms.filter((r) => hasWalls(r) || hasCeiling(r) || hasWood(r));
   const patch = (roomId: string, fn: (m: RoomMeasure) => RoomMeasure) =>
     setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, measure: fn(measureOf(r)) } : r)));
+  // Nog niet in de woning? Dan mag de stap zonder maten; de styliste vult ze later in.
+  const onbekend = measured.length > 0 && measured.every((r) => r.measure?.unknown);
+  const zetOnbekend = (aan: boolean) => {
+    const ids = new Set(measured.map((r) => r.id));
+    // Aan: lege maten (zonder de standaard-deur), zodat de styliste ze later invult. Uit: opnieuw beginnen.
+    const leeg = (r: Room): RoomMeasure => { const s = seed(r); return { ...s, woodwork: { ...s.woodwork, doors: 0 }, unknown: true }; };
+    setRooms((prev) => prev.map((r) => (ids.has(r.id) ? { ...r, measure: aan ? leeg(r) : seed(r) } : r)));
+  };
 
   if (measured.length === 0) {
     return (
@@ -44,7 +52,15 @@ export function MatenStep({ rooms, setRooms }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {measured.map((r) => {
+      <label className="rd-card-white" style={{ display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }}>
+        <input type="checkbox" checked={onbekend} onChange={(e) => zetOnbekend(e.target.checked)} style={{ width: 20, height: 20, marginTop: 2, flex: "0 0 auto", accentColor: "var(--rd-purple, #6267AF)" }} />
+        <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontWeight: 700 }}>Ik weet de maten nog niet</span>
+          <span style={{ fontSize: 13, opacity: 0.7 }}>Woon je er nog niet, of kun je nu niet meten? Geen probleem, dan kijken we samen naar de maten.</span>
+        </span>
+      </label>
+
+      {!onbekend && measured.map((r) => {
         const m = measureOf(r);
         return (
           <div key={r.id} className="rd-card-white" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -120,9 +136,9 @@ export function MatenStep({ rooms, setRooms }: Props) {
         );
       })}
 
-      <p className="rd-sub" style={{ margin: 0, textAlign: "center" }}>
+      {!onbekend && <p className="rd-sub" style={{ margin: 0, textAlign: "center" }}>
         Een schatting is prima, het hoeft niet exact. We gebruiken je maten om het gesprek goed voor te bereiden; kloppen ze niet helemaal, dan passen we het samen aan.
-      </p>
+      </p>}
     </div>
   );
 }
