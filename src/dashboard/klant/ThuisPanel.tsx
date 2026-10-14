@@ -33,11 +33,20 @@ export function ThuisPanel({ b, onChanged }: { b: ThuisBooking; onChanged: () =>
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: string; link?: string | null; ok?: boolean } | null>(null);
   const [isOwner, setIsOwner] = useState(false);
-  const [visits, setVisits] = useState<{ id: string; planned_at: string | null; outcome: string; fee: number; created_at: string }[]>([]);
+  const [visits, setVisits] = useState<{ id: string; planned_at: string | null; outcome: string; fee: number; parking: number; created_at: string }[]>([]);
   const [note, setNote] = useState("");
+  const [parking, setParking] = useState("");
+  const loadVisits = () => supabase.from("thuis_visits").select("id,planned_at,outcome,fee,parking,created_at").eq("booking_id", b.id).order("created_at").then(({ data }) => setVisits((data as typeof visits) ?? []));
+  const editParking = async (id: string, cur: number) => {
+    const v = window.prompt("Betaalde parkeerkosten in euro (zoals op je bonnetje)", String(cur).replace(".", ","));
+    if (v === null) return;
+    const { error } = await supabase.rpc("thuis_visit_parking", { p_visit_id: id, p_parking: Number(v.replace(",", ".")) || 0 });
+    if (error) { window.alert(error.message); return; }
+    loadVisits();
+  };
   useEffect(() => {
     if (b.stylist_id) supabase.rpc("owns_stylist", { sid: b.stylist_id }).then(({ data }) => setIsOwner(data === true));
-    supabase.from("thuis_visits").select("id,planned_at,outcome,fee,created_at").eq("booking_id", b.id).order("created_at").then(({ data }) => setVisits((data as typeof visits) ?? []));
+    loadVisits();
   }, [b.id, b.stylist_id, b.status]);
 
   useEffect(() => {
@@ -191,11 +200,17 @@ export function ThuisPanel({ b, onChanged }: { b: ThuisBooking; onChanged: () =>
               ["dichte_deur", "Al onderweg of dichte deur", "€ 75"],
             ] as const).map(([k, t, f]) => (
               <button key={k} className={k === "uitgevoerd" ? "rd-btn rd-btn-primary" : "rd-btn rd-btn-outline"} disabled={busy}
-                onClick={() => { if (window.confirm(`${t} vastleggen? Vergoeding: ${f} excl. btw.`)) run("thuis_outcome", { outcome: k, note }); }}
+                onClick={() => { if (window.confirm(`${t} vastleggen? Vergoeding: ${f} excl. btw${Number(parking.replace(",", ".")) > 0 ? `, plus € ${parking} parkeerkosten` : ""}.`)) run("thuis_outcome", { outcome: k, note, parking: Number(parking.replace(",", ".")) || 0 }); }}
                 style={{ width: "auto", padding: "0 14px", minHeight: 44, fontSize: 14 }}>{t} · {f}</button>
             ))}
           </div>
-          <input className="rd-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Toelichting (optioneel), bijv. betaald parkeren afgestemd met Roll" style={{ height: 40 }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "0 0 180px" }}><span className="kk-label">Parkeerkosten (€)</span>
+              <input className="rd-input" inputMode="decimal" value={parking} onChange={(e) => setParking(e.target.value.replace(/[^\d,.]/g, ""))} placeholder="0,00" style={{ height: 40 }} /></label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 240px" }}><span className="kk-label">Toelichting (optioneel)</span>
+              <input className="rd-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Bijv. parkeergarage naast de woning" style={{ height: 40 }} /></label>
+          </div>
+          <span style={{ fontSize: 12, opacity: 0.65 }}>Vul het betaalde bedrag in, zoals op je bonnetje. Het telt mee in je maandoverzicht.</span>
         </div>
       )}
 
@@ -203,7 +218,7 @@ export function ThuisPanel({ b, onChanged }: { b: ThuisBooking; onChanged: () =>
         <div style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 2 }}>
           <span className="kk-label">Vastgelegde bezoeken</span>
           {visits.map((v) => (
-            <span key={v.id}>{v.planned_at ? new Date(v.planned_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "-"} · {({ uitgevoerd: "Uitgevoerd", geannuleerd_ruim: "Ruim vooraf geannuleerd", geannuleerd_kort: "Binnen 24 uur geannuleerd", dichte_deur: "Onderweg of dichte deur" } as Record<string, string>)[v.outcome] ?? v.outcome} · € {Number(v.fee).toFixed(2).replace(".", ",")}</span>
+            <span key={v.id}>{v.planned_at ? new Date(v.planned_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "-"} · {({ uitgevoerd: "Uitgevoerd", geannuleerd_ruim: "Ruim vooraf geannuleerd", geannuleerd_kort: "Binnen 24 uur geannuleerd", dichte_deur: "Onderweg of dichte deur" } as Record<string, string>)[v.outcome] ?? v.outcome} · € {Number(v.fee).toFixed(2).replace(".", ",")}{Number(v.parking) > 0 ? ` + € ${Number(v.parking).toFixed(2).replace(".", ",")} parkeren` : ""} <button className="rd-textlink" style={{ fontSize: 12 }} onClick={() => editParking(v.id, Number(v.parking))}>{Number(v.parking) > 0 ? "wijzig parkeren" : "parkeerkosten toevoegen"}</button></span>
           ))}
         </div>
       )}

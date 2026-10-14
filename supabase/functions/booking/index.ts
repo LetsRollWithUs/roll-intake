@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
       const bid = String(body.booking_id ?? "");
       if (action === "thuis_outcome") {
-        const { data: fee, error } = await caller.rpc("thuis_outcome", { p_booking_id: bid, p_outcome: body.outcome, p_note: body.note ?? null });
+        const { data: fee, error } = await caller.rpc("thuis_outcome", { p_booking_id: bid, p_outcome: body.outcome, p_note: body.note ?? null, p_parking: Number(body.parking ?? 0) || 0 });
         if (error) return j({ ok: false, error: error.message });
         return j({ ok: true, fee });
       }
