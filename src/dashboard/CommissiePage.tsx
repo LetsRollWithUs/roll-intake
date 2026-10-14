@@ -154,7 +154,7 @@ export function CommissiePage() {
 
       {isAdmin && (
         <p className="rd-sub" style={{ margin: "0 0 14px", fontSize: 13 }}>
-          Commissiepercentages, kortingscodes en samenwerkingsafspraken beheer je per medewerker onder <Link to="/beheer/adviseurs" className="rd-textlink">Team</Link>.
+          Commissiepercentages en samenwerkingsafspraken beheer je per medewerker onder <Link to="/beheer/adviseurs" className="rd-textlink">Team</Link>.
         </p>
       )}
 
