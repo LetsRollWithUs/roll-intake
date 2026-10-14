@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 // Werkgebied voor thuisadvies: vertrekpostcode + reisafstand. Leeg = geen thuisadvies.
 // Beheerders beheren hier ook de uitgesloten postcodes (eilanden e.d.).
 
-const KMS = [15, 25, 40, 60];
+const KMS = [15, 25, 40, 60, 80, 100];
 
 export function ThuisArea({ stylistId, canEdit, isAdmin, onFlash }: { stylistId: string; canEdit: boolean; isAdmin: boolean; onFlash: (t: string) => void }) {
   const [country, setCountry] = useState("NL");

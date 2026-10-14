@@ -186,10 +186,35 @@ Deno.serve(async (req) => {
     }
 
     // Beheer: moment vastleggen, omzetten naar online, of annuleren (alleen beheerders).
+    // Uitkomst van een thuisbezoek (styliste of beheerder): vergoeding wordt vastgelegd voor het maandoverzicht.
+    if (action === "thuis_outcome" || action === "no_show") {
+      const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
+      const bid = String(body.booking_id ?? "");
+      if (action === "thuis_outcome") {
+        const { data: fee, error } = await caller.rpc("thuis_outcome", { p_booking_id: bid, p_outcome: body.outcome, p_note: body.note ?? null });
+        if (error) return j({ ok: false, error: error.message });
+        return j({ ok: true, fee });
+      }
+      // Niet verschenen (online): de klant krijgt een mail om zelf een nieuw moment te kiezen bij dezelfde styliste.
+      const { error } = await caller.rpc("booking_no_show", { p_booking_id: bid });
+      if (error) return j({ ok: false, error: error.message });
+      const ctx = await buildBookingContext(admin, bid);
+      if (ctx) {
+        const p = ctx.properties;
+        await klaviyoTrack("Advies flow", ctx.profile, {
+          stap: "plan_je_afspraak", uitnodiging: true, gemist: true, booking_id: p.booking_id,
+          plan_url: `${p.manage_url}&plan=1`, stylist_name: p.stylist_name, intake_ingevuld: p.intake_ingevuld,
+          intake_url: p.intake_url, service_label: p.service_label,
+        }, {}, `${bid}:gemist:${Date.now()}`, admin);
+      }
+      return j({ ok: true });
+    }
+
     if (action === "thuis_plan" || action === "thuis_to_online" || action === "thuis_cancel") {
       const caller = createClient(SB_URL, SB_ANON, { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } }, auth: { persistSession: false } });
       const { data: isAdm } = await caller.rpc("is_admin");
-      if (isAdm !== true) return j({ error: "Geen toegang" }, 403);
+      // Moment vastleggen mag ook de toegewezen styliste zelf (de databasefunctie controleert dat).
+      if (isAdm !== true && action !== "thuis_plan") return j({ error: "Geen toegang" }, 403);
       const bid = String(body.booking_id ?? "");
       if (action === "thuis_plan") {
         const { error } = await caller.rpc("thuis_plan", { p_booking_id: bid, p_stylist_id: body.stylist_id, p_start: body.start });

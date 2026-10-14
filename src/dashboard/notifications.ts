@@ -34,7 +34,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
   const out: Notif[] = [];
   let q = supabase
     .from("bookings")
-    .select("id,start_at,status,customer_name,intake_id,kanban_stage,samples_besteld,opgevolgd_at,expected_purchase_at,stylist_id, stylists(name)")
+    .select("id,start_at,created_at,status,customer_name,intake_id,kanban_stage,samples_besteld,opgevolgd_at,expected_purchase_at,stylist_id, stylists(name)")
     .in("status", ["confirmed", "paid_unplaced", "manual", "requested"])
     .is("archived_at", null);
   if (opts.stylistId) q = q.eq("stylist_id", opts.stylistId);
@@ -59,7 +59,14 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     const gesprek = `/beheer/gesprek/${r.id}`;
 
     if (r.status === "requested") {
-      out.push({ id: `thuis-${r.id}`, kind: "plan", title: `${name} vroeg thuisadvies aan (betaald)`, sub: "Bel de klant en leg het moment vast in de klantkaart", to: gesprek });
+      // Afspraak: binnen 2 werkdagen contact en een afspraak vastgelegd.
+      const telaat = werkdagenSinds(r.created_at) >= 2;
+      out.push({
+        id: `thuis-${r.id}`, kind: "plan",
+        title: telaat ? `Thuisaanvraag van ${name} wacht al 2 werkdagen op een afspraak` : `${name} vroeg thuisadvies aan`,
+        sub: (r.stylists?.name ? "" : "Nog geen styliste in de regio. ") + "Neem contact op en leg de afspraak vast in de klantkaart" + who(r),
+        to: gesprek,
+      });
       continue;
     }
     if (r.status === "paid_unplaced") {
@@ -143,4 +150,12 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/beheer/meldingen" });
   }
   return out;
+}
+
+// Aantal hele werkdagen (ma t/m vr) sinds een tijdstip.
+function werkdagenSinds(iso: string): number {
+  const d = new Date(iso); const now = new Date(); let n = 0;
+  const cur = new Date(d); cur.setHours(0, 0, 0, 0); cur.setDate(cur.getDate() + 1);
+  while (cur <= now) { const wd = cur.getDay(); if (wd !== 0 && wd !== 6) n++; cur.setDate(cur.getDate() + 1); }
+  return n;
 }

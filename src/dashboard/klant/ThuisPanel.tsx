@@ -32,6 +32,13 @@ export function ThuisPanel({ b, onChanged }: { b: ThuisBooking; onChanged: () =>
   const [time, setTime] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: string; link?: string | null; ok?: boolean } | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
+  const [visits, setVisits] = useState<{ id: string; planned_at: string | null; outcome: string; fee: number; created_at: string }[]>([]);
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (b.stylist_id) supabase.rpc("owns_stylist", { sid: b.stylist_id }).then(({ data }) => setIsOwner(data === true));
+    supabase.from("thuis_visits").select("id,planned_at,outcome,fee,created_at").eq("booking_id", b.id).order("created_at").then(({ data }) => setVisits((data as typeof visits) ?? []));
+  }, [b.id, b.stylist_id, b.status]);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +72,7 @@ export function ThuisPanel({ b, onChanged }: { b: ThuisBooking; onChanged: () =>
     if (action === "thuis_plan") setMsg({ t: "Moment vastgelegd. De klant krijgt de bevestiging en de styliste een melding.", ok: true });
     if (action === "thuis_to_online") setMsg({ t: `Omgezet naar online advies. De klant krijgt een mail om zelf een moment te kiezen. Betaal nu € ${d.refund} terug in WooCommerce (het verschil).`, link: d.order_url, ok: true });
     if (action === "thuis_cancel") setMsg({ t: "Aanvraag geannuleerd. Betaal het volledige bedrag terug in WooCommerce.", link: d.order_url, ok: true });
+    if (action === "thuis_outcome") setMsg({ t: extra.outcome === "uitgevoerd" ? "Bezoek vastgelegd als uitgevoerd." : "Vastgelegd. Spreek een nieuw moment af en leg dat hier vast, of laat Roll de aanvraag afhandelen.", ok: true });
     setMode(null);
     onChanged();
   };
@@ -158,6 +166,48 @@ export function ThuisPanel({ b, onChanged }: { b: ThuisBooking; onChanged: () =>
           )}
         </>
       )}
+      {!isAdmin && isOwner && !geannuleerd && b.status !== "confirmed" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>Neem binnen 2 werkdagen contact op met de klant en leg de afspraak hier vast. De klant krijgt dan de bevestiging.</p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="kk-label">Datum</span>
+              <input className="rd-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={sel} /></label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}><span className="kk-label">Tijd</span>
+              <input className="rd-input" type="time" step={900} value={time} onChange={(e) => setTime(e.target.value)} style={sel} /></label>
+            <button className="rd-btn rd-btn-primary" disabled={busy || !date || !time} onClick={() => run("thuis_plan", { stylist_id: b.stylist_id, start: nlToIso(date, time) })} style={{ width: "auto", padding: "0 18px", minHeight: 44 }}>{busy ? "Bezig..." : "Afspraak vastleggen"}</button>
+          </div>
+          <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>Past het niet, of is het adres te ver weg? Laat het Roll weten via een taak, dan handelen wij het af.</p>
+        </div>
+      )}
+
+      {(isAdmin || isOwner) && gepland && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12, borderTop: "1px solid var(--rd-line)" }}>
+          <span className="kk-label">Hoe ging het bezoek?</span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {([
+              ["uitgevoerd", "Uitgevoerd", "€ 75"],
+              ["geannuleerd_ruim", "Meer dan 24 uur vooraf geannuleerd of verzet", "€ 0"],
+              ["geannuleerd_kort", "Binnen 24 uur geannuleerd of verzet", "€ 37,50"],
+              ["dichte_deur", "Al onderweg of dichte deur", "€ 75"],
+            ] as const).map(([k, t, f]) => (
+              <button key={k} className={k === "uitgevoerd" ? "rd-btn rd-btn-primary" : "rd-btn rd-btn-outline"} disabled={busy}
+                onClick={() => { if (window.confirm(`${t} vastleggen? Vergoeding: ${f} excl. btw.`)) run("thuis_outcome", { outcome: k, note }); }}
+                style={{ width: "auto", padding: "0 14px", minHeight: 44, fontSize: 14 }}>{t} · {f}</button>
+            ))}
+          </div>
+          <input className="rd-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Toelichting (optioneel), bijv. betaald parkeren afgestemd met Roll" style={{ height: 40 }} />
+        </div>
+      )}
+
+      {visits.length > 0 && (
+        <div style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 2 }}>
+          <span className="kk-label">Vastgelegde bezoeken</span>
+          {visits.map((v) => (
+            <span key={v.id}>{v.planned_at ? new Date(v.planned_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "-"} · {({ uitgevoerd: "Uitgevoerd", geannuleerd_ruim: "Ruim vooraf geannuleerd", geannuleerd_kort: "Binnen 24 uur geannuleerd", dichte_deur: "Onderweg of dichte deur" } as Record<string, string>)[v.outcome] ?? v.outcome} · € {Number(v.fee).toFixed(2).replace(".", ",")}</span>
+          ))}
+        </div>
+      )}
+
       {msg && (
         <div role="status" style={{ fontSize: 14, fontWeight: 600, color: msg.ok ? "var(--rd-aubergine)" : "var(--rd-pink-dark)" }}>
           {msg.t} {msg.link && <a className="rd-textlink" href={msg.link} target="_blank" rel="noreferrer">Open de bestelling in WooCommerce</a>}

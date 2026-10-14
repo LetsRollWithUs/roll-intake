@@ -1,4 +1,5 @@
 import { ThuisArea } from "./ThuisArea";
+import { StylistProfile } from "./StylistProfile";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -505,6 +506,7 @@ export function AgendaPage() {
           })()}
 
           {/* Eigen agenda blokkeren (iCal) */}
+          {selectedId && <StylistProfile stylistId={selectedId} canEdit={!!canEdit} onFlash={flash} />}
           {selectedId && <ThuisArea stylistId={selectedId} canEdit={!!canEdit} isAdmin={isAdmin} onFlash={flash} />}
 
           <div className="rd-card-white" style={{ marginTop: 12 }}>

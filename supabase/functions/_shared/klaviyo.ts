@@ -121,7 +121,7 @@ export async function buildBookingContext(
 export async function notifyStylist(admin: any, bookingId: string, soort: string): Promise<void> {
   const { data: b } = await admin
     .from("bookings")
-    .select("id,start_at,customer_name,customer_email,customer_phone,intake_id,format,address, services(key), stylists(name,email)")
+    .select("id,start_at,customer_name,customer_email,customer_phone,intake_id,format,address,preferences, services(key), stylists(name,email)")
     .eq("id", bookingId)
     .maybeSingle();
   if (!b) return;
@@ -139,6 +139,8 @@ export async function notifyStylist(admin: any, bookingId: string, soort: string
     intake_ingevuld: !!row.intake_id,
     vorm: row.format === "thuis" ? "thuis" : "online",
     adres_regel: row.format === "thuis" && row.address ? `${row.address.straat ?? ""} ${row.address.huisnummer ?? ""}, ${row.address.postcode ?? ""} ${row.address.plaats ?? ""}` : null,
+    voorkeuren: row.format === "thuis" ? voorkeurenTekst(row.preferences) : null,
+    klantkaart_url: `${INTAKE_BASE}/beheer/gesprek/${row.id}`,
     boekingen_url: `${INTAKE_BASE}/beheer/boekingen`,
     intake_dashboard_url: row.intake_id ? `${INTAKE_BASE}/beheer/${row.intake_id}` : null,
   };
