@@ -1,3 +1,4 @@
+import { MaandOverzicht } from "./MaandOverzicht";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -108,6 +109,7 @@ export function CommissiePage() {
       <p className="rd-sub" style={{ marginTop: 0 }}>
         Verfcommissie per toegeschreven bestelling (standaard 10%, per styliste in te stellen). {isAdmin ? "Beheer de codes, keur goed en markeer uitbetaald." : "Je eigen toegeschreven verforders en commissie."}
       </p>
+      <MaandOverzicht />
 
       {/* Totalen */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "14px 0 18px" }}>

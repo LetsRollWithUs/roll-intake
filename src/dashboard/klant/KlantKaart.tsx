@@ -24,14 +24,14 @@ interface Booking {
   customer_name: string | null; customer_email: string | null; customer_phone: string | null;
   intake_id: string | null; stylist_id: string | null; kanban_stage: string; samples_besteld: boolean;
   opgevolgd_at: string | null; gesprek_gevoerd_at: string | null; archived_at: string | null; gratis: boolean; invited_at: string | null;
-  format: string; address: ThuisBooking["address"]; preferences: ThuisBooking["preferences"]; woo_order_id: string | null; converted_from: string | null;
+  format: string; upsell_booked: boolean | null; upsell_value: number | null; no_show_at: string | null; address: ThuisBooking["address"]; preferences: ThuisBooking["preferences"]; woo_order_id: string | null; converted_from: string | null;
   stylists: { name: string; meet_url: string | null } | null; services: { key: string } | null;
 }
 interface Commission { id: string; woo_order_id: string; amount: number; status: string; created_at: string }
 type Fase = "voorbereiden" | "advies" | "afronden";
 type Save = "idle" | "saving" | "saved" | "error";
 
-const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis,invited_at,format,address,preferences,woo_order_id,converted_from, stylists(name,meet_url), services(key)";
+const SEL = "id,start_at,end_at,created_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id,kanban_stage,samples_besteld,opgevolgd_at,gesprek_gevoerd_at,archived_at,gratis,invited_at,format,address,preferences,woo_order_id,converted_from,upsell_booked,upsell_value,no_show_at, stylists(name,meet_url), services(key)";
 const TZ = "Europe/Amsterdam";
 const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 const time = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(":", ".");
@@ -44,6 +44,7 @@ const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Vo
 function afspraakLabel(b: Booking): string {
   if (b.format === "thuis" && b.status === "requested") return "Thuisadvies aangevraagd · nog geen moment";
   if (b.format === "thuis" && b.status === "cancelled") return "Thuisaanvraag geannuleerd";
+  if (b.status === "manual" && b.no_show_at) return "Niet verschenen, klant kiest een nieuw moment";
   if (b.status === "manual" && b.invited_at) return "Uitgenodigd, klant kiest een moment";
   if (b.status === "manual" || b.status === "paid_unplaced") return "Afspraak nog niet gepland";
   const d = new Date(b.start_at);
@@ -322,6 +323,30 @@ export function KlantKaart() {
                 {b.gesprek_gevoerd_at
                   ? <button className="kk-link" style={{ textAlign: "left" }} onClick={() => { patchBooking({ gesprek_gevoerd: false }, { gesprek_gevoerd_at: null }); setMeer(false); }}>Gesprek gevoerd ongedaan maken</button>
                   : <button className="kk-link" style={{ textAlign: "left" }} onClick={() => { patchBooking({ gesprek_gevoerd: true }, { gesprek_gevoerd_at: new Date().toISOString() }); setMeer(false); }}>Markeer gesprek als gevoerd</button>}
+                {b.format !== "thuis" && b.status === "confirmed" && new Date(b.start_at).getTime() < Date.now() && !b.gesprek_gevoerd_at && (
+                  <button className="kk-link" style={{ textAlign: "left" }} onClick={async () => {
+                    if (!window.confirm("Klant niet verschenen? De klant krijgt een mail om zelf een nieuw moment te kiezen in jouw agenda.")) return;
+                    const { data } = await supabase.functions.invoke("booking", { body: { action: "no_show", booking_id: b.id } });
+                    const d = data as { ok?: boolean; error?: string } | null;
+                    if (!d?.ok) { window.alert(d?.error ?? "Dat lukte niet. Probeer het opnieuw."); return; }
+                    const { data: nb } = await supabase.from("bookings").select(SEL).eq("id", b.id).maybeSingle();
+                    if (nb) setB(nb as unknown as Booking);
+                    setMeer(false);
+                  }}>Klant niet verschenen</button>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, borderTop: "1px solid var(--rd-line)" }}>
+                  <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+                    <input type="checkbox" checked={!!b.upsell_booked} onChange={(e) => patchBooking({ upsell_booked: e.target.checked }, { upsell_booked: e.target.checked })} />
+                    Aanvullend interieuradvies geboekt
+                  </label>
+                  {b.upsell_booked && (
+                    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span className="kk-label">Ontvangen adviesomzet excl. btw</span>
+                      <input className="rd-input" type="number" min={0} step={1} defaultValue={b.upsell_value ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); patchBooking({ upsell_value: v }, { upsell_value: v }); }} style={{ height: 40 }} />
+                      <span style={{ fontSize: 12, opacity: 0.65 }}>Roll ontvangt 10% van de eerste opdracht; dit komt in het maandoverzicht.</span>
+                    </label>
+                  )}
+                </div>
                 <button className="kk-link" style={{ textAlign: "left" }} onClick={() => archive(!b.archived_at)}>{b.archived_at ? "Terugzetten uit het archief" : "Archiveren"}</button>
                 <Link to={`/beheer/gesprek-oud/${b.id}`} className="kk-link" style={{ textAlign: "left" }}>Oude weergave openen</Link>
               </div>

@@ -32,6 +32,9 @@ export async function notifyThuisAanvraag(admin: any, bookingId: string) {
       voorkeuren: p.voorkeuren, whatsapp: "085 369 62 44", service_label: "Kleuradvies thuis",
     }, { intake_url: p.intake_url }, `${bookingId}:thuis_aanvraag`, admin);
   }
+  // Toewijzen aan de dichtstbijzijnde styliste in de regio; zij krijgt een melding en neemt contact op.
+  const { data: sid } = await admin.rpc("thuis_assign", { p_booking_id: bookingId });
+  if (sid) await notifyStylist(admin, bookingId, "thuis_aanvraag");
   await admin.from("system_alerts").insert({
     kind: "thuis_aanvraag",
     message: "Nieuwe aanvraag voor thuisadvies (betaald). Neem contact op en leg het moment vast in de klantkaart.",
