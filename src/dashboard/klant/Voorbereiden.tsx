@@ -7,7 +7,7 @@ import { AddPhotos } from "../AddPhotos";
 import { ConceptPanel } from "../ConceptPanel";
 import { CustomerPurchases, type OrdersResp } from "../CustomerPurchases";
 import type { AdviceV2, SurfaceType } from "./advice";
-import { INSPIRATIONS } from "@/data/inspiration";
+import { inspiratie } from "@/data/inspiration";
 import { summarizeMeasure, calcRoom } from "@/lib/verfcalc";
 import { maatSignalen } from "../advicePrompt";
 
@@ -119,7 +119,7 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
               <span className="kk-label">Gekozen sfeerbeelden</span>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
                 {intake.inspiration_likes!.map((id) => {
-                  const ins = INSPIRATIONS.find((x) => x.id === id);
+                  const ins = inspiratie(id);
                   return ins ? (
                     <figure key={id} style={{ margin: 0, width: 120 }}>
                       <img src={ins.src} alt="" style={{ width: 120, height: 90, objectFit: "cover", borderRadius: 10, display: "block" }} />

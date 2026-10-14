@@ -1,7 +1,7 @@
 import { rollColors } from "@/data/roll-colors";
 import { SAMPLE_PACKS } from "@/data/sample-packs";
 import { SURFACES, SUN_MOMENTS, USAGE_TIMES, PLANNING, PAINTERS } from "@/data/intake-options";
-import { INSPIRATIONS } from "@/data/inspiration";
+import { inspiratie } from "@/data/inspiration";
 import { summarizeMeasure, calcRoom } from "@/lib/verfcalc";
 import type { IntakeRow } from "./types";
 
@@ -137,7 +137,7 @@ export function buildAdvicePrompt(intake: IntakeRow, photos: PromptPhotos): stri
   L.push("## Sfeer en smaak");
   if ((intake.moods ?? []).length) L.push(`- Gewenst gevoel: ${intake.moods!.join(", ")}`);
   if (intake.boldness) L.push(`- Uitgesprokenheid: ${intake.boldness} van 5 (1 = rustig en ingetogen, 5 = verras me)`);
-  const likes = (intake.inspiration_likes ?? []).map((id) => INSPIRATIONS.find((x) => x.id === id)?.label ?? id);
+  const likes = (intake.inspiration_likes ?? []).map((id) => { const x = inspiratie(id); return x ? `${x.label}${x.kleur ? ` (muur in Roll-kleur ${x.kleur})` : ""}` : id; });
   if (likes.length) L.push(`- Gekozen sfeerbeelden: ${likes.join(", ")}`);
   if (p.noSfeerImage) L.push("- Geen van de sfeerbeelden paste");
   if ((intake.rooms ?? []).length > 1 && p.sfeerSameAll != null) L.push(p.sfeerSameAll ? "- Zelfde sfeer in alle ruimtes" : `- Sfeer verschilt per ruimte${p.sfeerExceptionNote ? `: ${String(p.sfeerExceptionNote)}` : ""}`);

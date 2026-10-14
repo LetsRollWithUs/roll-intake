@@ -2,12 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { emptyState, type IntakeState } from "./types";
 
 const KEY = "roll-intake-v1";
+const SFEER_V2: Record<string, string> = {
+  "licht-1": "licht-luchtig", "warm-1": "rustig-koel", "kleur-1": "zacht-warm",
+  "warm-2": "aards-geborgen", "warm-3": "diep-sfeervol", "kleur-3": "speels-kleurig",
+};
 
 export function loadState(): IntakeState {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return emptyState();
     const parsed = JSON.parse(raw) as Partial<IntakeState>;
+    // Sfeerbeelden v2: een eerder gekozen beeld wordt het nieuwe beeld met hetzelfde label.
+    if (parsed.inspirationLikes) parsed.inspirationLikes = [...new Set(parsed.inspirationLikes.map((id) => SFEER_V2[id] ?? id))];
     return { ...emptyState(), ...parsed };
   } catch {
     return emptyState();
