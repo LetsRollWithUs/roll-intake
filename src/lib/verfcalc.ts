@@ -33,6 +33,9 @@ export interface Object2D { w: number; h: number }
 
 export type MuurOndergrond = "bestaand" | "nieuw" | "onbekend"; // bestaande verflaag | nieuw stucwerk of gipsplaat | klant weet het nog niet
 export type HoutOndergrond = "gelakt" | "kaal" | "onbekend"; // al gelakt | kaal hout of metaal | klant weet het nog niet
+export type KamerGrootte = "klein" | "gemiddeld" | "groot";
+/** Vloeroppervlak per geschatte kamergrootte (m²). */
+export const KAMER_VLOER: Record<KamerGrootte, number> = { klein: 10, gemiddeld: 18, groot: 30 };
 export type MuurStaat = "glad" | "oneffen" | "scheuren" | "onbekend"; // scheuren = ook "behang eraf"
 
 // Meetgegevens per ruimte. Kleuren per vlak vult de styliste in het dashboard.
@@ -52,6 +55,8 @@ export interface RoomMeasure {
   wall_condition?: MuurStaat;
   // Klant weet de maten nog niet (woont er bijv. nog niet); de styliste vult ze later in.
   unknown?: boolean;
+  // Geschatte kamergrootte (vloer) als de klant de maten niet weet; maten zijn dan afgeleid.
+  geschat?: KamerGrootte;
   coats: number; // standaard 2
   ceiling_color?: string;
   wood_color?: string;
@@ -162,6 +167,7 @@ export function summarizeMeasure(m: RoomMeasure): string[] {
   if (kast) wood.push(`${kast} kast${kast === 1 ? "" : "en"}`);
   if (num(w.stairs) > 0) wood.push(`${num(w.stairs)} trap${num(w.stairs) === 1 ? "" : "pen"} (standaard, ca. ${TRAP_M2} m² per trap)`);
   if (wood.length) out.push(`Houtwerk: ${wood.join(", ")}${m.wood_substrate === "kaal" ? " · kaal hout/metaal" : m.wood_substrate === "onbekend" ? " · staat onbekend" : ""}`);
+  if (m.geschat && out.length) out.unshift(`Geschat door de klant: ${m.geschat} (± ${KAMER_VLOER[m.geschat]} m² vloer), maten afgeleid`);
   return out;
 }
 

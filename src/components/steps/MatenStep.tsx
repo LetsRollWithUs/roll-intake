@@ -1,12 +1,15 @@
 import type { Room } from "@/lib/types";
-import { emptyMeasure, STANDAARD_HOOGTE, type RoomMeasure } from "@/lib/verfcalc";
+import { emptyMeasure, KAMER_VLOER, STANDAARD_HOOGTE, type KamerGrootte, type RoomMeasure } from "@/lib/verfcalc";
 
 interface Props {
   rooms: Room[];
   setRooms: (updater: (prev: Room[]) => Room[]) => void;
   /** Klant woont er nog niet (vlag voor de hele intake). */
   nogNiet?: boolean;
+  /** Antwoord op "Woon je al in de woning?" (undefined = nog niet gevraagd). */
+  woontErAl?: boolean;
   onNogNiet?: (aan: boolean) => void;
+  onWoontErAl?: () => void;
 }
 
 const hasWalls = (r: Room) => r.surfaces.includes("muren");
@@ -23,16 +26,17 @@ function seed(r: Room): RoomMeasure {
 }
 const measureOf = (r: Room): RoomMeasure => r.measure ?? seed(r);
 
-export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
+export function MatenStep({ rooms, setRooms, nogNiet, woontErAl, onNogNiet, onWoontErAl }: Props) {
   const measured = rooms.filter((r) => hasWalls(r) || hasCeiling(r) || hasWood(r));
   const patch = (roomId: string, fn: (m: RoomMeasure) => RoomMeasure) =>
     setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, measure: fn(measureOf(r)) } : r)));
 
-  // Nog niet in de woning? Per ruimte "Maten weet ik nog niet": de maatvelden verdwijnen,
-  // ondergrond en staat blijven (met "Weet ik nog niet"). De styliste vult de maten later in.
+  // "Maten weet ik nog niet" geldt alleen voor die ruimte: de klant kan net niet thuis zijn.
+  // We denken mee met een optionele schatting van de kamergrootte, en vragen één keer of de
+  // klant er al woont. Alleen bij "nog niet" past de rest van de intake zich aan.
   const leeg = (r: Room, x: RoomMeasure, alles: boolean): RoomMeasure => {
     const s = seed(r);
-    // Bij "voor alle ruimtes" staan ondergrond en staat ook op "Weet ik nog niet",
+    // Woont de klant er nog niet, dan staan ondergrond en staat ook op "Weet ik nog niet",
     // tenzij de klant ze al zelf had gekozen.
     const kies = <T,>(v: T | undefined, standaard: T) => (alles && (v ?? standaard) === standaard ? "onbekend" : v ?? standaard);
     return {
@@ -42,25 +46,35 @@ export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
       wood_substrate: kies(x.wood_substrate, "gelakt") as RoomMeasure["wood_substrate"],
       woodwork: { ...s.woodwork, doors: 0 },
       unknown: true,
+      geschat: alles ? undefined : x.geschat,
     };
   };
-  const zetOnbekend = (r: Room, aan: boolean) => {
-    // De eerste keer "weet ik nog niet": geldt meteen voor alle ruimtes, en de rest van de
-    // intake (foto's, lichtinval) vraagt er daarna niet meer verplicht naar.
-    if (aan && !nogNiet && measured.length > 1) {
-      const ids = new Set(measured.map((x) => x.id));
-      setRooms((prev) => prev.map((x) => (ids.has(x.id) ? { ...x, measure: leeg(x, measureOf(x), true) } : x)));
-      onNogNiet?.(true);
-      return;
-    }
-    if (aan && !nogNiet) onNogNiet?.(true);
+  const zetOnbekend = (r: Room, aan: boolean) =>
     patch(r.id, (x) => {
       const keuzes = { wall_substrate: x.wall_substrate, wall_condition: x.wall_condition, wood_substrate: x.wood_substrate };
       return aan ? leeg(r, x, false) : { ...seed(r), ...keuzes };
     });
-    // Alles weer uitgevinkt? Dan woont de klant er kennelijk wel; vlag eraf.
-    if (!aan && nogNiet && measured.every((x) => x.id === r.id || !x.measure?.unknown)) onNogNiet?.(false);
+  // Schatting op kamergrootte: muurbreedte ≈ omtrek van een vierkante vloer, plafond = vloer.
+  const schat = (r: Room, g: KamerGrootte) =>
+    patch(r.id, (x) => {
+      if (x.geschat === g) return { ...x, geschat: undefined, walls: seed(r).walls, ceilings: seed(r).ceilings };
+      const zijde = Math.sqrt(KAMER_VLOER[g]);
+      const r1 = (n: number) => Math.round(n * 10) / 10;
+      return {
+        ...x,
+        geschat: g,
+        walls: hasWalls(r) ? [{ w: r1(4 * zijde), h: STANDAARD_HOOGTE }] : x.walls,
+        ceilings: hasCeiling(r) ? [{ l: r1(zijde), b: r1(zijde) }] : x.ceilings,
+      };
+    });
+  // "Nog niet": alle ruimtes op weet-ik-nog-niet, en foto's/lichtinval worden optioneel.
+  const woontErNogNiet = () => {
+    const ids = new Set(measured.map((x) => x.id));
+    setRooms((prev) => prev.map((x) => (ids.has(x.id) ? { ...x, measure: leeg(x, measureOf(x), true) } : x)));
+    onNogNiet?.(true);
   };
+  const vraagWonen = woontErAl === undefined && !nogNiet;
+  const eersteOnbekend = measured.find((x) => x.measure?.unknown)?.id;
 
   if (measured.length === 0) {
     return (
@@ -79,13 +93,45 @@ export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
     </label>
   );
 
-  const vinkje = (r: Room, aan: boolean) => (
-    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.75, cursor: "pointer", alignSelf: "flex-start" }}>
-      <input type="checkbox" checked={aan} onChange={(e) => zetOnbekend(r, e.target.checked)}
-        style={{ width: 16, height: 16, margin: 0, accentColor: "var(--rd-purple, #6267AF)" }} />
-      Maten weet ik nog niet
-    </label>
+  const chip = (aan: boolean, label: string, on: () => void) => (
+    <button type="button" className={`rd-plan-chip${aan ? " is-on" : ""}`} aria-pressed={aan} onClick={on}
+      style={{ fontSize: 13, padding: "6px 12px", minHeight: 0 }}>
+      {label}
+    </button>
   );
+  const vinkje = (r: Room, m: RoomMeasure) => {
+    const aan = !!m.unknown;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.75, cursor: "pointer", alignSelf: "flex-start" }}>
+          <input type="checkbox" checked={aan} onChange={(e) => zetOnbekend(r, e.target.checked)}
+            style={{ width: 16, height: 16, margin: 0, accentColor: "var(--rd-purple, #6267AF)" }} />
+          Maten weet ik nog niet
+        </label>
+        {aan && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 13 }}>Weet je ongeveer hoe groot de ruimte is? Dan rekenen we daarmee.</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(["klein", "gemiddeld", "groot"] as KamerGrootte[]).map((g) =>
+                chip(m.geschat === g, `${g[0].toUpperCase()}${g.slice(1)} (± ${KAMER_VLOER[g]} m²)`, () => schat(r, g)))}
+            </div>
+          </div>
+        )}
+        {aan && vraagWonen && eersteOnbekend === r.id && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", borderRadius: 12, background: "var(--rd-grey-light, #F4F1F7)" }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Woon je al in de woning?</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {chip(false, "Ja, ik weet het nu even niet", () => onWoontErAl?.())}
+              {chip(false, "Nog niet, we gaan er wonen", woontErNogNiet)}
+            </div>
+          </div>
+        )}
+        {aan && woontErAl === true && eersteOnbekend === r.id && (
+          <span style={{ fontSize: 12, opacity: 0.65 }}>Geen probleem. Je antwoorden blijven bewaard, dus je kunt de intake ook later op dit apparaat afmaken.</span>
+        )}
+      </div>
+    );
+  };
 
   const keuze = <K extends "wall_substrate" | "wall_condition" | "wood_substrate">(
     r: Room, m: RoomMeasure, k: K, label: string, opties: [NonNullable<RoomMeasure[K]>, string][], standaard: NonNullable<RoomMeasure[K]>,
@@ -102,9 +148,9 @@ export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {nogNiet && measured.length > 1 && (
+      {nogNiet && (
         <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>
-          We hebben het voor alle ruimtes aangevinkt; de maten kijken we samen na. Weet je ze van een ruimte wel? Vink het daar uit. Foto's en lichtinval mag je straks ook overslaan.
+          Je woont er nog niet, dus we hebben het voor alle ruimtes aangevinkt; de maten kijken we samen na. Weet je ze van een ruimte wel, bijvoorbeeld uit de plattegrond? Vink het daar uit. Foto's en lichtinval mag je straks ook overslaan.
         </p>
       )}
       {measured.map((r) => {
@@ -125,7 +171,7 @@ export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
                     {num("Hoogte (m)", m.walls[0]?.h ?? STANDAARD_HOOGTE, (n) => patch(r.id, (x) => ({ ...x, walls: [{ w: x.walls[0]?.w ?? 0, h: n }] })), "2,6", "Standaard 2,6 m. Anders? Pas het aan.")}
                   </div>
                 )}
-                {plek === "muren" && vinkje(r, onb)}
+                {plek === "muren" && vinkje(r, m)}
                 {keuze(r, m, "wall_substrate", "Ondergrond muren", [["bestaand", "Er zit al verf op"], ["nieuw", "Nieuw stucwerk of gipsplaat"]], "bestaand")}
                 {keuze(r, m, "wall_condition", "Staat van de muren", [["glad", "Glad"], ["oneffen", "Oneffen"], ["scheuren", "Scheuren, of het behang gaat eraf"]], "glad")}
               </div>
@@ -146,7 +192,7 @@ export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
                     <button className="rd-textlink" onClick={() => patch(r.id, (x) => ({ ...x, ceilings: [...x.ceilings, { l: 0, b: 0 }] }))} style={{ alignSelf: "flex-start" }}>+ Nog een vlak (bij een L-vorm)</button>
                   </>
                 )}
-                {plek === "plafond" && vinkje(r, onb)}
+                {plek === "plafond" && vinkje(r, m)}
               </div>
             )}
 
@@ -172,7 +218,7 @@ export function MatenStep({ rooms, setRooms, nogNiet, onNogNiet }: Props) {
                     </div>
                   </>
                 )}
-                {plek === "hout" && vinkje(r, onb)}
+                {plek === "hout" && vinkje(r, m)}
                 {keuze(r, m, "wood_substrate", "Staat van het houtwerk", [["gelakt", "Al gelakt"], ["kaal", "Kaal hout of metaal"]], "gelakt")}
               </div>
             )}
