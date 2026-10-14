@@ -1,3 +1,4 @@
+import { AfsprakenDocs } from "./AfsprakenDocs";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -117,7 +118,6 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
 }) {
   const [sName, setSName] = useState(m.stylist_name ?? m.name ?? "");
   const [meet, setMeet] = useState(m.meet_url ?? "");
-  const [code, setCode] = useState(m.discount_code ?? "");
   const [active, setActive] = useState(m.active ?? true);
   const [pct, setPct] = useState(pctText(m.commission_rate));
   const [start, setStart] = useState(m.start_date ?? "");
@@ -143,7 +143,7 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
     if (p !== null && (!Number.isFinite(p) || p < 0 || p > 100)) { onError("Vul een commissiepercentage tussen 0 en 100 in, of laat het leeg voor de standaard (10%)."); return; }
     setSaving(true);
     const { error: e1 } = await supabase.from("stylists")
-      .update({ name: sName.trim() || m.email, meet_url: meet.trim() || null, discount_code: code.trim().toUpperCase() || null, active })
+      .update({ name: sName.trim() || m.email, meet_url: meet.trim() || null, active })
       .eq("id", m.stylist_id);
     const { error: e2 } = await supabase.from("stylist_agreements").upsert({
       stylist_id: m.stylist_id, commission_rate: p === null ? null : Math.round(p * 10) / 1000,
@@ -199,7 +199,6 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>{label("Naam in het dashboard")}<input className="rd-input" value={sName} onChange={(e) => setSName(e.target.value)} style={{ height: 38 }} /></label>
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>{label("Videolink")}<input className="rd-input" value={meet} onChange={(e) => setMeet(e.target.value)} placeholder="https://meet.google.com/..." style={{ height: 38 }} /></label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>{label("Persoonlijke kortingscode")}<input className="rd-input" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Bijv. ANNA10" style={{ height: 38, textTransform: "uppercase" }} /></label>
               <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, paddingTop: 20 }}><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Actief (kan geboekt worden)</label>
             </div>
 
@@ -214,6 +213,7 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>{label("Afspraken")}
                 <textarea className="rd-input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Bijv. vergoeding en facturatie, beschikbaarheid per week, afspraken over eigen klanten en vervolgadvies." style={{ height: 110, paddingTop: 10, resize: "vertical", lineHeight: 1.45 }} />
               </label>
+              {m.stylist_id && <AfsprakenDocs stylistId={m.stylist_id} />}
               <span style={{ fontSize: 12, opacity: 0.6 }}>
                 Leeg percentage = standaard 10%. Een nieuw percentage geldt voor nieuwe toeschrijvingen; bestaande commissieregels houden hun percentage. Alleen beheerders zien deze afspraken.
                 {m.updated_at ? ` Laatst bijgewerkt ${fmtDate(m.updated_at)}${m.updated_by ? ` door ${m.updated_by}` : ""}.` : ""}
