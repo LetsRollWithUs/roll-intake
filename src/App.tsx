@@ -545,7 +545,7 @@ export function App() {
     >
       {screen === "rooms" && <RoomsStep rooms={state.rooms} setRooms={setRooms} />}
       {screen === "surfaces" && <SurfacesStep rooms={state.rooms} setRooms={setRooms} />}
-      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} nogNiet={nogNiet} woontErAl={state.woontErAl} onNogNiet={zetNogNiet} onWoontErAl={() => update({ woontErAl: true, nogNietInWoning: false })} />}
+      {screen === "maten" && <MatenStep rooms={state.rooms} setRooms={setRooms} nogNiet={nogNiet} woontErAl={state.woontErAl} onNogNiet={zetNogNiet} onWoontErAl={() => zetNogNiet(false)} />}
       {screen === "photos" && nogNiet && (
         <PhotosLaterStep rooms={state.rooms} patch={patchRoom} onTochAl={() => zetNogNiet(false)} />
       )}
