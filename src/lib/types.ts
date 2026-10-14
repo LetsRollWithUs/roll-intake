@@ -52,6 +52,8 @@ export interface Room {
   noPhotos?: boolean;
   /** Meetgegevens (m² voor de reken-engine); optioneel, klant vult per ruimte in. */
   measure?: import("./verfcalc").RoomMeasure;
+  /** Maten van vóór "Nog niet, we gaan er wonen", om dat terug te draaien (niet opgeslagen in de database). */
+  maatVoorNogNiet?: import("./verfcalc").RoomMeasure | null;
 }
 
 /** Een Roll-kleur die iemand overweegt. */

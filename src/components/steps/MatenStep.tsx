@@ -68,13 +68,41 @@ export function MatenStep({ rooms, setRooms, nogNiet, woontErAl, onNogNiet, onWo
       };
     });
   // "Nog niet": alle ruimtes op weet-ik-nog-niet, en foto's/lichtinval worden optioneel.
+  // We bewaren de maten van daarvoor, zodat "Ja" het netjes terugdraait.
   const woontErNogNiet = () => {
+    if (nogNiet) return;
     const ids = new Set(measured.map((x) => x.id));
-    setRooms((prev) => prev.map((x) => (ids.has(x.id) ? { ...x, measure: leeg(x, measureOf(x), true) } : x)));
+    setRooms((prev) => prev.map((x) => {
+      if (!ids.has(x.id)) return x;
+      const m = measureOf(x);
+      const nieuw = leeg(x, m, true);
+      // Een gekozen schatting blijft staan.
+      return { ...x, maatVoorNogNiet: x.measure ?? null, measure: m.geschat ? { ...nieuw, geschat: m.geschat, walls: m.walls, ceilings: m.ceilings } : nieuw };
+    }));
     onNogNiet?.(true);
   };
-  const vraagWonen = woontErAl === undefined && !nogNiet;
+  const woontErWel = () => {
+    if (nogNiet) {
+      setRooms((prev) => prev.map((x) => (x.maatVoorNogNiet !== undefined
+        ? { ...x, measure: x.maatVoorNogNiet ?? undefined, maatVoorNogNiet: undefined }
+        : x)));
+    }
+    onWoontErAl?.();
+  };
   const eersteOnbekend = measured.find((x) => x.measure?.unknown)?.id;
+  // De vraag blijft staan na het antwoord, met de keuze gemarkeerd, zodat je kunt wisselen.
+  const woonVraag = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", borderRadius: 12, background: "var(--rd-grey-light, #F4F1F7)" }}>
+      <span style={{ fontSize: 13, fontWeight: 600 }}>Woon je al in de woning?</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <button type="button" className={`rd-plan-chip${woontErAl === true ? " is-on" : ""}`} aria-pressed={woontErAl === true} onClick={woontErWel} style={{ fontSize: 13, padding: "6px 12px", minHeight: 0 }}>Ja, ik weet het nu even niet</button>
+        <button type="button" className={`rd-plan-chip${nogNiet ? " is-on" : ""}`} aria-pressed={!!nogNiet} onClick={woontErNogNiet} style={{ fontSize: 13, padding: "6px 12px", minHeight: 0 }}>Nog niet, we gaan er wonen</button>
+      </div>
+      {woontErAl === true && (
+        <span style={{ fontSize: 12, opacity: 0.65 }}>Geen probleem. Je antwoorden blijven bewaard, dus je kunt de intake ook later op dit apparaat afmaken.</span>
+      )}
+    </div>
+  );
 
   if (measured.length === 0) {
     return (
@@ -117,18 +145,7 @@ export function MatenStep({ rooms, setRooms, nogNiet, woontErAl, onNogNiet, onWo
             </div>
           </div>
         )}
-        {aan && vraagWonen && eersteOnbekend === r.id && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px", borderRadius: 12, background: "var(--rd-grey-light, #F4F1F7)" }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Woon je al in de woning?</span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {chip(false, "Ja, ik weet het nu even niet", () => onWoontErAl?.())}
-              {chip(false, "Nog niet, we gaan er wonen", woontErNogNiet)}
-            </div>
-          </div>
-        )}
-        {aan && woontErAl === true && eersteOnbekend === r.id && (
-          <span style={{ fontSize: 12, opacity: 0.65 }}>Geen probleem. Je antwoorden blijven bewaard, dus je kunt de intake ook later op dit apparaat afmaken.</span>
-        )}
+        {aan && eersteOnbekend === r.id && woonVraag}
       </div>
     );
   };
@@ -153,6 +170,8 @@ export function MatenStep({ rooms, setRooms, nogNiet, woontErAl, onNogNiet, onWo
           Je woont er nog niet, dus we hebben het voor alle ruimtes aangevinkt; de maten kijken we samen na. Weet je ze van een ruimte wel, bijvoorbeeld uit de plattegrond? Vink het daar uit. Foto's en lichtinval mag je straks ook overslaan.
         </p>
       )}
+      {/* Alles uitgevinkt terwijl "nog niet" aan staat: de vraag blijft bovenaan bereikbaar. */}
+      {nogNiet && !eersteOnbekend && woonVraag}
       {measured.map((r) => {
         const m = measureOf(r);
         const onb = !!m.unknown;
