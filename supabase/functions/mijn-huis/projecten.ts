@@ -2,6 +2,7 @@
 // plugin meestuurt; elke schrijfactie controleert dat project en ruimte bij die gebruiker horen.
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { ROLL_COLORS } from "../_shared/roll-collection.ts";
+import { klaviyoTrack } from "../_shared/klaviyo.ts";
 
 const KLEUR_IDS = new Set(ROLL_COLORS.map((c: any) => c.id));
 const RUIMTE_KOLOMMEN =
@@ -24,7 +25,7 @@ const RUIMTE: Record<string, string> = {
 
 export async function projectAction(sb: SupabaseClient, body: any): Promise<{ status: number; data: unknown }> {
   const uid = Number(body.woo_user_id);
-  const alleenLezen = body.action === "plan_claim" && body.alleen_lezen === true;
+  const alleenLezen = (body.action === "plan_claim" && body.alleen_lezen === true) || body.action === "plan_opnieuw";
   if (!alleenLezen && (!Number.isInteger(uid) || uid <= 0)) return { status: 400, data: { error: "gebruiker" } };
   const site = typeof body.site === "string" && /^[a-z0-9.-]{3,100}$/.test(body.site) ? body.site : "roll.nl";
   const email = typeof body.email === "string" && body.email.includes("@") ? body.email.trim().toLowerCase().slice(0, 200) : null;
@@ -176,6 +177,30 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
       if (rijen.length) await sb.from("mh_ruimtes").insert(rijen);
       await sb.from("mh_kleurplannen").update({ project_id: p!.id }).eq("id", plan.id);
       return { status: 200, data: { project_id: p!.id, voornaam: plan.voornaam } };
+    }
+
+    case "plan_opnieuw": {
+      // Verlopen link: zelfde kleurplan, nieuwe link naar hetzelfde adres (max. 3 per dag per adres).
+      const pid = String(body.plan_id ?? "");
+      if (!/^[0-9a-f-]{36}$/.test(pid)) return { status: 400, data: { error: "plan" } };
+      const { data: plan } = await sb.from("mh_kleurplannen").select("id,email,voornaam,ruimtes,geclaimd_at,verloopt_at").eq("id", pid).maybeSingle();
+      if (!plan || plan.geclaimd_at) return { status: 404, data: { error: "plan" } };
+      // Alleen na verlopen: zo kan een link per kleurplan hooguit eens per 14 dagen opnieuw worden gestuurd.
+      if (new Date(plan.verloopt_at).getTime() > Date.now()) return { status: 409, data: { error: "nog geldig" } };
+      const { count } = await sb.from("mh_kleurplannen").select("id", { count: "exact", head: true })
+        .ilike("email", exact(String(plan.email))).gte("created_at", new Date(Date.now() - 864e5).toISOString());
+      if ((count ?? 0) > 3) return { status: 429, data: { error: "te vaak" } };
+      const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))))
+        .map((x) => x.toString(16).padStart(2, "0")).join("");
+      await sb.from("mh_kleurplannen").update({ token_hash: hash, verloopt_at: new Date(Date.now() + 14 * 864e5).toISOString() }).eq("id", plan.id);
+      const shop = (Deno.env.get("WOO_URL") ?? "https://roll.nl").replace(/\/$/, "");
+      const namen = (plan.ruimtes as any[]).map((r) => r.naam || r.soort);
+      await klaviyoTrack("Kleurplan Bewaard",
+        { email: plan.email, ...(plan.voornaam ? { first_name: plan.voornaam } : {}) },
+        { activatie_url: `${shop}/my-account/?roll_mh_plan=${plan.id}.${token}`, ruimtes: namen, aantal_ruimtes: namen.length, nu: [], opnieuw: true },
+        {}, `kleurplan-${plan.id}-${Date.now()}`, sb);
+      return { status: 200, data: { ok: true } };
     }
 
     case "ruimte_weg": {
