@@ -6,6 +6,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { ROLL_COLORS, ROLL_PACKS } from "../_shared/roll-collection.ts";
 import { projectAction, exact } from "./projecten.ts";
+import { serviceMode } from "../_shared/klaviyo.ts";
 
 const KEY = Deno.env.get("MIJNHUIS_KEY") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
       .ilike("email", exact(email)).gte("created_at", sinds).not("primary_color_id", "is", null)
       .order("created_at", { ascending: false }).limit(20),
     sb.from("bookings")
-      .select("id,status,format,start_at,manage_token,created_at,gesprek_gevoerd_at,intake_id,stylist_id, stylists(name,photo_path), services(name,duration_min)")
+      .select("id,status,format,start_at,manage_token,created_at,gesprek_gevoerd_at,intake_id,stylist_id, stylists(name,photo_path), services(key,name,duration_min)")
       .ilike("customer_email", exact(email)).is("archived_at", null).in("status", ["confirmed", "requested", "manual"])
       .order("created_at", { ascending: false }).limit(5),
     sb.from("intake").select("id,created_at,status,booking_id").ilike("contact_email", exact(email)).is("archived_at", null)
@@ -102,6 +103,7 @@ Deno.serve(async (req) => {
     styliste: b.stylists ? { naam: b.stylists.name, foto: b.stylists.photo_path ? SB_PUBLIC + b.stylists.photo_path : null } : null,
     beheer_url: b.manage_token ? `${INTAKE_BASE}/boek/beheer?token=${b.manage_token}` : null,
     intake: !!b.intake_id,
+    intake_url: b.intake_id ? null : `${INTAKE_BASE}/?booking=${b.id}&mode=${serviceMode(b.services?.key)}`,
   }));
 
   const intakes = ((ins as any[]) ?? []).map((i) => ({ id: i.id, datum: i.created_at, status: i.status, booking_id: i.booking_id }));
