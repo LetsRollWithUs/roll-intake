@@ -5,6 +5,7 @@
 // - klant:   kleurentests (quiz), adviesafspraken en intake bij dit e-mailadres
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { ROLL_COLORS, ROLL_PACKS } from "../_shared/roll-collection.ts";
+import { projectAction } from "./projecten.ts";
 
 const KEY = Deno.env.get("MIJNHUIS_KEY") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -45,6 +46,12 @@ Deno.serve(async (req) => {
       kleuren: ROLL_COLORS.map((c: any) => ({ id: c.id, naam: c.name, sub: c.sub, hex: c.hex })),
       pakketten: ROLL_PACKS.map((p: any) => ({ id: p.id, naam: p.name, kleuren: p.colorIds })),
     });
+  }
+
+  if (["projecten", "project_opslaan", "project_weg", "ruimte_opslaan", "ruimte_weg"].includes(body.action)) {
+    const sbp = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
+    const r = await projectAction(sbp, body);
+    return j(r.data, r.status);
   }
 
   if (body.action !== "klant") return j({ error: "onbekende actie" }, 400);
