@@ -5,7 +5,7 @@ import { ROLL_COLORS } from "../_shared/roll-collection.ts";
 
 const KLEUR_IDS = new Set(ROLL_COLORS.map((c: any) => c.id));
 const RUIMTE_KOLOMMEN =
-  "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,aftrek_m2,muur_m2,plafond_m2,quiz_result_id,sort,updated_at";
+  "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,aftrek_m2,muur_m2,plafond_m2,ondergrond,status_klant,quiz_result_id,sort,updated_at";
 
 // ILIKE zonder jokers: % en _ in een e-mailadres mogen nooit andere adressen matchen.
 export const exact = (e: string) => e.replace(/[\\%_]/g, "\\$&");
@@ -110,6 +110,8 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
       if ("kleur_id" in v) velden.kleur_id = kleur(v.kleur_id);
       if ("plafond_kleur_id" in v) velden.plafond_kleur_id = kleur(v.plafond_kleur_id);
       if ("plafond_mee" in v) velden.plafond_mee = !!v.plafond_mee;
+      if ("ondergrond" in v) velden.ondergrond = ["bestaand", "nieuw", "behang", "onbekend"].includes(v.ondergrond) ? v.ondergrond : "bestaand";
+      if ("status_klant" in v) velden.status_klant = ["niet_getest", "twijfel", "uitgesteld", "klaar"].includes(v.status_klant) ? v.status_klant : null;
       if ("test_kleuren" in v) velden.test_kleuren = (Array.isArray(v.test_kleuren) ? v.test_kleuren : []).map(kleur).filter(Boolean).slice(0, 6);
       for (const k of ["omtrek_m", "hoogte_m", "aftrek_m2", "muur_m2", "plafond_m2"]) if (k in v) velden[k] = getal(v[k]);
       // Muuroppervlak uit de maten als omtrek en hoogte er zijn; anders telt het direct ingevulde aantal m².
