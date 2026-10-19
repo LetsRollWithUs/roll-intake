@@ -6,7 +6,7 @@ import { klaviyoTrack } from "../_shared/klaviyo.ts";
 
 const KLEUR_IDS = new Set(ROLL_COLORS.map((c: any) => c.id));
 const RUIMTE_KOLOMMEN =
-  "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,aftrek_m2,muur_m2,plafond_m2,ondergrond,status_klant,quiz_result_id,sort,updated_at";
+  "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,aftrek_m2,muur_m2,plafond_m2,ondergrond,status_klant,onderdelen,quiz_result_id,sort,updated_at";
 
 // ILIKE zonder jokers: % en _ in een e-mailadres mogen nooit andere adressen matchen.
 export const exact = (e: string) => e.replace(/[\\%_]/g, "\\$&");
@@ -22,6 +22,47 @@ const RUIMTE: Record<string, string> = {
   woonkamer: "Woonkamer", slaapkamer: "Slaapkamer", keuken: "Keuken", badkamer: "Badkamer", hal: "Gang en hal",
   kinderkamer: "Kinderkamer", werkkamer: "Werkkamer", eetkamer: "Eetkamer", wc: "Toilet", anders: "Andere ruimte",
 };
+
+
+// ---------- onderdelen per ruimte ----------
+const SOORT_OND = new Set(["wand", "plafond", "houtwerk"]);
+const nieuwId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+const kleurLijst = (v: unknown) => (Array.isArray(v) ? v : []).map(kleur).filter(Boolean).slice(0, 6) as string[];
+function normOnderdeel(o: any): Record<string, unknown> | null {
+  if (!o || typeof o !== "object" || !SOORT_OND.has(o.soort)) return null;
+  const uit: Record<string, unknown> = {
+    id: typeof o.id === "string" && /^[a-z0-9]{6,12}$/.test(o.id) ? o.id : nieuwId(),
+    soort: o.soort,
+    test_kleuren: kleurLijst(o.test_kleuren),
+  };
+  const k = kleur(o.kleur_id);
+  if (k) uit.kleur_id = k;
+  const naam = tekst(o.naam, 40); if (naam) uit.naam = naam;
+  const eigen = tekst(o.eigen_kleur, 60); if (eigen) uit.eigen_kleur = eigen;
+  const m2 = getal(o.m2); if (m2) uit.m2 = m2;
+  if (o.soort === "houtwerk") {
+    uit.glans = ["mat", "zijdeglans", "hoogglans"].includes(o.glans) ? o.glans : "zijdeglans";
+    uit.ondergrond = o.ondergrond === "kaal" ? "kaal" : "gelakt";
+    const d = getal(o.deuren, 50); if (d) uit.deuren = Math.round(d);
+    const r = getal(o.ramen, 50); if (r) uit.ramen = Math.round(r);
+    const p = getal(o.plinten_m, 300); if (p) uit.plinten_m = p;
+  }
+  return uit;
+}
+// Oude kolommen gelijk houden met de eerste wand en het plafond (voor code die nog op die kolommen leest).
+function legacy(onderdelen: any[]) {
+  const w = onderdelen.find((o) => o.soort === "wand");
+  const p = onderdelen.find((o) => o.soort === "plafond");
+  return {
+    kleur_id: w?.kleur_id ?? null,
+    test_kleuren: w?.test_kleuren ?? [],
+    plafond_mee: !!p,
+    plafond_kleur_id: p?.kleur_id ?? null,
+    plafond_m2: p?.m2 ?? null,
+  };
+}
+const standaardOnderdelen = (test: string[], kleurId: string | null = null) =>
+  [normOnderdeel({ soort: "wand", test_kleuren: test, kleur_id: kleurId })];
 
 export async function projectAction(sb: SupabaseClient, body: any): Promise<{ status: number; data: unknown }> {
   const uid = Number(body.woo_user_id);
@@ -63,7 +104,7 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
             gezien.add(soort);
             const test = [q.primary_color_id, ...(Array.isArray(q.secondary_colors) ? q.secondary_colors.map((c: any) => c?.id) : [])]
               .filter((id: any) => KLEUR_IDS.has(id)).slice(0, 3);
-            rijen.push({ project_id: p!.id, naam: RUIMTE[soort] ?? "Ruimte", soort, test_kleuren: test, quiz_result_id: q.id, sort: rijen.length });
+            rijen.push({ project_id: p!.id, naam: RUIMTE[soort] ?? "Ruimte", soort, test_kleuren: test, onderdelen: standaardOnderdelen(test), quiz_result_id: q.id, sort: rijen.length });
           }
           if (rijen.length) await sb.from("mh_ruimtes").insert(rijen);
           ({ data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,created_at,updated_at")
@@ -132,7 +173,8 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
       if (!pid) return { status: 404, data: { error: "project" } };
       const { count } = await sb.from("mh_ruimtes").select("id", { count: "exact", head: true }).eq("project_id", pid).is("archived_at", null);
       if ((count ?? 0) >= 30) return { status: 400, data: { error: "maximaal 30 ruimtes" } };
-      const { data, error } = await sb.from("mh_ruimtes").insert({ ...velden, project_id: pid, naam: velden.naam ?? "Ruimte", sort: count ?? 0 })
+      const test0 = (velden.test_kleuren as string[] | undefined) ?? [];
+      const { data, error } = await sb.from("mh_ruimtes").insert({ ...velden, onderdelen: standaardOnderdelen(test0, (velden.kleur_id as string) ?? null), project_id: pid, naam: velden.naam ?? "Ruimte", sort: count ?? 0 })
         .select(RUIMTE_KOLOMMEN).single();
       if (error) return { status: 500, data: { error: "opslaan" } };
       return { status: 200, data: { ruimte: data } };
@@ -172,7 +214,7 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
         const q = perSoort.get(r.soort);
         const test = q ? [q.primary_color_id, ...(Array.isArray(q.secondary_colors) ? q.secondary_colors.map((c: any) => c?.id) : [])]
           .filter((id: any) => KLEUR_IDS.has(id)).slice(0, 3) : [];
-        return { project_id: p!.id, naam: r.naam || RUIMTE[r.soort] || "Ruimte", soort: r.soort, test_kleuren: test, quiz_result_id: q?.id ?? null, sort: i };
+        return { project_id: p!.id, naam: r.naam || RUIMTE[r.soort] || "Ruimte", soort: r.soort, test_kleuren: test, onderdelen: standaardOnderdelen(test), quiz_result_id: q?.id ?? null, sort: i };
       });
       if (rijen.length) await sb.from("mh_ruimtes").insert(rijen);
       await sb.from("mh_kleurplannen").update({ project_id: p!.id }).eq("id", plan.id);
@@ -201,6 +243,27 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
         { activatie_url: `${shop}/my-account/?roll_mh_plan=${plan.id}.${token}`, ruimtes: namen, aantal_ruimtes: namen.length, nu: [], opnieuw: true },
         {}, `kleurplan-${plan.id}-${Date.now()}`, sb);
       return { status: 200, data: { ok: true } };
+    }
+
+    case "onderdeel_opslaan":
+    case "onderdeel_weg": {
+      const r = await eigenRuimte(body.ruimte_id);
+      if (!r) return { status: 404, data: { error: "ruimte" } };
+      const { data: rij } = await sb.from("mh_ruimtes").select("onderdelen,kleur_id,test_kleuren").eq("id", r.id).single();
+      let lijst: any[] = Array.isArray(rij?.onderdelen) ? rij!.onderdelen : standaardOnderdelen(rij?.test_kleuren ?? [], rij?.kleur_id ?? null);
+      if (body.action === "onderdeel_weg") {
+        lijst = lijst.filter((o) => o.id !== body.onderdeel_id);
+      } else {
+        const o = normOnderdeel(body.onderdeel);
+        if (!o) return { status: 400, data: { error: "onderdeel" } };
+        const i = lijst.findIndex((x) => x.id === o.id);
+        if (i >= 0) lijst[i] = o;
+        else if (lijst.length < 8) lijst.push(o);
+        else return { status: 400, data: { error: "maximaal 8 onderdelen" } };
+      }
+      const { data } = await sb.from("mh_ruimtes").update({ onderdelen: lijst, ...legacy(lijst), updated_at: new Date().toISOString() })
+        .eq("id", r.id).select(RUIMTE_KOLOMMEN).single();
+      return { status: 200, data: { ruimte: data } };
     }
 
     case "ruimte_weg": {
