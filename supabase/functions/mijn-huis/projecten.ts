@@ -6,7 +6,7 @@ import { klaviyoTrack } from "../_shared/klaviyo.ts";
 
 const KLEUR_IDS = new Set(ROLL_COLORS.map((c: any) => c.id));
 const RUIMTE_KOLOMMEN =
-  "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,aftrek_m2,muur_m2,plafond_m2,ondergrond,status_klant,onderdelen,quiz_result_id,sort,updated_at";
+  "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,lengte_m,breedte_m,aftrek_m2,muur_m2,plafond_m2,ondergrond,status_klant,onderdelen,quiz_result_id,sort,updated_at";
 
 // ILIKE zonder jokers: % en _ in een e-mailadres mogen nooit andere adressen matchen.
 export const exact = (e: string) => e.replace(/[\\%_]/g, "\\$&");
@@ -40,6 +40,15 @@ function normOnderdeel(o: any): Record<string, unknown> | null {
   const naam = tekst(o.naam, 40); if (naam) uit.naam = naam;
   const eigen = tekst(o.eigen_kleur, 60); if (eigen) uit.eigen_kleur = eigen;
   const m2 = getal(o.m2); if (m2) uit.m2 = m2;
+  // Eerdere kleuren (paspoort): Roll-kleur of eigen kleur, met datum. Max 12.
+  if (Array.isArray(o.historie)) {
+    uit.historie = o.historie.slice(0, 12).map((h: any) => {
+      const hk = kleur(h?.kleur_id); const he = tekst(h?.eigen_kleur, 60);
+      if (!hk && !he) return null;
+      const d = typeof h?.datum === "string" && /^\d{4}-\d{2}(-\d{2})?$/.test(h.datum) ? h.datum : null;
+      return { ...(hk ? { kleur_id: hk } : { eigen_kleur: he }), ...(d ? { datum: d } : {}), ...(h?.besteld ? { besteld: true } : {}) };
+    }).filter(Boolean);
+  }
   if (o.soort === "houtwerk") {
     uit.glans = ["mat", "zijdeglans", "hoogglans"].includes(o.glans) ? o.glans : "zijdeglans";
     uit.ondergrond = o.ondergrond === "kaal" ? "kaal" : "gelakt";
@@ -155,7 +164,11 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
       if ("ondergrond" in v) velden.ondergrond = ["bestaand", "nieuw", "behang", "onbekend"].includes(v.ondergrond) ? v.ondergrond : "bestaand";
       if ("status_klant" in v) velden.status_klant = ["niet_getest", "twijfel", "uitgesteld", "klaar"].includes(v.status_klant) ? v.status_klant : null;
       if ("test_kleuren" in v) velden.test_kleuren = (Array.isArray(v.test_kleuren) ? v.test_kleuren : []).map(kleur).filter(Boolean).slice(0, 6);
-      for (const k of ["omtrek_m", "hoogte_m", "aftrek_m2", "muur_m2", "plafond_m2"]) if (k in v) velden[k] = getal(v[k]);
+      for (const k of ["omtrek_m", "hoogte_m", "lengte_m", "breedte_m", "aftrek_m2", "muur_m2", "plafond_m2"]) if (k in v) velden[k] = getal(v[k]);
+      // Lengte en breedte bekend: omtrek = 2 x (lengte + breedte).
+      if (velden.lengte_m && velden.breedte_m) {
+        velden.omtrek_m = Math.round(2 * ((velden.lengte_m as number) + (velden.breedte_m as number)) * 100) / 100;
+      }
       // Muuroppervlak uit de maten als omtrek en hoogte er zijn; anders telt het direct ingevulde aantal m².
       const omtrek = velden.omtrek_m as number | null | undefined, hoogte = velden.hoogte_m as number | null | undefined;
       if (omtrek && hoogte) {
@@ -257,11 +270,39 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
         const o = normOnderdeel(body.onderdeel);
         if (!o) return { status: 400, data: { error: "onderdeel" } };
         const i = lijst.findIndex((x) => x.id === o.id);
-        if (i >= 0) lijst[i] = o;
+        if (i >= 0) {
+          const oud = lijst[i];
+          // Andere kleur gekozen: de vorige gaat naar de eerdere kleuren (voor het paspoort en nabestellen).
+          if (oud?.kleur_id && oud.kleur_id !== o.kleur_id && body.historie_bijwerken !== false) {
+            const h = Array.isArray(o.historie) ? o.historie as any[] : [];
+            if (!h.some((x) => x.kleur_id === oud.kleur_id)) h.unshift({ kleur_id: oud.kleur_id, datum: new Date().toISOString().slice(0, 7) });
+            o.historie = h.slice(0, 12);
+          }
+          lijst[i] = o;
+        }
         else if (lijst.length < 8) lijst.push(o);
         else return { status: 400, data: { error: "maximaal 8 onderdelen" } };
       }
       const { data } = await sb.from("mh_ruimtes").update({ onderdelen: lijst, ...legacy(lijst), updated_at: new Date().toISOString() })
+        .eq("id", r.id).select(RUIMTE_KOLOMMEN).single();
+      return { status: 200, data: { ruimte: data } };
+    }
+
+    case "scan_toewijzen": {
+      // Kleurentest van advies.roll.nl aan een ruimte koppelen: de kleuren worden testkleuren van de wanden.
+      const r = await eigenRuimte(body.ruimte_id);
+      if (!r || !email) return { status: 404, data: { error: "ruimte" } };
+      const { data: q } = await sb.from("quiz_results").select("id,primary_color_id,secondary_colors")
+        .eq("id", String(body.quiz_result_id ?? "")).ilike("email", exact(email)).maybeSingle();
+      if (!q) return { status: 404, data: { error: "scan" } };
+      const test = [q.primary_color_id, ...(Array.isArray(q.secondary_colors) ? q.secondary_colors.map((c: any) => c?.id) : [])]
+        .filter((id: any) => KLEUR_IDS.has(id)).slice(0, 4);
+      const { data: rij } = await sb.from("mh_ruimtes").select("onderdelen,kleur_id,test_kleuren").eq("id", r.id).single();
+      const lijst: any[] = Array.isArray(rij?.onderdelen) ? rij!.onderdelen : standaardOnderdelen(rij?.test_kleuren ?? [], rij?.kleur_id ?? null);
+      let w = lijst.find((o) => o.soort === "wand");
+      if (!w) { w = normOnderdeel({ soort: "wand" }); lijst.unshift(w); }
+      w.test_kleuren = [...new Set([...(w.test_kleuren ?? []), ...test])].slice(0, 6);
+      const { data } = await sb.from("mh_ruimtes").update({ onderdelen: lijst, ...legacy(lijst), quiz_result_id: q.id, updated_at: new Date().toISOString() })
         .eq("id", r.id).select(RUIMTE_KOLOMMEN).single();
       return { status: 200, data: { ruimte: data } };
     }
