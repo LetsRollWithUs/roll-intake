@@ -109,5 +109,12 @@ Deno.serve(async (req) => {
   const intakes = ((ins as any[]) ?? []).map((i) => ({ id: i.id, datum: i.created_at, status: i.status, booking_id: i.booking_id }));
   const voornaam = ((qs as any[]) ?? []).find((q) => q.first_name)?.first_name ?? null;
 
-  return j({ voornaam, ruimtes, afspraken, intakes });
+  // Alle kleurentests (max. 20), voor het overzicht van je kleuradvies en om ze aan een ruimte te koppelen.
+  const scans = ((qs as any[]) ?? []).map((q) => ({
+    id: q.id, datum: q.created_at, ruimte: q.room_type ?? "anders", ruimte_naam: ruimteNaam(q.room_type ?? null),
+    hoofdkleur: kleur(q.primary_color_id, q.primary_color),
+    kleuren: Array.isArray(q.secondary_colors) ? q.secondary_colors.slice(0, 4).map((c: any) => kleur(c?.id, c?.name)).filter(Boolean) : [],
+  }));
+
+  return j({ voornaam, ruimtes, scans, afspraken, intakes });
 });
