@@ -37,6 +37,11 @@ function normOnderdeel(o: any): Record<string, unknown> | null {
   };
   const k = kleur(o.kleur_id);
   if (k) uit.kleur_id = k;
+  // Gemengde kleur uit de kleurkiezer (Kleurmatch): alleen de Roll-naam en mengcode, geen merk.
+  if (!k && o.km && typeof o.km === "object" && /^[A-Za-z0-9_-]{1,40}$/.test(String(o.km.id ?? ""))) {
+    const hex = typeof o.km.hex === "string" && /^#[0-9a-fA-F]{6}$/.test(o.km.hex) ? o.km.hex : null;
+    uit.km = { id: String(o.km.id), roll_naam: tekst(o.km.roll_naam, 60) || "Roll kleur", roll_code: tekst(o.km.roll_code, 20) || null, hex };
+  }
   const naam = tekst(o.naam, 40); if (naam) uit.naam = naam;
   const eigen = tekst(o.eigen_kleur, 60); if (eigen) uit.eigen_kleur = eigen;
   const m2 = getal(o.m2); if (m2) uit.m2 = m2;
