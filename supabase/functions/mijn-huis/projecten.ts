@@ -7,6 +7,8 @@ const KLEUR_IDS = new Set(ROLL_COLORS.map((c: any) => c.id));
 const RUIMTE_KOLOMMEN =
   "id,project_id,naam,soort,kleur_id,test_kleuren,plafond_mee,plafond_kleur_id,omtrek_m,hoogte_m,aftrek_m2,muur_m2,plafond_m2,quiz_result_id,sort,updated_at";
 
+// ILIKE zonder jokers: % en _ in een e-mailadres mogen nooit andere adressen matchen.
+export const exact = (e: string) => e.replace(/[\\%_]/g, "\\$&");
 const tekst = (v: unknown, max = 80) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const kleur = (v: unknown) => (typeof v === "string" && KLEUR_IDS.has(v) ? v : null);
 const getal = (v: unknown, max = 1000) => {
@@ -22,34 +24,36 @@ const RUIMTE: Record<string, string> = {
 
 export async function projectAction(sb: SupabaseClient, body: any): Promise<{ status: number; data: unknown }> {
   const uid = Number(body.woo_user_id);
-  if (!Number.isInteger(uid) || uid <= 0) return { status: 400, data: { error: "gebruiker" } };
+  const alleenLezen = body.action === "plan_claim" && body.alleen_lezen === true;
+  if (!alleenLezen && (!Number.isInteger(uid) || uid <= 0)) return { status: 400, data: { error: "gebruiker" } };
+  const site = typeof body.site === "string" && /^[a-z0-9.-]{3,100}$/.test(body.site) ? body.site : "roll.nl";
   const email = typeof body.email === "string" && body.email.includes("@") ? body.email.trim().toLowerCase().slice(0, 200) : null;
 
   const eigenProject = async (pid: unknown) => {
     if (typeof pid !== "string") return null;
-    const { data } = await sb.from("mh_projecten").select("id").eq("id", pid).eq("woo_user_id", uid).is("archived_at", null).maybeSingle();
+    const { data } = await sb.from("mh_projecten").select("id").eq("id", pid).eq("woo_user_id", uid).eq("site", site).is("archived_at", null).maybeSingle();
     return data ? data.id as string : null;
   };
   const eigenRuimte = async (rid: unknown) => {
     if (typeof rid !== "string") return null;
-    const { data } = await sb.from("mh_ruimtes").select("id,project_id, mh_projecten!inner(woo_user_id)")
-      .eq("id", rid).eq("mh_projecten.woo_user_id", uid).is("archived_at", null).maybeSingle();
+    const { data } = await sb.from("mh_ruimtes").select("id,project_id, mh_projecten!inner(woo_user_id,site)")
+      .eq("id", rid).eq("mh_projecten.woo_user_id", uid).eq("mh_projecten.site", site).is("archived_at", null).maybeSingle();
     return data ? data as { id: string; project_id: string } : null;
   };
 
   switch (body.action) {
     case "projecten": {
       let { data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,created_at,updated_at")
-        .eq("woo_user_id", uid).is("archived_at", null).order("created_at");
+        .eq("woo_user_id", uid).eq("site", site).is("archived_at", null).order("created_at");
       // Eerste keer: maak een project uit de kleurentests bij het (bevestigde) e-mailadres.
       if ((!ps || ps.length === 0) && body.importeer && email) {
         const { data: qs } = await sb.from("quiz_results")
           .select("id,created_at,room_type,primary_color_id,secondary_colors")
-          .ilike("email", email).not("primary_color_id", "is", null)
+          .ilike("email", exact(email)).not("primary_color_id", "is", null)
           .gte("created_at", new Date(Date.now() - 400 * 864e5).toISOString())
           .order("created_at", { ascending: false }).limit(20);
         if (qs && qs.length) {
-          const { data: p } = await sb.from("mh_projecten").insert({ woo_user_id: uid, email, naam: "Mijn huis" }).select("id").single();
+          const { data: p } = await sb.from("mh_projecten").insert({ woo_user_id: uid, site, email, naam: "Mijn huis" }).select("id").single();
           const gezien = new Set<string>();
           const rijen = [];
           for (const q of qs as any[]) {
@@ -62,7 +66,7 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
           }
           if (rijen.length) await sb.from("mh_ruimtes").insert(rijen);
           ({ data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,created_at,updated_at")
-            .eq("woo_user_id", uid).is("archived_at", null).order("created_at"));
+            .eq("woo_user_id", uid).eq("site", site).is("archived_at", null).order("created_at"));
         }
       }
       const ids = (ps ?? []).map((p: any) => p.id);
@@ -84,9 +88,9 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
         await sb.from("mh_projecten").update({ naam, postcode, updated_at: new Date().toISOString() }).eq("id", pid);
         return { status: 200, data: { id: pid } };
       }
-      const { count } = await sb.from("mh_projecten").select("id", { count: "exact", head: true }).eq("woo_user_id", uid).is("archived_at", null);
+      const { count } = await sb.from("mh_projecten").select("id", { count: "exact", head: true }).eq("woo_user_id", uid).eq("site", site).is("archived_at", null);
       if ((count ?? 0) >= 10) return { status: 400, data: { error: "maximaal 10 projecten" } };
-      const { data, error } = await sb.from("mh_projecten").insert({ woo_user_id: uid, email, naam, postcode }).select("id").single();
+      const { data, error } = await sb.from("mh_projecten").insert({ woo_user_id: uid, site, email, naam, postcode }).select("id").single();
       if (error) return { status: 500, data: { error: "opslaan" } };
       return { status: 200, data: { id: data.id } };
     }
@@ -129,6 +133,45 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
         .select(RUIMTE_KOLOMMEN).single();
       if (error) return { status: 500, data: { error: "opslaan" } };
       return { status: 200, data: { ruimte: data } };
+    }
+
+    case "plan_claim": {
+      // Link uit de mail "Kleurplan bewaard": id + token. Eenmalig; maakt een project met de gekozen ruimtes,
+      // aangevuld met kleuren uit de kleurentests bij hetzelfde e-mailadres.
+      const [pid, token] = String(body.plan ?? "").split(".");
+      if (!/^[0-9a-f-]{36}$/.test(pid ?? "") || !/^[0-9a-f]{64}$/.test(token ?? "")) return { status: 400, data: { error: "link" } };
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))))
+        .map((x) => x.toString(16).padStart(2, "0")).join("");
+      const { data: plan } = await sb.from("mh_kleurplannen").select("id,email,voornaam,postcode,ruimtes,token_hash,verloopt_at,geclaimd_at")
+        .eq("id", pid).maybeSingle();
+      if (!plan || plan.token_hash !== hash) return { status: 404, data: { error: "link" } };
+      if (plan.geclaimd_at) return { status: 409, data: { error: "al gebruikt", email: plan.email } };
+      if (new Date(plan.verloopt_at).getTime() < Date.now()) return { status: 410, data: { error: "verlopen" } };
+      // Alleen lezen (voor de plugin om te kiezen: inloggen, account maken of koppelen).
+      if (body.alleen_lezen) return { status: 200, data: { email: plan.email, voornaam: plan.voornaam } };
+      if (!email || email !== String(plan.email).toLowerCase()) return { status: 403, data: { error: "ander adres", email: plan.email } };
+
+      const { data: geclaimd } = await sb.from("mh_kleurplannen").update({ geclaimd_at: new Date().toISOString(), woo_user_id: uid })
+        .eq("id", plan.id).is("geclaimd_at", null).select("id").maybeSingle();
+      if (!geclaimd) return { status: 409, data: { error: "al gebruikt" } };
+
+      const { data: qs } = await sb.from("quiz_results").select("id,room_type,primary_color_id,secondary_colors")
+        .ilike("email", exact(email)).not("primary_color_id", "is", null)
+        .gte("created_at", new Date(Date.now() - 400 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(20);
+      const perSoort = new Map<string, any>();
+      for (const q of (qs as any[]) ?? []) if (!perSoort.has(q.room_type ?? "anders")) perSoort.set(q.room_type ?? "anders", q);
+
+      const { data: p } = await sb.from("mh_projecten")
+        .insert({ woo_user_id: uid, site, email, naam: "Mijn huis", postcode: plan.postcode }).select("id").single();
+      const rijen = (plan.ruimtes as any[]).map((r, i) => {
+        const q = perSoort.get(r.soort);
+        const test = q ? [q.primary_color_id, ...(Array.isArray(q.secondary_colors) ? q.secondary_colors.map((c: any) => c?.id) : [])]
+          .filter((id: any) => KLEUR_IDS.has(id)).slice(0, 3) : [];
+        return { project_id: p!.id, naam: r.naam || RUIMTE[r.soort] || "Ruimte", soort: r.soort, test_kleuren: test, quiz_result_id: q?.id ?? null, sort: i };
+      });
+      if (rijen.length) await sb.from("mh_ruimtes").insert(rijen);
+      await sb.from("mh_kleurplannen").update({ project_id: p!.id }).eq("id", plan.id);
+      return { status: 200, data: { project_id: p!.id, voornaam: plan.voornaam } };
     }
 
     case "ruimte_weg": {
