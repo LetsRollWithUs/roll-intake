@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (["projecten", "project_opslaan", "project_weg", "ruimte_opslaan", "ruimte_weg", "plan_claim", "plan_opnieuw"].includes(body.action)) {
+  if (["projecten", "project_opslaan", "project_weg", "ruimte_opslaan", "ruimte_weg", "plan_claim", "plan_opnieuw", "onderdeel_opslaan", "onderdeel_weg"].includes(body.action)) {
     const sbp = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
     const r = await projectAction(sbp, body);
     return j(r.data, r.status);
