@@ -11,7 +11,11 @@ const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SHOP = (Deno.env.get("WOO_URL") ?? "https://roll.nl").replace(/\/$/, "");
 const ORIGINS = [/^https:\/\/advies\.roll\.nl$/, /^http:\/\/localhost(:\d+)?$/];
 
-const SOORTEN = new Set(["woonkamer", "slaapkamer", "keuken", "eetkamer", "hal", "badkamer", "kinderkamer", "werkkamer", "wc", "anders"]);
+const LABEL: Record<string, string> = {
+  woonkamer: "woonkamer", slaapkamer: "slaapkamer", keuken: "keuken", eetkamer: "eetkamer", hal: "hal",
+  badkamer: "badkamer", kinderkamer: "kinderkamer", werkkamer: "werkkamer", wc: "toilet", anders: "andere ruimte",
+};
+const SOORTEN = new Set(Object.keys(LABEL));
 
 function cors(origin: string | null) {
   const ok = origin && ORIGINS.some((r) => r.test(origin));
@@ -72,11 +76,11 @@ Deno.serve(async (req) => {
   if (error || !plan) return j({ error: "Bewaren lukte niet. Probeer het nog een keer." }, 500);
 
   const link = `${SHOP}/my-account/?roll_mh_plan=${plan.id}.${token}`;
-  const namen = ruimtes.map((r: any) => r.naam || r.soort);
+  const namen = ruimtes.map((r: any) => r.naam || LABEL[r.soort]);
   await klaviyoTrack(
     "Kleurplan Bewaard",
     { email, ...(voornaam ? { first_name: voornaam } : {}) },
-    { activatie_url: link, ruimtes: namen, aantal_ruimtes: ruimtes.length, nu: ruimtes.filter((r: any) => r.nu).map((r: any) => r.naam || r.soort) },
+    { activatie_url: link, ruimtes: namen, aantal_ruimtes: ruimtes.length, nu: ruimtes.filter((r: any) => r.nu).map((r: any) => r.naam || LABEL[r.soort]) },
     {},
     `kleurplan-${plan.id}`,
     sb,
