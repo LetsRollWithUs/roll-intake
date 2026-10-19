@@ -168,6 +168,9 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
       // Lengte en breedte bekend: omtrek = 2 x (lengte + breedte).
       if (velden.lengte_m && velden.breedte_m) {
         velden.omtrek_m = Math.round(2 * ((velden.lengte_m as number) + (velden.breedte_m as number)) * 100) / 100;
+      } else if ("lengte_m" in v && !("omtrek_m" in v)) {
+        velden.omtrek_m = null;
+        if (!("muur_m2" in v) || v.muur_m2 === "" || v.muur_m2 === null) velden.muur_m2 = null;
       }
       // Muuroppervlak uit de maten als omtrek en hoogte er zijn; anders telt het direct ingevulde aantal m².
       const omtrek = velden.omtrek_m as number | null | undefined, hoogte = velden.hoogte_m as number | null | undefined;
