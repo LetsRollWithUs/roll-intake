@@ -5,7 +5,7 @@
 // - klant:   kleurentests (quiz), adviesafspraken en intake bij dit e-mailadres
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { ROLL_COLORS, ROLL_PACKS } from "../_shared/roll-collection.ts";
-import { projectAction } from "./projecten.ts";
+import { projectAction, exact } from "./projecten.ts";
 
 const KEY = Deno.env.get("MIJNHUIS_KEY") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (["projecten", "project_opslaan", "project_weg", "ruimte_opslaan", "ruimte_weg"].includes(body.action)) {
+  if (["projecten", "project_opslaan", "project_weg", "ruimte_opslaan", "ruimte_weg", "plan_claim"].includes(body.action)) {
     const sbp = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
     const r = await projectAction(sbp, body);
     return j(r.data, r.status);
@@ -64,13 +64,13 @@ Deno.serve(async (req) => {
   const [{ data: qs }, { data: bs }, { data: ins }] = await Promise.all([
     sb.from("quiz_results")
       .select("id,created_at,first_name,room_type,daylight,paint_scope,paint_timeline,primary_color,primary_color_id,secondary_colors,recommended_pack_name,user_answers")
-      .ilike("email", email).gte("created_at", sinds).not("primary_color_id", "is", null)
+      .ilike("email", exact(email)).gte("created_at", sinds).not("primary_color_id", "is", null)
       .order("created_at", { ascending: false }).limit(20),
     sb.from("bookings")
       .select("id,status,format,start_at,manage_token,created_at,gesprek_gevoerd_at,intake_id,stylist_id, stylists(name,photo_path), services(name,duration_min)")
-      .ilike("customer_email", email).is("archived_at", null).in("status", ["confirmed", "requested", "manual"])
+      .ilike("customer_email", exact(email)).is("archived_at", null).in("status", ["confirmed", "requested", "manual"])
       .order("created_at", { ascending: false }).limit(5),
-    sb.from("intake").select("id,created_at,status,booking_id").ilike("contact_email", email).is("archived_at", null)
+    sb.from("intake").select("id,created_at,status,booking_id").ilike("contact_email", exact(email)).is("archived_at", null)
       .order("created_at", { ascending: false }).limit(3),
   ]);
 
