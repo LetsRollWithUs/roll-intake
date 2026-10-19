@@ -94,7 +94,7 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
 
   switch (body.action) {
     case "projecten": {
-      let { data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,created_at,updated_at")
+      let { data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,straat,huisnummer,plaats,created_at,updated_at")
         .eq("woo_user_id", uid).eq("site", site).is("archived_at", null).order("created_at");
       // Eerste keer: maak een project uit de kleurentests bij het (bevestigde) e-mailadres.
       if ((!ps || ps.length === 0) && body.importeer && email) {
@@ -116,7 +116,7 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
             rijen.push({ project_id: p!.id, naam: RUIMTE[soort] ?? "Ruimte", soort, test_kleuren: test, onderdelen: standaardOnderdelen(test), quiz_result_id: q.id, sort: rijen.length });
           }
           if (rijen.length) await sb.from("mh_ruimtes").insert(rijen);
-          ({ data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,created_at,updated_at")
+          ({ data: ps } = await sb.from("mh_projecten").select("id,naam,postcode,straat,huisnummer,plaats,created_at,updated_at")
             .eq("woo_user_id", uid).eq("site", site).is("archived_at", null).order("created_at"));
         }
       }
@@ -133,15 +133,16 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
     case "project_opslaan": {
       const naam = tekst(body.naam, 60) || "Mijn huis";
       const postcode = tekst(body.postcode, 10).toUpperCase() || null;
+      const adres = { straat: tekst(body.straat, 80) || null, huisnummer: tekst(body.huisnummer, 12) || null, plaats: tekst(body.plaats, 60) || null };
       if (body.id) {
         const pid = await eigenProject(body.id);
         if (!pid) return { status: 404, data: { error: "project" } };
-        await sb.from("mh_projecten").update({ naam, postcode, updated_at: new Date().toISOString() }).eq("id", pid);
+        await sb.from("mh_projecten").update({ naam, postcode, ...adres, updated_at: new Date().toISOString() }).eq("id", pid);
         return { status: 200, data: { id: pid } };
       }
       const { count } = await sb.from("mh_projecten").select("id", { count: "exact", head: true }).eq("woo_user_id", uid).eq("site", site).is("archived_at", null);
       if ((count ?? 0) >= 10) return { status: 400, data: { error: "maximaal 10 projecten" } };
-      const { data, error } = await sb.from("mh_projecten").insert({ woo_user_id: uid, site, email, naam, postcode }).select("id").single();
+      const { data, error } = await sb.from("mh_projecten").insert({ woo_user_id: uid, site, email, naam, postcode, ...adres }).select("id").single();
       if (error) return { status: 500, data: { error: "opslaan" } };
       return { status: 200, data: { id: data.id } };
     }
