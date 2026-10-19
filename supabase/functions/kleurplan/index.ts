@@ -9,7 +9,8 @@ import { klaviyoTrack } from "../_shared/klaviyo.ts";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SHOP = (Deno.env.get("WOO_URL") ?? "https://roll.nl").replace(/\/$/, "");
-const ORIGINS = [/^https:\/\/advies\.roll\.nl$/, /^http:\/\/localhost(:\d+)?$/];
+// advies.roll.nl, lokaal, en testversies van het quiz-project van het Roll-team op Vercel (achter Vercel-login).
+const ORIGINS = [/^https:\/\/advies\.roll\.nl$/, /^http:\/\/localhost(:\d+)?$/, /^https:\/\/quiz-git-[a-z0-9-]+-letsroll\.vercel\.app$/];
 
 const LABEL: Record<string, string> = {
   woonkamer: "woonkamer", slaapkamer: "slaapkamer", keuken: "keuken", eetkamer: "eetkamer", hal: "hal",
