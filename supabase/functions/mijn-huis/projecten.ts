@@ -161,8 +161,10 @@ export async function projectAction(sb: SupabaseClient, body: any): Promise<{ st
       const perSoort = new Map<string, any>();
       for (const q of (qs as any[]) ?? []) if (!perSoort.has(q.room_type ?? "anders")) perSoort.set(q.room_type ?? "anders", q);
 
+      const { count } = await sb.from("mh_projecten").select("id", { count: "exact", head: true })
+        .eq("woo_user_id", uid).eq("site", site).is("archived_at", null);
       const { data: p } = await sb.from("mh_projecten")
-        .insert({ woo_user_id: uid, site, email, naam: "Mijn huis", postcode: plan.postcode }).select("id").single();
+        .insert({ woo_user_id: uid, site, email, naam: (count ?? 0) > 0 ? "Mijn kleurplan" : "Mijn huis", postcode: plan.postcode }).select("id").single();
       const rijen = (plan.ruimtes as any[]).map((r, i) => {
         const q = perSoort.get(r.soort);
         const test = q ? [q.primary_color_id, ...(Array.isArray(q.secondary_colors) ? q.secondary_colors.map((c: any) => c?.id) : [])]
