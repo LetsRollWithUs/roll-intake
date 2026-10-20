@@ -45,6 +45,7 @@ function normOnderdeel(o: any): Record<string, unknown> | null {
   const naam = tekst(o.naam, 40); if (naam) uit.naam = naam;
   const eigen = tekst(o.eigen_kleur, 60); if (eigen) uit.eigen_kleur = eigen;
   const m2 = getal(o.m2); if (m2) uit.m2 = m2;
+  if ((k || uit.km) && typeof o.gekozen_op === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.gekozen_op)) uit.gekozen_op = o.gekozen_op;
   // Eerdere kleuren (paspoort): Roll-kleur of eigen kleur, met datum. Max 12.
   if (Array.isArray(o.historie)) {
     uit.historie = o.historie.slice(0, 12).map((h: any) => {
