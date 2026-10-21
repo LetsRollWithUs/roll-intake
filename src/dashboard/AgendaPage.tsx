@@ -506,7 +506,7 @@ export function AgendaPage() {
           })()}
 
           {/* Eigen agenda blokkeren (iCal) */}
-          {selectedId && <StylistProfile stylistId={selectedId} canEdit={!!canEdit} onFlash={flash} />}
+          {selectedId && <StylistProfile stylistId={selectedId} canEdit={!!canEdit} onFlash={flash} kicker={stylists.find((s) => s.id === selectedId)?.email?.toLowerCase() === myEmail?.toLowerCase() ? "Je profiel" : `Profiel van ${stylists.find((s) => s.id === selectedId)?.name ?? "deze medewerker"}`} />}
           {selectedId && <ThuisArea stylistId={selectedId} canEdit={!!canEdit} isAdmin={isAdmin} onFlash={flash} />}
 
           <div className="rd-card-white" style={{ marginTop: 12 }}>
