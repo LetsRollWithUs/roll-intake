@@ -76,13 +76,26 @@ Deno.serve(async (req) => {
       });
       if (error) return j({ error: error.message }, 409);
       const bookingId = hold.booking_id as string;
+      // Adres (sinds okt 2026 gevraagd): voor de factuur en om samples te sturen. Oude clients sturen het niet mee.
+      const a = body.address ?? {};
+      const address = {
+        straat: String(a.straat ?? "").trim().slice(0, 120), huisnummer: String(a.huisnummer ?? "").trim().slice(0, 20),
+        postcode: String(a.postcode ?? "").trim().toUpperCase().slice(0, 10), plaats: String(a.plaats ?? "").trim().slice(0, 80),
+        country: a.country === "BE" ? "BE" : "NL",
+      };
+      const heeftAdres = !!(address.straat && address.huisnummer && address.postcode && address.plaats);
+      if (heeftAdres) await admin.from("bookings").update({ address }).eq("id", bookingId);
+      const parts = String(name ?? "").trim().split(/\s+/);
 
       const orderRes = await fetch(`${WOO_URL}/wp-json/wc/v3/orders`, {
         method: "POST",
         headers: { Authorization: wooAuth, "content-type": "application/json" },
         body: JSON.stringify({
           status: "pending",
-          billing: { first_name: name, email, phone: phone || undefined },
+          billing: heeftAdres
+            ? { first_name: parts[0], last_name: parts.slice(1).join(" ") || undefined, email, phone: phone || undefined,
+                address_1: `${address.straat} ${address.huisnummer}`, postcode: address.postcode, city: address.plaats, country: address.country }
+            : { first_name: name, email, phone: phone || undefined },
           line_items: [{ product_id: PRODUCT_ID, ...(ONLINE_VARIATION_ID && PRODUCT_ID === 14753 ? { variation_id: ONLINE_VARIATION_ID } : {}), quantity: 1 }],
           coupon_lines: coupon ? [{ code: String(coupon) }] : undefined,
           meta_data: [

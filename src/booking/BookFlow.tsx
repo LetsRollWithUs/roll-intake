@@ -96,6 +96,10 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [straat, setStraat] = useState("");
+  const [huisnummer, setHuisnummer] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [plaats, setPlaats] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -135,13 +139,20 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
 
   const emailOk = /.+@.+\..+/.test(email.trim());
   const phoneOk = phone.replace(/\D/g, "").length >= 8;
+  // Adres voor de factuur en eventuele samples; land volgt uit de postcode (1234 AB = NL, 1000 = BE).
+  const pc = postcode.trim().toUpperCase();
+  const pcNL = /^\d{4}\s?[A-Z]{2}$/.test(pc);
+  const pcOk = pcNL || /^\d{4}$/.test(pc);
+  const adresOk = !!straat.trim() && !!huisnummer.trim() && !!plaats.trim() && pcOk;
 
   const confirm = async () => {
     setBusy(true);
     setErr(null);
     const turnstile_token = await getTurnstileToken("booking_checkout");
     const { data, error } = await supabase.functions.invoke("booking", {
-      body: { action: "checkout", service_key: service, start: slot, name, email, phone, coupon: coupon || undefined, turnstile_token, utm: utmParams() },
+      body: { action: "checkout", service_key: service, start: slot, name, email, phone,
+        address: { straat, huisnummer, postcode: pc, plaats, country: pcNL ? "NL" : "BE" },
+        coupon: coupon || undefined, turnstile_token, utm: utmParams() },
     });
     setBusy(false);
     if (error || !data?.pay_url) {
@@ -154,7 +165,7 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
       } catch {
         /* geen json-body */
       }
-      if (serverMsg && /geduld|e-mailadres|boekbaar|controleren/i.test(serverMsg)) {
+      if (serverMsg && /geduld|e-mailadres|boekbaar|controleren|adres/i.test(serverMsg)) {
         setErr(serverMsg);
         return;
       }
@@ -186,7 +197,7 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
     summary = ctaOk ? `${dayFull(slot)} · ${timeLabel(slot)}` : "";
     onCta = () => ctaOk && setStep(3);
   } else {
-    ctaOk = name.trim() !== "" && emailOk && phoneOk && !busy;
+    ctaOk = name.trim() !== "" && emailOk && phoneOk && adresOk && !busy;
     ctaLabel = busy ? "Bezig..." : "Naar betalen (€30)";
     summary = `${dayFull(slot)} · ${timeLabel(slot)}`;
     onCta = confirm;
@@ -280,8 +291,23 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
                 style={{ width: "100%", padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none", marginBottom: 10 }} />
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Je telefoonnummer" type="tel" autoComplete="tel"
                 style={{ width: "100%", padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none" }} />
-              <p style={{ fontSize: 12, color: "rgba(47,33,65,.5)", margin: "8px 2px 0" }}>
+              <p style={{ fontSize: 12, color: "rgba(47,33,65,.5)", margin: "8px 2px 16px" }}>
                 Zo kunnen we je bereiken als er iets is rond je videogesprek.
+              </p>
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                <input value={straat} onChange={(e) => setStraat(e.target.value)} placeholder="Straat" autoComplete="address-line1"
+                  style={{ flex: 2, minWidth: 0, padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none" }} />
+                <input value={huisnummer} onChange={(e) => setHuisnummer(e.target.value)} placeholder="Nr."
+                  style={{ flex: 1, minWidth: 0, padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none" }} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="1234 AB" aria-label="Postcode" autoComplete="postal-code"
+                  style={{ flex: 1, minWidth: 0, padding: "15px 16px", borderRadius: 14, border: `1.5px solid ${postcode && !pcOk ? PINK : "rgba(47,33,65,.18)"}`, background: "#fff", font: "400 15px Figtree", outline: "none" }} />
+                <input value={plaats} onChange={(e) => setPlaats(e.target.value)} placeholder="Plaats" autoComplete="address-level2"
+                  style={{ flex: 2, minWidth: 0, padding: "15px 16px", borderRadius: 14, border: "1.5px solid rgba(47,33,65,.18)", background: "#fff", font: "400 15px Figtree", outline: "none" }} />
+              </div>
+              <p style={{ fontSize: 12, color: "rgba(47,33,65,.5)", margin: "8px 2px 0" }}>
+                Voor je factuur, en zodat we samples naar je huis kunnen sturen.
               </p>
             </div>
           )}
