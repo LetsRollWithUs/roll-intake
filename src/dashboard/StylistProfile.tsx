@@ -3,8 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { compressImage } from "@/lib/imageCompress";
 
 // Profiel van een styliste: foto en korte introductie. Foto's staan in de openbare bucket stylist-photos.
-const SB_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const photoUrl = (path: string | null) => (path ? `${SB_URL}/storage/v1/object/public/stylist-photos/${path}` : null);
+// Via de client (die heeft een fallback-URL); VITE_SUPABASE_URL staat niet in elke build.
+const photoUrl = (path: string | null) => (path ? supabase.storage.from("stylist-photos").getPublicUrl(path).data.publicUrl : null);
 
 // `kicker` noemt van wie het profiel is (beheer bekijkt ook andere medewerkers); `plain` = zonder eigen kaart (binnen de Team-kaart).
 export function StylistProfile({ stylistId, canEdit, onFlash, kicker = "Je profiel", plain = false }: { stylistId: string; canEdit: boolean; onFlash: (t: string) => void; kicker?: string; plain?: boolean }) {
