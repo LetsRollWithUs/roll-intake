@@ -16,8 +16,31 @@ interface BookingInfo {
   reschedule_count: number;
   customer_name: string;
   stylist_name: string | null;
+  stylist_photo_path?: string | null;
+  stylist_bio?: string | null;
   can_self_reschedule: boolean;
   can_self_plan: boolean;
+}
+
+// Je styliste: live gelezen bij het openen, dus klopt ook als de afspraak intern is overgedragen.
+function StylisteKaart({ info }: { info: BookingInfo }) {
+  if (!info.stylist_name) return null;
+  const foto = info.stylist_photo_path ? supabase.storage.from("stylist-photos").getPublicUrl(info.stylist_photo_path).data.publicUrl : null;
+  const voornaam = info.stylist_name.trim().split(/\s+/)[0];
+  return (
+    <div style={{ background: "#fff", borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+      <div style={{ fontWeight: 600, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: PINK, marginBottom: 10 }}>Je styliste</div>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 99, background: "#DAD4E3", flex: "none", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", font: "700 18px Figtree", color: AUB }}>
+          {foto ? <img src={foto} alt={`Foto van ${voornaam}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : voornaam.slice(0, 1).toUpperCase()}
+        </div>
+        <div style={{ font: "700 16px Figtree" }}>{info.stylist_name}</div>
+      </div>
+      {info.stylist_bio && (
+        <p style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(47,33,65,.75)", margin: "12px 0 0", whiteSpace: "pre-line" }}>{info.stylist_bio}</p>
+      )}
+    </div>
+  );
 }
 
 export function ManageBooking() {
@@ -151,6 +174,7 @@ export function ManageBooking() {
         <p style={{ fontSize: 15, color: "rgba(47,33,65,.7)", marginTop: 0 }}>
           {info.stylist_name ? `${info.stylist_name} nodigt je uit voor een online kleuradvies.` : "Je bent uitgenodigd voor een online kleuradvies."} Kies een moment dat jou uitkomt. Het gesprek duurt 30 minuten en is via video.
         </p>
+        <StylisteKaart info={info} />
         {slotsLoading ? (
           <p style={{ fontSize: 14, color: "rgba(47,33,65,.6)" }}>Beschikbaarheid laden...</p>
         ) : availDays.size === 0 ? (
@@ -191,6 +215,8 @@ export function ManageBooking() {
           </div>
         )}
       </div>
+
+      {info.status !== "cancelled" && <StylisteKaart info={info} />}
 
       {!done && !planned && !picking && (
         <>
