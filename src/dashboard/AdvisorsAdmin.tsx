@@ -1,4 +1,5 @@
 import { AfsprakenDocs } from "./AfsprakenDocs";
+import { StylistProfile } from "./StylistProfile";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -201,6 +202,8 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
               <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>{label("Videolink")}<input className="rd-input" value={meet} onChange={(e) => setMeet(e.target.value)} placeholder="https://meet.google.com/..." style={{ height: 38 }} /></label>
               <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, paddingTop: 20 }}><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Actief (kan geboekt worden)</label>
             </div>
+
+            <StylistProfile stylistId={m.stylist_id} canEdit onFlash={onFlash} plain kicker="Foto en introductie" />
 
             <div style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               <div className="rd-kicker rd-kicker-pink">Samenwerkingsafspraken</div>

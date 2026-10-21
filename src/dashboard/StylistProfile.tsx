@@ -6,7 +6,8 @@ import { compressImage } from "@/lib/imageCompress";
 const SB_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const photoUrl = (path: string | null) => (path ? `${SB_URL}/storage/v1/object/public/stylist-photos/${path}` : null);
 
-export function StylistProfile({ stylistId, canEdit, onFlash }: { stylistId: string; canEdit: boolean; onFlash: (t: string) => void }) {
+// `kicker` noemt van wie het profiel is (beheer bekijkt ook andere medewerkers); `plain` = zonder eigen kaart (binnen de Team-kaart).
+export function StylistProfile({ stylistId, canEdit, onFlash, kicker = "Je profiel", plain = false }: { stylistId: string; canEdit: boolean; onFlash: (t: string) => void; kicker?: string; plain?: boolean }) {
   const [bio, setBio] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,8 +45,8 @@ export function StylistProfile({ stylistId, canEdit, onFlash }: { stylistId: str
 
   const url = photoUrl(photo);
   return (
-    <div className="rd-card-white" style={{ marginTop: 12 }}>
-      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>Je profiel</div>
+    <div className={plain ? undefined : "rd-card-white"} style={plain ? { borderTop: "1px solid var(--rd-line)", paddingTop: 12 } : { marginTop: 12 }}>
+      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 10 }}>{kicker}</div>
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
           <div style={{ width: 96, height: 96, borderRadius: 99, background: "var(--rd-grey-light)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, opacity: url ? 1 : 0.6 }}>
@@ -59,13 +60,13 @@ export function StylistProfile({ stylistId, canEdit, onFlash }: { stylistId: str
           )}
         </div>
         <div style={{ flex: "1 1 280px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <label className="kk-label" htmlFor="bio" style={{ fontSize: 13, fontWeight: 700 }}>Introductie</label>
-          <textarea id="bio" className="rd-input" rows={4} maxLength={1200} value={bio} disabled={!canEdit} onChange={(e) => setBio(e.target.value)}
+          <label className="kk-label" htmlFor={`bio-${stylistId}`} style={{ fontSize: 13, fontWeight: 700 }}>Introductie</label>
+          <textarea id={`bio-${stylistId}`} className="rd-input" rows={4} maxLength={1200} value={bio} disabled={!canEdit} onChange={(e) => setBio(e.target.value)}
             placeholder="Vertel kort wie je bent, waar je ervaring ligt en waar je blij van wordt in een interieur."
             style={{ minHeight: 110, paddingTop: 10, lineHeight: 1.5 }} />
           {canEdit && (
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button className="rd-btn rd-btn-primary" onClick={async () => { if (await save()) onFlash("Profiel opgeslagen."); }} disabled={busy} style={{ width: "auto", padding: "0 20px", minHeight: 44 }}>{busy ? "Opslaan..." : "Opslaan"}</button>
+              <button className="rd-btn rd-btn-primary" onClick={async () => { if (await save()) onFlash("Profiel opgeslagen."); }} disabled={busy} style={{ width: "auto", padding: "0 20px", minHeight: 44 }}>{busy ? "Opslaan..." : plain ? "Introductie opslaan" : "Opslaan"}</button>
               <span style={{ fontSize: 12, opacity: 0.6 }}>{bio.length}/1200</span>
             </div>
           )}
