@@ -68,7 +68,7 @@ export async function buildBookingContext(
   const { data: b } = await admin
     .from("bookings")
     .select(
-      "id,start_at,end_at,customer_name,customer_email,customer_phone,manage_token,intake_id,format,address,preferences, services(key), stylists(name,meet_url)",
+      "id,start_at,end_at,customer_name,customer_email,customer_phone,manage_token,intake_id,format,address,preferences, services(key), stylists(name,meet_url,photo_path,bio)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -95,6 +95,10 @@ export async function buildBookingContext(
     start_at_local: fmtLocal(row.start_at),
     stylist_name: row.stylists?.name ?? null,
     meet_url: row.stylists?.meet_url ?? null,
+    // Styliste voorstellen (24u-reminder, uit de profielprops): voornaam, foto en introductie, leeg als niet ingevuld.
+    stylist_voornaam: row.stylists?.name ? String(row.stylists.name).trim().split(/\s+/)[0] : null,
+    stylist_foto_url: row.stylists?.photo_path ? `${SB_URL || "https://lsboujprrvhntgbvlvyu.supabase.co"}/storage/v1/object/public/stylist-photos/${row.stylists.photo_path}` : null,
+    stylist_intro: row.stylists?.bio ?? null,
     intake_url: intakeUrl,
     manage_url: manageUrl,
     intake_ingevuld: !!row.intake_id,
@@ -166,6 +170,9 @@ export function appointmentProfileProps(
     next_appointment_at: p.start_at,
     next_appointment_local: p.start_at_local,
     stylist_name: p.stylist_name,
+    stylist_voornaam: p.stylist_voornaam,
+    stylist_foto_url: p.stylist_foto_url,
+    stylist_intro: p.stylist_intro,
     meet_url: p.meet_url,
     intake_url: p.intake_url,
     manage_url: p.manage_url,
