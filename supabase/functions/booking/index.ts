@@ -48,6 +48,22 @@ function utmMeta(u: any): { key: string; value: string }[] {
   if (out.length) out.push({ key: "_wc_order_attribution_source_type", value: "utm" });
   return out;
 }
+// Plan van roll.nl/kleurplan: token bij de boeking, de intake haalt het plan op en vult ruimtes, maten en kleuren voor.
+const kleurplanToken = (v: unknown) => (typeof v === "string" && /^\d+-[a-f0-9]{24}$/.test(v) ? v : null);
+async function kleurplanVan(token: string | null): Promise<unknown> {
+  if (!token) return null;
+  try {
+    const r = await fetch(`${WOO_URL}/wp-admin/admin-ajax.php`, {
+      method: "POST",
+      body: new URLSearchParams({ action: "roll_vc_kleurplan", wat: "laad", token }),
+      signal: AbortSignal.timeout(6000),
+    });
+    const d = await r.json();
+    if (!d?.success) return null;
+    // Alleen wat de intake nodig heeft (niet de hele staat van de route).
+    return { token, ruimtes: d.data?.ruimtes ?? [], overweegt: d.data?.overweegt ?? [] };
+  } catch { return null; }
+}
 // Thuisadvies: eigen product (of variatie van het kleuradviesproduct). Zonder deze secrets staat thuis uit.
 const THUIS_PRODUCT_ID = Number(Deno.env.get("THUIS_PRODUCT_ID") ?? 0);
 const THUIS_VARIATION_ID = Number(Deno.env.get("THUIS_VARIATION_ID") ?? 0);
@@ -84,7 +100,8 @@ Deno.serve(async (req) => {
         country: a.country === "BE" ? "BE" : "NL",
       };
       const heeftAdres = !!(address.straat && address.huisnummer && address.postcode && address.plaats);
-      if (heeftAdres) await admin.from("bookings").update({ address }).eq("id", bookingId);
+      const kp = kleurplanToken(body.kleurplan);
+      if (heeftAdres || kp) await admin.from("bookings").update({ ...(heeftAdres ? { address } : {}), ...(kp ? { kleurplan_token: kp } : {}) }).eq("id", bookingId);
       const parts = String(name ?? "").trim().split(/\s+/);
 
       const orderRes = await fetch(`${WOO_URL}/wp-json/wc/v3/orders`, {
@@ -171,7 +188,7 @@ Deno.serve(async (req) => {
       if (check === "buiten" || check === "ongeldig") return j({ error: "Thuisadvies kan op dit adres helaas nog niet. Online kleuradvies kan wel." }, 409);
       const { data: ins, error: insErr } = await admin.from("bookings").insert({
         service_id: (svc as any).id, status: "pending_payment", format: "thuis", start_at: new Date().toISOString(), end_at: new Date().toISOString(),
-        customer_name: name, customer_email: email, customer_phone: phone, address, preferences,
+        customer_name: name, customer_email: email, customer_phone: phone, address, preferences, kleurplan_token: kleurplanToken(body.kleurplan),
         hold_expires_at: new Date(Date.now() + 2 * 3600e3).toISOString(), kanban_stage: "ingepland",
       }).select("id").single();
       if (insErr || !ins) return j({ error: "Kon de aanvraag niet opslaan." }, 500);
@@ -265,15 +282,18 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const { data: b } = await admin
         .from("bookings")
-        .select("id,status,format,woo_order_id,start_at,customer_email, services(key)")
+        .select("id,status,format,woo_order_id,start_at,customer_email,kleurplan_token, services(key)")
         .eq("id", body.booking_id)
         .maybeSingle();
       if (!b) return j({ error: "Niet gevonden" }, 404);
       const mode = (b as any).services?.key ?? null;
       const email = (b as any).customer_email ?? null;
-      if ((b as any).format === "thuis" && ["requested", "confirmed"].includes(b.status as string)) return j({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
-      if (b.status === "confirmed") return j({ status: "confirmed", start_at: b.start_at, mode, customer_email: email });
-      if (b.status === "paid_unplaced") return j({ status: "paid_unplaced", start_at: b.start_at, mode, customer_email: email });
+      // Plan van roll.nl/kleurplan meegeven (alleen voor de intake), zodat ruimtes, maten en kleuren al zijn ingevuld.
+      const kleurplan = body.met_kleurplan ? await kleurplanVan((b as any).kleurplan_token ?? null) : null;
+      const jk = (o: Record<string, unknown>) => j(kleurplan ? { ...o, kleurplan } : o);
+      if ((b as any).format === "thuis" && ["requested", "confirmed"].includes(b.status as string)) return jk({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
+      if (b.status === "confirmed") return jk({ status: "confirmed", start_at: b.start_at, mode, customer_email: email });
+      if (b.status === "paid_unplaced") return jk({ status: "paid_unplaced", start_at: b.start_at, mode, customer_email: email });
       if (b.woo_order_id) {
         const r = await fetch(`${WOO_URL}/wp-json/wc/v3/orders/${b.woo_order_id}`, {
           headers: { Authorization: wooAuth },
@@ -282,11 +302,11 @@ Deno.serve(async (req) => {
         if (r.ok && ["processing", "completed", "on-hold"].includes(o.status)) {
           await confirmPaid(admin, b.id as string);
           const { data: after } = await admin.from("bookings").select("status,start_at,format").eq("id", b.id).maybeSingle();
-          if ((after as any)?.format === "thuis") return j({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
-          return j({ status: (after as any)?.status ?? b.status, start_at: (after as any)?.start_at ?? b.start_at, mode });
+          if ((after as any)?.format === "thuis") return jk({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
+          return jk({ status: (after as any)?.status ?? b.status, start_at: (after as any)?.start_at ?? b.start_at, mode });
         }
       }
-      return j({ status: b.status, start_at: b.start_at, mode });
+      return jk({ status: b.status, start_at: b.start_at, mode });
     }
 
     // E-mailcheck (anon): heeft dit adres al een afspraak of een gekocht advies-tegoed?

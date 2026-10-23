@@ -46,3 +46,9 @@ export function utmParams(): Record<string, string> | undefined {
   for (const k of UTM_KEYS) { const v = p.get(k); if (v) out[k] = v.slice(0, 120); }
   return Object.keys(out).length ? out : undefined;
 }
+
+/** Plan van roll.nl/kleurplan (?kleurplan=<token>): gaat mee met de boeking, zodat de intake al is ingevuld. */
+export function kleurplanToken(): string | undefined {
+  const t = params().get("kleurplan") ?? "";
+  return /^\d+-[a-f0-9]{24}$/.test(t) ? t : undefined;
+}

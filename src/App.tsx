@@ -18,6 +18,7 @@ import { useIntake, loadScreen, saveScreen, clearIntakeSession } from "@/lib/sto
 import { submitIntake, saveConceptLead } from "@/lib/submit";
 import { preloadTurnstile } from "@/lib/turnstile";
 import { lockDocument } from "@/lib/lock-document";
+import { kleurplanNaarIntake, type Kleurplan } from "@/lib/kleurplan";
 import type { Room } from "@/lib/types";
 
 type StepScreen =
@@ -121,6 +122,8 @@ export function App() {
   >(null);
   const resumed = useRef(false);
   const prefilled = useRef(false);
+  // Geboekt vanuit roll.nl/kleurplan: ruimtes, maten en kleuren zijn al ingevuld.
+  const [vanKleurplan, setVanKleurplan] = useState(false);
   const lastChecked = useRef<string>("");
 
   useEffect(() => lockDocument(), []);
@@ -143,11 +146,17 @@ export function App() {
   useEffect(() => {
     if (!bookingId || prefilled.current) return;
     prefilled.current = true;
-    supabase.functions.invoke("booking", { body: { action: "status", booking_id: bookingId } }).then(({ data }) => {
-      const d = data as { start_at?: string; customer_email?: string } | null;
+    supabase.functions.invoke("booking", { body: { action: "status", booking_id: bookingId, met_kleurplan: true } }).then(({ data }) => {
+      const d = data as { start_at?: string; customer_email?: string; kleurplan?: Kleurplan } | null;
       if (!d) return;
       if (d.start_at) setApptStart(d.start_at);
       if (d.customer_email && !state.contactEmail.trim()) update({ contactEmail: d.customer_email });
+      // Alleen een lege intake voorinvullen; wat de klant zelf al invulde blijft staan.
+      if (d.kleurplan?.ruimtes?.length && state.rooms.length === 0) {
+        const { rooms, colors } = kleurplanNaarIntake(d.kleurplan);
+        update((prev) => (prev.rooms.length ? {} : { rooms, colors: prev.colors.length ? prev.colors : colors }));
+        setVanKleurplan(true);
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
@@ -249,6 +258,7 @@ export function App() {
       >
         <div className="rd-card-white" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {[
+            ...(vanKleurplan ? ["Je ruimtes, maten en kleuren uit je kleurplan staan er al in"] : []),
             "Ongeveer 5 minuten",
             "Foto's, kleuren en inspiratie bij de hand? Dan gaat het nog sneller",
             "Je antwoorden worden tussendoor bewaard",
@@ -384,6 +394,8 @@ export function App() {
   const idx = FLOW.indexOf(screen as StepScreen);
   const meta = screen === "photos" && state.nogNietInWoning
     ? { ...META.photos, title: "Heb je al beelden van de woning?", sub: "Je woont er nog niet, dus dit is helemaal optioneel. Foto's en licht kijken we samen na." }
+    : screen === "rooms" && vanKleurplan
+    ? { ...META.rooms, sub: "Deze ruimtes komen uit je kleurplan. Klopt het nog? Pas gerust aan." }
     : META[screen as StepScreen];
 
   // Validatie (soepel: kern verplicht, rest aanrader)

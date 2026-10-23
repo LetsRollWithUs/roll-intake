@@ -9,7 +9,7 @@ import {
   dateKey, dayFull, timeLabel, isoDate,
 } from "./slots";
 import { ThuisFlow } from "./ThuisFlow";
-import { isEmbed, postToParent, goToPayment, utmParams } from "./embed";
+import { isEmbed, postToParent, goToPayment, utmParams, kleurplanToken } from "./embed";
 
 function normalizeType(t: string | null): string {
   if (!t) return "";
@@ -152,7 +152,7 @@ function OnlineFlow({ onBack }: { onBack?: () => void }) {
     const { data, error } = await supabase.functions.invoke("booking", {
       body: { action: "checkout", service_key: service, start: slot, name, email, phone,
         address: { straat, huisnummer, postcode: pc, plaats, country: pcNL ? "NL" : "BE" },
-        coupon: coupon || undefined, turnstile_token, utm: utmParams() },
+        coupon: coupon || undefined, turnstile_token, utm: utmParams(), kleurplan: kleurplanToken() },
     });
     setBusy(false);
     if (error || !data?.pay_url) {

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getTurnstileToken, preloadTurnstile } from "@/lib/turnstile";
 import { AUB, AUB_DIM, PINK, CREME } from "./slots";
-import { postToParent, goToPayment, utmParams } from "./embed";
+import { postToParent, goToPayment, utmParams, kleurplanToken } from "./embed";
 
 // Thuisadvies aanvragen: postcodecheck, algemene voorkeursmomenten, adres en gegevens, dan betalen.
 // Na betaling neemt een styliste contact op en spreken jullie samen het moment af.
@@ -74,7 +74,7 @@ export function ThuisFlow({ price, onOnline, onBack }: { price: number; onOnline
       body: {
         action: "checkout_thuis", turnstile_token, name, email, phone,
         address: { straat, huisnummer, postcode: postcode.trim().toUpperCase(), plaats, country },
-        preferences: { wanneer, momenten, toelichting }, utm: utmParams(),
+        preferences: { wanneer, momenten, toelichting }, utm: utmParams(), kleurplan: kleurplanToken(),
       },
     });
     if (error || !data?.pay_url) {
