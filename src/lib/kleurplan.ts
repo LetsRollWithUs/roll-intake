@@ -21,6 +21,8 @@ export interface KpRuimte {
   kleur: KpKleur | null;
   plafondKleur?: KpKleur | null;
   houtKleur?: KpKleur | null;
+  /** Sinds okt 2026: vlakken met eigen kleur (muren, accent, plafond, deuren, kozijnen, plinten, radiatoren). */
+  vlakken?: { id: string; soort: string; m2: number; aantal: number | null; kleur: KpKleur | null; glans?: string | null }[];
 }
 export interface Kleurplan { token: string; ruimtes: KpRuimte[]; overweegt: KpKleur[] }
 
@@ -28,6 +30,17 @@ const TYPES = new Set(ROOM_TYPES.map((t) => t.key));
 const GROOTTE: Record<string, KamerGrootte> = { klein: "klein", middel: "gemiddeld", groot: "groot" };
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const byName = new Map(rollColors.map((c) => [c.name.toLowerCase(), c]));
+
+function surfacesUitVlakken(v: NonNullable<KpRuimte["vlakken"]>): SurfaceKey[] {
+  const s = new Set(v.map((x) => x.soort));
+  const out: SurfaceKey[] = [];
+  if (s.has("muren") || s.has("accent")) out.push("muren");
+  if (s.has("plafond")) out.push("plafond");
+  if (s.has("deuren")) out.push("deuren");
+  if (s.has("kozijnen")) out.push("kozijnen");
+  if (s.has("plinten") || s.has("radiatoren")) out.push("houtwerk");
+  return out;
+}
 
 function surfaces(ond: string[]): SurfaceKey[] {
   const out: SurfaceKey[] = [];
@@ -60,6 +73,21 @@ function measure(r: KpRuimte, s: SurfaceKey[]): RoomMeasure {
   if (!r.vloer && g && KAMER_VLOER[g] === vloer) m.geschat = g;
   if (r.plafondKleur?.naam) m.ceiling_color = r.plafondKleur.naam;
   if (r.houtKleur?.naam) m.wood_color = r.houtKleur.naam;
+  // Vlakken: muren en elke accentmuur als eigen wandvlak met kleur; lakwerk per soort.
+  if (r.vlakken?.length) {
+    const v = r.vlakken;
+    const van = (soort: string) => v.find((x) => x.soort === soort);
+    m.walls = v.filter((x) => (x.soort === "muren" || x.soort === "accent") && x.m2 > 0)
+      .map((x) => ({ w: r1(x.m2 / STANDAARD_HOOGTE), h: STANDAARD_HOOGTE, color: x.kleur?.naam || undefined }));
+    m.woodwork.doors = van("deuren")?.aantal ?? 0;
+    m.woodwork.windows = Array.from({ length: van("kozijnen")?.aantal ?? 0 }, () => ({ w: 1.2, h: 1.4 }));
+    m.woodwork.plinths_m = van("plinten") ? r1(omtrek) : 0;
+    m.woodwork.radiators = Array.from({ length: van("radiatoren")?.aantal ?? 0 }, () => ({ w: 1, h: 0.6 }));
+    const plafond = van("plafond")?.kleur?.naam;
+    if (plafond) m.ceiling_color = plafond;
+    const lak = ["deuren", "kozijnen", "plinten", "radiatoren"].map(van).find((x) => x?.kleur?.naam);
+    if (lak?.kleur?.naam) m.wood_color = lak.kleur.naam;
+  }
   return m;
 }
 
@@ -70,7 +98,7 @@ function pick(k: KpKleur): ColorPick {
 
 export function kleurplanNaarIntake(kp: Kleurplan): { rooms: Room[]; colors: ColorPick[] } {
   const rooms: Room[] = (kp.ruimtes ?? []).map((r) => {
-    const s = surfaces(r.onderdelen ?? []);
+    const s = r.vlakken?.length ? surfacesUitVlakken(r.vlakken) : surfaces(r.onderdelen ?? []);
     return {
       id: uid(),
       typeKey: TYPES.has(r.type) ? r.type : "anders",
@@ -82,7 +110,8 @@ export function kleurplanNaarIntake(kp: Kleurplan): { rooms: Room[]; colors: Col
   });
   const seen = new Set<string>();
   const colors: ColorPick[] = [];
-  for (const k of [...(kp.ruimtes ?? []).map((r) => r.kleur), ...(kp.overweegt ?? [])]) {
+  const vlakKleuren = (kp.ruimtes ?? []).flatMap((r) => (r.vlakken ?? []).filter((x) => x.soort === "accent").map((x) => x.kleur));
+  for (const k of [...(kp.ruimtes ?? []).map((r) => r.kleur), ...vlakKleuren, ...(kp.overweegt ?? [])]) {
     if (!k?.naam || seen.has(k.naam.toLowerCase())) continue;
     seen.add(k.naam.toLowerCase());
     colors.push(pick(k));
