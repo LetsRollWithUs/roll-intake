@@ -38,7 +38,7 @@ function surfacesUitVlakken(v: NonNullable<KpRuimte["vlakken"]>): SurfaceKey[] {
   if (s.has("plafond")) out.push("plafond");
   if (s.has("deuren")) out.push("deuren");
   if (s.has("kozijnen")) out.push("kozijnen");
-  if (s.has("plinten") || s.has("radiatoren")) out.push("houtwerk");
+  if (["plinten", "radiatoren", "lambrisering", "kasten", "trap"].some((x) => s.has(x))) out.push("houtwerk");
   return out;
 }
 
@@ -83,9 +83,12 @@ function measure(r: KpRuimte, s: SurfaceKey[]): RoomMeasure {
     m.woodwork.windows = Array.from({ length: van("kozijnen")?.aantal ?? 0 }, () => ({ w: 1.2, h: 1.4 }));
     m.woodwork.plinths_m = van("plinten") ? r1(omtrek) : 0;
     m.woodwork.radiators = Array.from({ length: van("radiatoren")?.aantal ?? 0 }, () => ({ w: 1, h: 0.6 }));
+    // Kast 1 × 2 m (voorkant en zijkanten), trap volgens de standaard van de intake.
+    m.woodwork.cabinets = Array.from({ length: van("kasten")?.aantal ?? 0 }, () => ({ w: 1, h: 2 }));
+    if (van("trap")) m.woodwork.stairs = van("trap")?.aantal ?? 1;
     const plafond = van("plafond")?.kleur?.naam;
     if (plafond) m.ceiling_color = plafond;
-    const lak = ["deuren", "kozijnen", "plinten", "radiatoren"].map(van).find((x) => x?.kleur?.naam);
+    const lak = ["deuren", "kozijnen", "plinten", "lambrisering", "kasten", "radiatoren", "trap"].map(van).find((x) => x?.kleur?.naam);
     if (lak?.kleur?.naam) m.wood_color = lak.kleur.naam;
   }
   return m;
