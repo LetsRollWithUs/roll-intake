@@ -9,6 +9,11 @@
 // POST { sessie, aanvraagId, formulier: { soort, ruimte?, waarden } } -> zelfde als een beurt; meestal zonder model
 // POST { sessie, overdracht: 'whatsapp'|'mail' } -> { code, tekst }
 // GET  ?sessie=...                              -> de laatste stand (terugkomen)
+// GET  ?sessie=...&kort=1                       -> { bestaat, ruimtes } (voor de mail op roll.nl)
+// GET  ?deel=<code>                             -> alleen-lezen: plan en pakket, zonder gesprek
+// POST { sessie, bewaard: { email? } }          -> plan is bewaard (mail of gekopieerde link)
+// POST { sessie, deel: true }                   -> { code } voor de deellink
+// POST { sessie: <nieuw>, kopie: <deelcode> }   -> een eigen kopie van een gedeeld plan
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { RUIMTE_NAMEN, VLOER, isLak, nieuwProject, naarRekenkern, projectStatus, telt, toepassen, w } from "../_shared/projectmodel/index.js";
@@ -648,6 +653,14 @@ function geldigAntwoord(inp: any) {
   };
 }
 
+/** Of het plan bewaard is, met het e-mailadres half verborgen (voor de projectkaart). */
+function bewaardInfo(rij: any) {
+  if (!rij?.bewaard_op) return null;
+  const e = String(rij.email ?? "");
+  const [n, d] = e.split("@");
+  return { op: rij.bewaard_op, email: d ? `${n.slice(0, 2)}***@${d}` : null };
+}
+
 /* ---------- de beurt ---------- */
 
 async function laad(sessie: string) {
@@ -880,8 +893,21 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     if (req.method === "GET") {
-      const sessie = new URL(req.url).searchParams.get("sessie") ?? "";
+      const q = new URL(req.url).searchParams;
+      const deel = q.get("deel") ?? "";
+      if (deel) {
+        // Een gedeeld plan: alleen kijken. Geen gesprek, geen e-mail, geen sessie.
+        const { data: gd } = /^[A-Z0-9]{12}$/.test(deel) ? await db.from("projecthulp_chat").select("project").eq("deel_code", deel).maybeSingle() : { data: null };
+        if (!gd) return j({ fout: "Dit gedeelde plan bestaat niet (meer)." }, 404);
+        const st = projectStatus(gd.project);
+        const { plan: pl } = naarRekenkern(gd.project);
+        let pk = null;
+        try { pk = await bereken(rekenPlan(pl, gd.project)); } catch { pk = { fout: "Pakket kon niet worden berekend." }; }
+        return j({ project: gd.project, status: st, pakket: pk, versie: gd.project.versie, route: route(gd.project), gedeeld: true });
+      }
+      const sessie = q.get("sessie") ?? "";
       const rij = sessie.length >= 24 ? await laad(sessie) : null;
+      if (q.get("kort")) return j(rij ? { bestaat: true, ruimtes: rij.project.ruimtes.map((r: any) => r.naam) } : { bestaat: false });
       if (!rij) return j({ leeg: true });
       const status = projectStatus(rij.project);
       if (new URL(req.url).searchParams.get("pakket")) {
@@ -893,11 +919,41 @@ Deno.serve(async (req) => {
       const { plan } = naarRekenkern(rij.project);
       let pakket = null;
       try { pakket = await bereken(rekenPlan(plan, rij.project)); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
-      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), bijRoll: "bij-roll" === rij.status });
+      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), bijRoll: "bij-roll" === rij.status, bewaard: bewaardInfo(rij) });
     }
     const body = await req.json();
     const sessie = String(body.sessie ?? "");
     if (!/^[a-z0-9]{24,64}$/i.test(sessie)) return j({ fout: "Ongeldige sessie." }, 400);
+    if (body.bewaard && "object" === typeof body.bewaard) {
+      const rij = await laad(sessie);
+      if (!rij) return j({ fout: "Geen plan gevonden." }, 404);
+      const email = "string" === typeof body.bewaard.email && /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,}$/i.test(body.bewaard.email) ? body.bewaard.email.toLowerCase() : null;
+      const nu = new Date().toISOString();
+      await db.from("projecthulp_chat").update({ bewaard_op: nu, ...(email ? { email } : {}), updated_at: nu }).eq("sessie", sessie);
+      return j({ bewaard: bewaardInfo({ ...rij, bewaard_op: nu, email: email ?? rij.email }) });
+    }
+    if (body.deel) {
+      const rij = await laad(sessie);
+      if (!rij) return j({ fout: "Geen plan gevonden." }, 404);
+      let code = rij.deel_code;
+      for (let i = 0; !code && i < 3; i++) {
+        const c = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((x) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[x % 32]).join("");
+        const { error } = await db.from("projecthulp_chat").update({ deel_code: c }).eq("sessie", sessie);
+        if (!error) code = c;
+      }
+      return code ? j({ code }) : j({ fout: "Delen lukte niet. Probeer het nog eens." }, 500);
+    }
+    if (body.kopie) {
+      const code = String(body.kopie);
+      const { data: gd } = /^[A-Z0-9]{12}$/.test(code) ? await db.from("projecthulp_chat").select("project").eq("deel_code", code).maybeSingle() : { data: null };
+      if (!gd) return j({ fout: "Dit gedeelde plan bestaat niet (meer)." }, 404);
+      if (await laad(sessie)) return j({ fout: "Deze sessie bestaat al." }, 409);
+      const project = { ...gd.project, id: sessie.slice(0, 12), log: [] };
+      const welkom = { tekst: "Je begint met een kopie van een gedeeld plan. Pas gerust aan wat bij jou anders is: vertel het hier of tik op de onderdelen.", chips: [], kaarten: [], actie: "geen", aannames: [] };
+      const nu = new Date().toISOString();
+      await db.from("projecthulp_chat").insert({ sessie, project, gesprek: [{ rol: "roll", tekst: welkom.tekst, aanvraagId: "kopie", op: nu, uit: { antwoord: welkom } }], status: "actief", bron: "kopie", updated_at: nu });
+      return j({ ok: true });
+    }
     if (body.overdracht) {
       const rij = await laad(sessie);
       if (!rij) return j({ fout: "Geen gesprek gevonden." }, 404);
