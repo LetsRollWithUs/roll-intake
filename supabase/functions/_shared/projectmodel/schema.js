@@ -14,6 +14,9 @@ export const DOOR = [ 'klant-chat', 'klant-kaart', 'klant-stappen', 'medewerker'
 
 export const RUIMTE_TYPES = [ 'woonkamer', 'slaapkamer', 'keuken', 'eetkamer', 'badkamer', 'toilet', 'hal', 'werkkamer', 'kinderkamer', 'anders' ];
 
+/** Hoe een ruimte heet als de klant geen eigen naam geeft. */
+export const RUIMTE_NAMEN = { woonkamer: 'Woonkamer', slaapkamer: 'Slaapkamer', keuken: 'Keuken', eetkamer: 'Eetkamer', badkamer: 'Badkamer', toilet: 'Toilet', hal: 'Hal en overloop', werkkamer: 'Werkkamer', kinderkamer: 'Kinderkamer', anders: 'Andere ruimte' };
+
 export const VERF_SOORTEN = [ 'muren', 'accent', 'plafond' ];
 export const LAK_SOORTEN = [ 'deuren', 'kozijnen', 'plinten', 'lambrisering', 'kasten', 'radiatoren', 'trap', 'meubel' ];
 export const VLAK_SOORTEN = [ ...VERF_SOORTEN, ...LAK_SOORTEN ];
@@ -109,7 +112,7 @@ export function nieuweRuimte( id, type, naam ) {
 	return {
 		id,
 		type,
-		naam: naam || type,
+		naam: naam || RUIMTE_NAMEN[ type ] || type,
 		maat: { grootte: gegeven( STANDAARD.grootte, 'aangenomen', 'roll' ), lengte: null, breedte: null },
 		hoogte: gegeven( STANDAARD.hoogte, 'aangenomen', 'roll' ),
 		extra: null,
