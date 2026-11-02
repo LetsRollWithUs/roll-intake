@@ -113,7 +113,7 @@ const TOOLS: any[] = [
       type: "object",
       properties: {
         tekst: { type: "string", description: "Kort, je-vorm, hooguit drie zinnen voor de vraag. Geen liters of bedragen." },
-        vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips of het formulier erbij (maat, ondergrond, onderdelen, lak). Bij eigen: geef chips mee." },
+        vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips of het formulier erbij (maat, ondergrond, onderdelen, lak). Bij eigen: geef chips mee." },
         chips: { type: "array", items: { type: "string" } },
         kaarten: { type: "array", items: { type: "string" }, description: "Namen van Roll-kleuren om als kaart te tonen." },
         voor: { type: "string", description: "Voor welk onderdeel de kaarten zijn, als pad: woonkamer.muren of slaapkamer2.plafond." },
@@ -177,6 +177,8 @@ KLEUR (per vlak):
 - Wanneer de klant wil beginnen (vraag "wanneer") alleen als het past, bij twijfel over kleur.
 
 LAKWERK: vraag welke onderdelen meegaan (vraag "onderdelen") en daarna aantallen, staat en glans (vraag "lak"). De kleur van lakwerk kiest de klant zelf: wit, zelfde als de muren, een bijpassende wittint of een andere kleur; nooit automatisch wit. "Wit zoals nu" = kies Blank Page. Houtrot, eerder gelakte muren of vermoeden van loodhoudende verf: actie "overdracht".
+
+KLEUR VAN PLAFOND EN LAKWERK: is de muurkleur gekozen (of kiest de klant die later) en staan plafond of lakwerk nog zonder kleur, vraag het dan een keer kort met vraag "kleur": de server toont snelle keuzes (wit, zelfde als de muren, bijpassende wittint, lichtere tint, andere kleur, later). Kiest de klant "andere kleur", toon dan kaarten met antwoord.voor op dat onderdeel.
 
 PLAFOND: vraag een keer "Gaat het plafond ook mee?" (vraag "plafond"). "Ja, wit" = vlak <ruimte> plafond en <ruimte>.plafond kies Blank Page. "Ja, in de muurkleur" = dezelfde kleur als de muren.
 
@@ -394,7 +396,7 @@ const TELBAAR = ["deuren", "kozijnen", "radiatoren", "kasten"];
 const LAK_BINNEN = ["deuren", "kozijnen", "plinten", "lambrisering", "radiatoren"];
 const LAK_BUITEN = ["deuren", "kozijnen"];
 const VOLGT_UIT_MAAT = ["plinten", "lambrisering"];
-const FORM_VRAGEN: Record<string, string> = { maat: "maat", ondergrond: "muren", onderdelen: "onderdelen", lak: "lak" };
+const FORM_VRAGEN: Record<string, string> = { maat: "maat", ondergrond: "muren", onderdelen: "onderdelen", lak: "lak", kleur: "kleur" };
 const START_TYPES = ["woonkamer", "slaapkamer", "keuken", "eetkamer", "badkamer", "toilet", "hal", "werkkamer", "kinderkamer", "anders"];
 
 const maatNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) || VOLGT_UIT_MAAT.includes(v.soort)) && !(telt(r.maat.lengte) && telt(r.maat.breedte)) && !telt(r.maat.grootte);
@@ -573,6 +575,89 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
   return { wijzigingen: [], tekst: "" };
 }
 
+/* ---------- snelle kleurkeuze voor plafond en lakwerk ---------- */
+
+const WIT = "Blank Page";
+const rgbVan = (hex: string) => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || ""); return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null; };
+const lichtVan = (c: number[]) => (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255;
+function hexVan(ix: any, k: any) { if (!k) return ""; if (k.km?.hex) return k.km.hex; return ix.c.find((x: Kleur) => x.n === (k.rollKleur ?? k.naam))?.h ?? ""; }
+/** Het Roll-wit dat bij de muurkleur past: warm bij warm, koel bij koel, neutraal bij neutraal (zelfde regel als de stappen). */
+function bijpassendWit(ix: any, muur: any) {
+  const c = rgbVan(hexVan(ix, muur));
+  const wit = ix.c.filter((x: Kleur) => (x.c ?? []).includes("wit") && x.n !== WIT && rgbVan(x.h));
+  if (!c || !wit.length) return WIT;
+  const tint = (r: number[]) => [r[0] - r[2], r[1] - (r[0] + r[2]) / 2];
+  const tm = tint(c), mm = Math.hypot(tm[0], tm[1]);
+  let best: Kleur | null = null, score = -1e9;
+  for (const x of wit) {
+    const tx = tint(rgbVan(x.h)!), mx = Math.hypot(tx[0], tx[1]);
+    const sc = mm < 8 ? -mx : (mx ? (tx[0] * tm[0] + tx[1] * tm[1]) / (mx * mm) : -1);
+    if (sc > score) { score = sc; best = x; }
+  }
+  return best ? best.n : WIT;
+}
+/** Een lichtere kleur uit dezelfde kleurfamilie als de muren; anders de bijpassende wittint. */
+function lichtereTint(ix: any, muur: any) {
+  const c = rgbVan(hexVan(ix, muur));
+  const i = muur && !muur.km ? ix.c.find((x: Kleur) => x.n === (muur.rollKleur ?? muur.naam)) : null;
+  const slugs = ix.f.map((f: any) => f.s);
+  const fams = i ? (i.c ?? []).filter((x: string) => slugs.includes(x) && "wit" !== x) : [];
+  if (!c || !fams.length) return bijpassendWit(ix, muur);
+  const l = lichtVan(c);
+  let best: Kleur | null = null, d = 1e9;
+  for (const x of ix.c as Kleur[]) {
+    const r = rgbVan(x.h);
+    if (!r || x.n === i.n || !(x.c ?? []).some((f) => fams.includes(f)) || lichtVan(r) < l + 0.08) continue;
+    const dx = (r[0] - c[0]) ** 2 + (r[1] - c[1]) ** 2 + (r[2] - c[2]) ** 2;
+    if (dx < d) { d = dx; best = x; }
+  }
+  return best ? best.n : bijpassendWit(ix, muur);
+}
+/** Plafond en lakwerk zonder kleur, met per onderdeel de keuzes als echte kleuren (zodat de kaart een kleurvlak toont). */
+function kleurFormulier(project: any, ix: any) {
+  const kleur = (naam: string) => ({ naam, hex: ix.c.find((x: Kleur) => x.n === naam)?.h ?? "" });
+  const onderdelen: any[] = [];
+  for (const r of project.ruimtes) {
+    const muren = r.vlakken.find((v: any) => "muren" === v.soort && "gekozen" === v.kleur.status);
+    const muur = muren ? w(muren.kleur.gekozen) : null;
+    for (const v of r.vlakken) {
+      if (("plafond" !== v.soort && !isLak(v.soort)) || "gekozen" === v.kleur.status) continue;
+      const opties: any[] = [{ k: "wit", label: "Wit", ...kleur(WIT) }];
+      if (muur) {
+        opties.push({ k: "zelfde", label: "Zelfde als de muren", naam: muur.naam, hex: hexVan(ix, muur) });
+        const bijwit = bijpassendWit(ix, muur), lichter = lichtereTint(ix, muur);
+        opties.push({ k: "bijwit", label: "Bijpassende wittint", ...kleur(bijwit) });
+        // Zonder lichtere tint in dezelfde familie valt die terug op de wittint: dan niet twee keer dezelfde kleur.
+        if ("plafond" === v.soort && lichter !== bijwit && lichter !== WIT) opties.push({ k: "lichter", label: "Lichtere tint van de muren", ...kleur(lichter) });
+      }
+      opties.push({ k: "anders", label: "Andere kleur" }, { k: "later", label: "Later" });
+      onderdelen.push({ ruimte: r.id, vlak: v.id, soort: v.soort, ruimteNaam: r.naam, opties, muur: muur ? muur.naam : null });
+    }
+  }
+  return onderdelen.length ? { soort: "kleur", onderdelen } : null;
+}
+/** De gekozen snelle keuzes naar kleurwijzigingen; "andere kleur" gaat daarna door naar het gesprek. */
+function kleurWijzigingen(f: any, project: any, ix: any) {
+  const form = kleurFormulier(project, ix);
+  const keuzes = f?.waarden?.keuzes ?? {};
+  const wz: any[] = [], delen: string[] = [], anders: string[] = [];
+  for (const o of form?.onderdelen ?? []) {
+    const k = keuzes[`${o.ruimte}.${o.vlak}`];
+    const opt = o.opties.find((x: any) => x.k === k);
+    if (!opt) continue;
+    const naamDeel = `${project.ruimtes.length > 1 ? o.ruimteNaam + ", " : ""}${o.soort}`;
+    if ("anders" === k) { anders.push(`${o.ruimte}.${o.vlak}`); delen.push(`${naamDeel}: andere kleur`); continue; }
+    if ("later" === k) { delen.push(`${naamDeel}: later`); continue; }
+    // Zelfde als de muren: precies dezelfde kleur, ook als dat een gemengde merkkleur is.
+    const r = project.ruimtes.find((x: any) => x.id === o.ruimte);
+    const muurKleur = w(r.vlakken.find((v: any) => "muren" === v.soort)?.kleur.gekozen);
+    const kl = "zelfde" === k && muurKleur ? muurKleur : { type: "roll", naam: opt.naam };
+    wz.push({ actie: "kleur", ruimte: o.ruimte, vlak: o.vlak, wat: "kies", kleur: kl, zekerheid: "zeker" });
+    delen.push(`${naamDeel}: ${"wit" === k ? "wit" : opt.label.toLowerCase()} (${opt.naam})`);
+  }
+  return { wijzigingen: wz, tekst: delen.join("; "), anders };
+}
+
 /** Een aanname als pad ("woonkamer.hoogte", "woonkamer.muren.afwerking") naar een accepteer-wijziging. */
 function aannameNaarWijziging(pad: string) {
   const d = String(pad).split(".");
@@ -639,7 +724,7 @@ function tekstUit(json: string) {
   return uit;
 }
 
-const VRAGEN = ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "eigen", "geen"];
+const VRAGEN = ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "eigen", "geen"];
 const ACTIES = ["geen", "samples", "bestellen", "bewaren", "stappen", "overdracht", "kleuradvies"];
 const tekstLijst = (x: unknown) => (Array.isArray(x) ? x.filter((y) => "string" === typeof y) : []);
 /** De invoer van antwoord komt ongecontroleerd binnen (eager streaming): zelf nalopen. */
@@ -730,12 +815,22 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   let formTekst = "";
   let antwoord: any = null;
   if (formulier && "object" === typeof formulier) {
-    const fw = formulierWijzigingen(formulier, project);
+    let anders: string[] = [];
+    let fw: { wijzigingen: any[]; tekst: string };
+    if ("kleur" === formulier.soort) {
+      await metKleuren();
+      const kw = kleurWijzigingen(formulier, project, await ixP);
+      fw = kw;
+      anders = kw.anders;
+    } else {
+      fw = formulierWijzigingen(formulier, project);
+    }
     formTekst = fw.tekst || "Formulier ingevuld";
     const u = toepassen(project, { aanvraagId: aanvraagId + "#f", versie: project.versie, door: "klant-kaart", wijzigingen: fw.wijzigingen }, opties);
     project = u.project;
     laatsteWijzigingen = u.toegepast;
     tikTekst = `De klant vulde het formulier in: ${formTekst}`;
+    if (anders.length) tikTekst += `. Toon kleurkaarten voor ${anders[0]} (antwoord.voor = ${anders[0]}) en vraag welke richting.`;
     const nuMens = naarRekenkern(project).mens;
     const terug = [...u.openVragen.map((x: any) => x.vraag), ...u.geweigerd.map((x: any) => x.reden)];
     if (nuMens.length) {
@@ -886,7 +981,8 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
   // Een vaste vraag van het model (maat, muren, onderdelen, lakwerk) wordt een formulier, als er nog iets te vragen is.
-  const formulierUit = antwoord.formulier ?? (FORM_VRAGEN[antwoord.vraag] ? maakFormulier(FORM_VRAGEN[antwoord.vraag], project) : null);
+  const vraagForm = FORM_VRAGEN[antwoord.vraag];
+  const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm ? maakFormulier(vraagForm, project) : null);
   const uit = {
     antwoord: { tekst: String(antwoord.tekst ?? ""), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
@@ -975,7 +1071,7 @@ Deno.serve(async (req) => {
       return j({ code, tekst: `Hoi Roll, ik heb een vraag over mijn schilderplan (code ${code}).` });
     }
     const bericht = String(body.bericht ?? "").slice(0, MAX_TEKENS);
-    const formulier = body.formulier && "object" === typeof body.formulier && ["start", "onderdelen", "maat", "muren", "lak"].includes(body.formulier.soort) ? body.formulier : null;
+    const formulier = body.formulier && "object" === typeof body.formulier && ["start", "onderdelen", "maat", "muren", "lak", "kleur"].includes(body.formulier.soort) ? body.formulier : null;
     if (!bericht.trim() && !body.tik && !formulier) return j({ fout: "Leeg bericht." }, 400);
     const aanvraagId = String(body.aanvraagId ?? crypto.randomUUID()).slice(0, 64);
     const model = TEST_TOKEN === body.test && /^claude-(haiku|sonnet|opus)-[\d-]+(:(uit|tussen|adaptive))?$/.test(String(body.model ?? "")) ? String(body.model) : MODEL;
