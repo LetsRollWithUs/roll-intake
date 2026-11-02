@@ -48,6 +48,9 @@ export const KLEUR_TYPE = [ 'roll', 'ral', 'merk-exact', 'merk-benaderd' ];
 
 export const SPULLEN = [ 'niets', 'deel', 'alles', 'schilder', 'onbekend' ];
 
+/** Zolang er kleuren open zijn: eerst alleen samples, of de verf voor de gekozen kleuren alvast erbij. */
+export const VOLGORDE = [ 'samples-eerst', 'verf-erbij' ];
+
 /** Grenzen voor getallen (zelfde als de stappen en de rekenkern). */
 export const GRENZEN = {
 	lengte: [ 1, 20 ],
@@ -101,6 +104,7 @@ export function nieuwProject( id ) {
 		ruimtes: [],
 		spullen: null,
 		wanneer: null,
+		volgorde: null,
 		land: gegeven( 'NL', 'aangenomen', 'roll' ),
 		openVragen: [],
 		log: [],

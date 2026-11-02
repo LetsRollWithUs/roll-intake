@@ -7,7 +7,7 @@
  * - Een aanvraag op een oudere projectversie wordt geweigerd (conflict); de browser haalt eerst de nieuwste op.
  * - Wat niet klopt of onduidelijk is, wordt een open vraag in plaats van een wijziging.
  */
-import { GLANS, GRENZEN, KLEUR_TYPE, LAK_SOORTEN, ONDERGROND, RUIMTE_TYPES, SPULLEN, VLAK_SOORTEN, gegeven, isLak, nieuweRuimte, nieuwVlak, w } from './schema.js';
+import { GLANS, GRENZEN, KLEUR_TYPE, LAK_SOORTEN, ONDERGROND, RUIMTE_TYPES, SPULLEN, VLAK_SOORTEN, VOLGORDE, gegeven, isLak, nieuweRuimte, nieuwVlak, w } from './schema.js';
 
 const BEWAAR_STAPPEN = 20;
 const MAX_RUIMTES_PER_TYPE = 6;
@@ -209,7 +209,7 @@ export function normaliseer( p, ruw ) {
 		wz.ruimte = id;
 	}
 	// Eén ruimte en geen ruimte genoemd: dan bedoelt de klant die ruimte.
-	if ( ! wz.ruimte && 1 === p.ruimtes.length && ( wz.vlak || [ 'vlak-erbij', 'kleur' ].includes( wz.actie ) || ( 'zet' === wz.actie && ! [ 'doel', 'spullen', 'wanneer', 'land' ].includes( wz.veld ) ) ) ) {
+	if ( ! wz.ruimte && 1 === p.ruimtes.length && ( wz.vlak || [ 'vlak-erbij', 'kleur' ].includes( wz.actie ) || ( 'zet' === wz.actie && ! [ 'doel', 'spullen', 'wanneer', 'volgorde', 'land' ].includes( wz.veld ) ) ) ) {
 		wz.ruimte = p.ruimtes[ 0 ].id;
 	}
 	if ( 'vlak-erbij' === wz.actie && ! wz.vlak && wz.soort ) {
@@ -257,6 +257,8 @@ function zet( p, r, v, wz, ctx ) {
 			p.spullen = g( waarde );
 		} else if ( 'wanneer' === a && [ 'week', 'weken', 'later', 'onbekend' ].includes( waarde ) ) {
 			p.wanneer = g( waarde );
+		} else if ( 'volgorde' === a && VOLGORDE.includes( waarde ) ) {
+			p.volgorde = g( waarde );
 		} else if ( 'land' === a && [ 'NL', 'BE' ].includes( waarde ) ) {
 			p.land = g( waarde );
 		} else {

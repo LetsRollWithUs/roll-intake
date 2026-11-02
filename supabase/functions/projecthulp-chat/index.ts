@@ -5,6 +5,7 @@
 // schrijft het model zijn antwoord (tool antwoord). Getallen, producten en prijzen toont de browser uit de berekening.
 //
 // POST { sessie, aanvraagId, bericht? , tik? }  -> { antwoord, project, status, pakket, mens, versie }
+//   met stroom: true -> text/event-stream: "tekst" (stukjes antwoord), "opnieuw" (tekst vervalt), "klaar" (zelfde JSON)
 // POST { sessie, overdracht: 'whatsapp'|'mail' } -> { code, tekst }
 // GET  ?sessie=...                              -> de laatste stand (terugkomen)
 import Anthropic from "npm:@anthropic-ai/sdk";
@@ -55,7 +56,7 @@ const kaart = (k: Kleur) => ({ naam: k.n, omschrijving: k.d ?? "", hex: k.h, afb
 
 /* ---------- tools ---------- */
 
-const TOOLS: Anthropic.Tool[] = [
+const TOOLS: any[] = [
   {
     name: "werk_bij",
     description: "Leg alles vast wat de klant zegt, als korte regels (zie OPDRACHTEN in de instructies). De server controleert en legt vast; je krijgt de nieuwe stand terug als er iets niet lukte.",
@@ -100,11 +101,13 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "antwoord",
     description: "Je antwoord aan de klant. Sluit elke beurt hiermee af.",
+    // De tekst gaat woord voor woord naar de klant; daarom niet wachten tot de hele invoer klaar is.
+    eager_input_streaming: true,
     input_schema: {
       type: "object",
       properties: {
         tekst: { type: "string", description: "Kort, je-vorm, hooguit drie zinnen voor de vraag. Geen liters of bedragen." },
-        vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips erbij. Bij eigen: geef chips mee." },
+        vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips erbij. Bij eigen: geef chips mee." },
         chips: { type: "array", items: { type: "string" } },
         kaarten: { type: "array", items: { type: "string" }, description: "Namen van Roll-kleuren om als kaart te tonen." },
         aannames: { type: "array", items: { type: "string" }, description: "Aannames die je in de tekst noemt, als pad: woonkamer.hoogte of woonkamer.muren.afwerking." },
@@ -122,8 +125,8 @@ DOEL: de klant eindigt met een passend plan, vertrouwen in het resultaat en een 
 SCOPE VAN DEZE VERSIE: binnenruimtes, muren en eventueel plafond (en een accentmuur); meerdere ruimtes mag. Noemt de klant lakwerk (deuren, kozijnen), buitenwerk, trappen of meubels: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
 
 ZO WERK JE ELKE BEURT
-1. Leg alles wat de klant zegt vast met EEN aanroep van werk_bij, in korte regels (zie OPDRACHTEN). Een Roll-kleur of RAL-code mag je direct vastleggen; de server zoekt hem op. Gebruik zoek_kleur alleen bij een kleur van een ander merk of als je twijfelt aan de naam.
-2. Sluit ALTIJD af met antwoord, in HETZELFDE bericht als werk_bij: de server verwerkt eerst de regels; lukt iets niet, dan krijg je de stand terug en schrijf je opnieuw. Kies de volgende vraag op basis van de projectstand. Stel nooit een vraag waarvan je het antwoord al weet. Houd alles kort: geen uitleg in de tools.
+1. Heb je eerst informatie nodig (zoek_kleur, stel_kleuren_voor, kleurhulp, productinfo, voorwaarden), vraag die dan eerst op.
+2. Daarna in EEN bericht: EERST antwoord (de klant ziet je tekst meteen verschijnen), DAN werk_bij met alles wat de klant zei, in korte regels (zie OPDRACHTEN). Een Roll-kleur of RAL-code mag je direct vastleggen; de server zoekt hem op. Gebruik zoek_kleur alleen bij een kleur van een ander merk of als je twijfelt aan de naam. De server verwerkt de regels voor hij je antwoord toont; lukt iets niet, dan krijg je de stand terug en schrijf je opnieuw. Kies de volgende vraag op basis van de projectstand. Stel nooit een vraag waarvan je het antwoord al weet. Houd alles kort: geen uitleg in de tools en geen tekst buiten de tools; de klant ziet alleen antwoord.
 3. Is iets dubbelzinnig en verandert het het pakket wezenlijk: leg het niet vast maar vraag het (vraag "eigen" met chips).
 
 OPDRACHTEN (een per regel; ruimte-ID = het type, met een cijfer bij een tweede: woonkamer, slaapkamer2; vlakken: muren, plafond, accent; een nieuwe ruimte heeft al muren):
@@ -133,7 +136,7 @@ woonkamer maat 5x4          | woonkamer grootte middel (klein/middel/groot) | wo
 woonkamer.muren afwerking muurverf   (velden: materiaal stucwerk/gipsplaat/beton/onbekend, afwerking geen/muurverf/behang/onbekend, kleurNu licht/midden/donker/onbekend, structuur glad/structuur/onbekend, conditie goed/scheurtjes/scheuren/bladdert/vocht/onbekend)
 woonkamer.accent breedte 4
 woonkamer.muren kies Sage Blink      (ook: kandidaat, favoriet, afwijzen; richting licht beige; open)
-sample Sand Salute | spullen niets (niets/deel/alles/schilder) | wanneer weken (week/weken/later/onbekend) | doel rustiger slapen | ongedaan
+sample Sand Salute | spullen niets (niets/deel/alles/schilder) | wanneer weken (week/weken/later/onbekend) | volgorde samples-eerst (of verf-erbij) | doel rustiger slapen | ongedaan
 Zet " ?" achter een regel die je afleidt maar die de klant niet zei: dat wordt een zichtbare aanname.
 
 VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen.
@@ -168,6 +171,8 @@ SPULLEN: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alle
 TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Hooguit drie zinnen voor de vraag. Positief, geen druk, geen nepdeadlines. Geen emoji, geen gedachtestreepjes.
 
 NOOIT: een HEX-code of mengcode noemen; zelf liters, aantallen blikken of bedragen noemen (die staan in de pakketkaart); dekking beloven ("een laag is genoeg", "dekt altijd"): zeg "we rekenen met een laag" of "met twee lagen"; retour noemen als geruststelling (op kleur gemengde verf kan niet retour); voorwaarden of productinformatie noemen die niet uit productinfo of voorwaarden komt; renovlies of verf over behang adviseren.
+
+UITKOMST ALS ER NOG KLEUREN OPEN ZIJN: verf voor een onderdeel zonder gekozen kleur verkopen we niet; de pakketkaart toont dan alleen samples. Zijn er nog kleuren open en is minstens een onderdeel al klaar (staat [klaar] in de stand) en is volgorde nog ?: vraag "volgorde" ("Wil je eerst de samples bekijken, of zetten we de verf voor de kleuren die al vaststaan alvast klaar?"). "Eerst de samples" = volgorde samples-eerst; "Zet de verf ... alvast klaar" = volgorde verf-erbij. Is nog geen onderdeel klaar, vraag het dan niet: help met kleur (samples, kleurhulp, stylist). Zeg nooit dat de verf al klaarstaat als volgorde samples-eerst is.
 
 VOLGENDE STAP (antwoord.actie): "samples" als er samples klaarstaan en de kleur nog open is; "bestellen" als onderdelen klaar zijn; "bewaren" bij later verder; "geen" als je nog een vraag stelt.`;
 
@@ -293,7 +298,7 @@ function stand(p: any) {
       regels.push(`  ${r.id}.${v.id}: ${kl}; ${o || "ondergrond ?"}${v.breedte ? `; breedte ${g(v.breedte)}` : ""} [${s2?.status}${mist ? ": " + mist : ""}]`);
     }
   }
-  regels.push(`spullen ${g(p.spullen)}; wanneer ${g(p.wanneer)}; samples ${(p.samples ?? []).map((x: any) => x.naam).join(", ") || "geen"}${p.doel ? `; doel ${w(p.doel)}` : ""}`);
+  regels.push(`spullen ${g(p.spullen)}; wanneer ${g(p.wanneer)}; volgorde ${g(p.volgorde)}; samples ${(p.samples ?? []).map((x: any) => x.naam).join(", ") || "geen"}${p.doel ? `; doel ${w(p.doel)}` : ""}`);
   return `(* = aanname, nog niet bevestigd; ? = onbekend)\n${regels.join("\n")}`;
 }
 
@@ -317,6 +322,7 @@ function parseRegels(regels: string[]) {
     if ("vlak" === al) { uit.push({ actie: "vlak-erbij", ruimte: b, vlak: rest[0], soort: rest[0] }); continue; }
     if ("vlak-" === al) { uit.push({ actie: "vlak-weg", ruimte: b, vlak: rest[0] }); continue; }
     if ("sample" === al) { uit.push({ actie: "sample", wat: "erbij", kleur: { naam: [b, ...rest].join(" ") }, zekerheid }); continue; }
+    if ("volgorde" === al) { uit.push({ actie: "zet", veld: al, waarde: /verf/i.test(b) ? "verf-erbij" : "samples-eerst", zekerheid }); continue; }
     if (["spullen", "wanneer", "doel"].includes(al)) { uit.push({ actie: "zet", veld: al, waarde: [b, ...rest].join(" "), zekerheid }); continue; }
     // ruimte[.vlak] veld waarde
     const [ruimte, vlak] = a.split(".");
@@ -361,6 +367,7 @@ function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
     case "kleurroute": return ["Ik weet mijn kleur", "Ik heb een richting", "Help me kiezen", "Laat een stylist meekijken", "Later kiezen"];
     case "geen-idee": return ["Help me kiezen", "Laat een stylist meekijken", "Later kiezen"];
     case "wanneer": return ["Binnen een week", "Over een paar weken", "Weet ik nog niet"];
+    case "volgorde": return ["Eerst de samples", "Zet de verf voor de gekozen kleuren alvast klaar"];
     default: return eigen.slice(0, 12);
   }
 }
@@ -372,6 +379,18 @@ function aannameNaarWijziging(pad: string) {
   return null;
 }
 
+/**
+ * Wat we verkopen zolang er kleuren open zijn. Zonder gekozen kleur geen verf; de klant kiest of de verf voor de
+ * kleuren die al vaststaan alvast mee gaat (verf-erbij) of dat eerst de samples komen (samples-eerst, ook de standaard).
+ */
+function route(project: any) {
+  const open: { ruimte: string; vlak: string }[] = [];
+  for (const r of project.ruimtes) for (const v of r.vlakken) if ("gekozen" !== v.kleur.status) open.push({ ruimte: r.naam, vlak: v.soort });
+  const v = w(project.volgorde);
+  return { route: !open.length ? "compleet" : "verf-erbij" === v ? "verf-erbij" : "samples-eerst" === v ? "samples-eerst" : "kiezen", open };
+}
+const zonderVerf = (plan: any, project: any) => (["kiezen", "samples-eerst"].includes(route(project).route) ? { ...plan, ruimtes: [] } : plan);
+
 /** Een plan met alleen de onderdelen in de gegeven statussen; samples en packs gaan altijd mee. */
 function planMet(plan: any, status: any, statussen: string[]) {
   const mee = new Set(status.onderdelen.filter((o: any) => statussen.includes(o.status)).map((o: any) => `${o.ruimte}.${o.vlak}`));
@@ -379,7 +398,7 @@ function planMet(plan: any, status: any, statussen: string[]) {
   return { ...plan, ruimtes };
 }
 /** Naar het mandje: alleen wat klaar is om te bestellen. */
-const mandPlan = (plan: any, status: any) => planMet(plan, status, ["klaar"]);
+const mandPlan = (plan: any, status: any, project: any) => zonderVerf(planMet(plan, status, ["klaar"]), project);
 /** In de pakketkaart: alleen onderdelen waarvan de klant de maat gaf (of een maat-chip koos) en de muren nu bekend zijn. */
 function rekenPlan(plan: any, project: any) {
   const mee = new Set<string>();
@@ -388,7 +407,45 @@ function rekenPlan(plan: any, project: any) {
     for (const v of r.vlakken) if (maat && null != w(v.ondergrond.afwerking)) mee.add(`${r.id}.${v.id}`);
   }
   const ruimtes = plan.ruimtes.map((r: any) => ({ ...r, vlakken: r.vlakken.filter((v: any) => mee.has(`${r.id}.${v.id}`)) })).filter((r: any) => r.vlakken.length);
-  return { ...plan, ruimtes };
+  return zonderVerf({ ...plan, ruimtes }, project);
+}
+
+/* ---------- woord voor woord ---------- */
+
+/** De tekst tot nu toe uit half binnengekomen JSON van de tool antwoord ({"tekst": "Hoi, ...). */
+function tekstUit(json: string) {
+  const m = /"tekst"\s*:\s*"/.exec(json);
+  if (!m) return "";
+  let i = m.index + m[0].length, uit = "";
+  const ESC: Record<string, string> = { n: "\n", t: " ", r: "", b: "", f: "", '"': '"', "\\": "\\", "/": "/" };
+  while (i < json.length) {
+    const c = json[i];
+    if ('"' === c) break;
+    if ("\\" === c) {
+      if (i + 1 >= json.length) break;
+      const n = json[i + 1];
+      if ("u" === n) { if (i + 6 > json.length) break; uit += String.fromCharCode(parseInt(json.slice(i + 2, i + 6), 16)); i += 6; continue; }
+      uit += ESC[n] ?? n; i += 2; continue;
+    }
+    uit += c; i++;
+  }
+  return uit;
+}
+
+const VRAGEN = ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "eigen", "geen"];
+const ACTIES = ["geen", "samples", "bestellen", "bewaren", "stappen", "overdracht", "kleuradvies"];
+const tekstLijst = (x: unknown) => (Array.isArray(x) ? x.filter((y) => "string" === typeof y) : []);
+/** De invoer van antwoord komt ongecontroleerd binnen (eager streaming): zelf nalopen. */
+function geldigAntwoord(inp: any) {
+  if (!inp || "string" !== typeof inp.tekst || !inp.tekst.trim()) return null;
+  return {
+    tekst: inp.tekst,
+    vraag: VRAGEN.includes(inp.vraag) ? inp.vraag : "geen",
+    chips: tekstLijst(inp.chips),
+    kaarten: tekstLijst(inp.kaarten),
+    aannames: tekstLijst(inp.aannames),
+    actie: ACTIES.includes(inp.actie) ? inp.actie : "geen",
+  };
 }
 
 /* ---------- de beurt ---------- */
@@ -398,8 +455,13 @@ async function laad(sessie: string) {
   return data;
 }
 
-async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, model = MODEL) {
+type Meld = (soort: "tekst" | "opnieuw", data?: unknown) => void;
+
+async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}) {
   const start = Date.now();
+  // Alleen in de testset: "model:denken" om de denkstand te vergelijken (uit, tussen, adaptief).
+  const [model, denkTest] = modelKeuze.split(":");
+  const denken = denkTest ?? Deno.env.get("PROJECTHULP_DENKEN") ?? "tussen";
   // De kleurenlijst van roll.nl laden we terwijl de rest doorgaat; pas nodig bij een kleur.
   const ixP = index();
   let rij = await laad(sessie);
@@ -430,7 +492,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     if (tik.kleur) await metKleuren();
     const u = toepassen(project, { aanvraagId: aanvraagId + "#t", versie: project.versie, door: "klant-kaart", wijzigingen: [{ zekerheid: "zeker", ...tik }] }, opties);
     project = u.project;
-    tikTekst = `De klant tikte: ${tik.wat ?? tik.actie} ${tik.kleur?.naam ?? ""} ${tik.vlak ? "voor " + tik.vlak : ""}`.trim();
+    tikTekst = "zet" === tik.actie
+      ? `De klant koos in de pakketkaart: ${tik.veld} ${tik.waarde}`
+      : `De klant tikte: ${tik.wat ?? tik.actie} ${tik.kleur?.naam ?? ""} ${tik.vlak ? "voor " + tik.vlak : ""}`.trim();
   }
 
   let mens: any[] = [];
@@ -439,7 +503,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Een gesprek begint altijd met de klant.
   while (geschiedenis.length && "assistant" === geschiedenis[0].role) geschiedenis.shift();
   // Zelfde rol twee keer achter elkaar mag; de API voegt ze samen.
-  const messages: Anthropic.MessageParam[] = [...geschiedenis, { role: "user", content: `Projectstand:\n${stand(project)}\n\n${tikTekst ? tikTekst + "\n" : ""}Klant: ${bericht || "(tikte op een kaart)"}` }];
+  const messages: Anthropic.MessageParam[] = [...geschiedenis, { role: "user", content: `Projectstand:\n${stand(project)}\n\n${tikTekst ? tikTekst + "\n" : ""}Klant: ${bericht || ("zet" === tik?.actie ? "(koos in de pakketkaart, staat al vast)" : "(tikte op een kaart)")}` }];
 
   let antwoord: any = null;
   const gevonden = new Map<string, any>();
@@ -447,7 +511,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   for (let stap = 0; stap < MAX_STAPPEN && !antwoord; stap++) {
     const haiku = model.includes("haiku");
     const t0 = Date.now();
-    const res = await claude.beta.messages.create({
+    const stroom = claude.beta.messages.stream({
       model,
       max_tokens: 4000,
       system: [{ type: "text", text: SYSTEEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
@@ -456,15 +520,40 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       output_config: { effort: "low" },
       // Zonder nadenken tussen de tools: een gesprek als dit heeft daar weinig aan en het scheelt seconden.
       // Met PROJECTHULP_DENKEN=adaptive gaat het nadenken weer aan.
-      ...("adaptive" === Deno.env.get("PROJECTHULP_DENKEN") ? {} : { thinking: { type: haiku ? "disabled" : "between_tools" } }),
+      ...("adaptive" === denken ? {} : { thinking: { type: haiku || "uit" === denken ? "disabled" : "between_tools" } }),
       // Server-side fallback bij een weigering bestaat voor Sonnet 5.5, niet voor Haiku.
       ...(haiku ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }),
     } as any);
+    // De tekst van antwoord gaat stukje voor stukje naar de browser.
+    let antwoordBlok = -1, json = "", verstuurd = "";
+    for await (const ev of stroom as any) {
+      if (!tokens.t.eerste) tokens.t.eerste = Date.now() - start;
+      if ("content_block_start" === ev.type && "tool_use" === ev.content_block?.type && "antwoord" === ev.content_block.name && antwoordBlok < 0) {
+        antwoordBlok = ev.index;
+        if (verstuurd) { meld("opnieuw"); verstuurd = ""; }
+      } else if ("content_block_delta" === ev.type && ev.index === antwoordBlok && "input_json_delta" === ev.delta?.type) {
+        json += ev.delta.partial_json;
+        const t = tekstUit(json);
+        if (t.length > verstuurd.length) { tokens.t.tekst ??= Date.now() - start; meld("tekst", t.slice(verstuurd.length)); verstuurd = t; }
+      }
+    }
+    let res: any;
+    try {
+      res = await stroom.finalMessage();
+    } catch (e) {
+      // Kon de invoer niet gelezen worden, dan telt alleen wat er al stond.
+      if (!(e instanceof SyntaxError) && !/json/i.test(String((e as Error).message))) throw e;
+      const t = tekstUit(json);
+      antwoord = t ? { tekst: t, vraag: "geen", actie: "geen", chips: [], kaarten: [], aannames: [] } : null;
+      if (!antwoord && verstuurd) meld("opnieuw");
+      break;
+    }
     tokens.t.model += Date.now() - t0;
+    (tokens.blokken ??= []).push(res.content.map((c: any) => `${c.type}${"thinking" === c.type ? ":" + String(c.thinking ?? "").length : "tool_use" === c.type ? ":" + c.name : "text" === c.type ? ":" + c.text.length : ""}`).join(" "));
     tokens.in += res.usage?.input_tokens ?? 0;
     tokens.uit += res.usage?.output_tokens ?? 0;
     tokens.cache += (res.usage as any)?.cache_read_input_tokens ?? 0;
-    if ("refusal" === res.stop_reason) break;
+    if ("refusal" === res.stop_reason || ("max_tokens" === res.stop_reason && res.content.some((c: any) => "tool_use" === c.type))) { if (verstuurd) meld("opnieuw"); break; }
     messages.push({ role: "assistant", content: res.content as any });
     const calls = res.content.filter((c: any) => "tool_use" === c.type) as Anthropic.ToolUseBlock[];
     if (!calls.length) {
@@ -480,6 +569,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     calls.sort((a, b) => Number("antwoord" === a.name) - Number("antwoord" === b.name));
     for (const c of calls) {
       if ("antwoord" === c.name && wijzigtOok && !schoon) {
+        if (verstuurd) { meld("opnieuw"); verstuurd = ""; }
         results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify({ opnieuw: "De wijzigingen zijn net verwerkt. Schrijf je antwoord opnieuw op basis van de nieuwe stand." }) });
         continue;
       }
@@ -516,7 +606,12 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
           case "kleurhulp": out = await kleurhulp(project, String(inp.ruimte ?? ""), inp.antwoorden); break;
           case "productinfo": out = productinfo(String(inp.onderwerp ?? "")); break;
           case "voorwaarden": out = VOORWAARDEN; break;
-          case "antwoord": antwoord = inp; out = { ok: true }; break;
+          case "antwoord": {
+            antwoord = geldigAntwoord(inp);
+            if (!antwoord && verstuurd) { meld("opnieuw"); verstuurd = ""; }
+            out = antwoord ? { ok: true } : { fout: "Antwoord onvolledig: geef tekst en vraag." };
+            break;
+          }
           default: out = { fout: "onbekende tool" };
         }
       } catch (e) {
@@ -539,7 +634,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const { plan } = naarRekenkern(project);
   const uit = {
     antwoord: { tekst: String(antwoord.tekst ?? ""), chips: chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6) },
-    project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status),
+    project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
   const nu = new Date().toISOString();
   const gesprek = [...(rij.gesprek as any[]),
@@ -548,7 +643,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const t2 = Date.now();
   await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu });
   tokens.t.opslaan = Date.now() - t2;
-  await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model, tokens, duur_ms: Date.now() - start });
+  await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model: modelKeuze, tokens, duur_ms: Date.now() - start });
   return uit;
 }
 
@@ -564,12 +659,12 @@ Deno.serve(async (req) => {
         const { plan: pl } = naarRekenkern(rij.project);
         let pk = null;
         try { pk = await bereken(rekenPlan(pl, rij.project)); } catch { pk = { fout: "Pakket kon niet worden berekend." }; }
-        return j({ pakket: pk, versie: rij.project.versie });
+        return j({ pakket: pk, versie: rij.project.versie, route: route(rij.project) });
       }
       const { plan } = naarRekenkern(rij.project);
       let pakket = null;
       try { pakket = await bereken(rekenPlan(plan, rij.project)); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
-      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status), bijRoll: "bij-roll" === rij.status });
+      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), bijRoll: "bij-roll" === rij.status });
     }
     const body = await req.json();
     const sessie = String(body.sessie ?? "");
@@ -584,8 +679,22 @@ Deno.serve(async (req) => {
     const bericht = String(body.bericht ?? "").slice(0, MAX_TEKENS);
     if (!bericht.trim() && !body.tik) return j({ fout: "Leeg bericht." }, 400);
     const aanvraagId = String(body.aanvraagId ?? crypto.randomUUID()).slice(0, 64);
-    const model = TEST_TOKEN === body.test && /^claude-(haiku|sonnet|opus)-[\d-]+$/.test(String(body.model ?? "")) ? String(body.model) : MODEL;
-    return j(await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model));
+    const model = TEST_TOKEN === body.test && /^claude-(haiku|sonnet|opus)-[\d-]+(:(uit|tussen|adaptive))?$/.test(String(body.model ?? "")) ? String(body.model) : MODEL;
+    if (!body.stroom) return j(await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model));
+    const enc = new TextEncoder();
+    const sse = new ReadableStream({
+      async start(ctrl) {
+        const stuur = (soort: string, data: unknown) => { try { ctrl.enqueue(enc.encode(`event: ${soort}\ndata: ${JSON.stringify(data)}\n\n`)); } catch { /* browser weg */ } };
+        try {
+          stuur("klaar", await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, (soort, data) => stuur(soort, data ?? null)));
+        } catch (e) {
+          console.error(e);
+          stuur("klaar", { fout: "Er ging iets mis. Probeer het nog een keer, of ga verder met de stappen.", actie: "stappen", ...(TEST_TOKEN === body.test ? { detail: String((e as Error).message ?? e).slice(0, 400) } : {}) });
+        }
+        ctrl.close();
+      },
+    });
+    return new Response(sse, { headers: { ...cors, "content-type": "text/event-stream", "cache-control": "no-cache" } });
   } catch (e) {
     console.error(e);
     return j({ fout: "Er ging iets mis. Probeer het nog een keer, of ga verder met de stappen.", actie: "stappen" }, 500);
