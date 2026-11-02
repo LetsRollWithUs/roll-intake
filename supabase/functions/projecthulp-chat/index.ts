@@ -459,7 +459,7 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
     let tekst = "";
     if (l && b) { wz.push({ actie: "zet", ruimte: r.id, veld: "maat.lengte", waarde: l, ...z }, { actie: "zet", ruimte: r.id, veld: "maat.breedte", waarde: b, ...z }); tekst = `${r.naam}: ${nl(l)} × ${nl(b)} m`; }
     else if (["klein", "middel", "groot"].includes(v.grootte)) { wz.push({ actie: "zet", ruimte: r.id, veld: "maat.grootte", waarde: v.grootte, ...z }); tekst = `${r.naam}: ${maatSchatting(r.type).find((x) => x.grootte === v.grootte)?.label.toLowerCase()}`; }
-    if (hg) { wz.push({ actie: "zet", ruimte: r.id, veld: "hoogte", waarde: hg, ...z }); tekst += `, muren ${nl(hg)} m hoog`; }
+    if (hg) { wz.push({ actie: "zet", ruimte: r.id, veld: "hoogte", waarde: hg, ...z }); tekst += `, muren ${hg.toFixed(2).replace(".", ",")} m hoog`; }
     return { wijzigingen: wz, tekst };
   }
   if ("muren" === f.soort) {
@@ -797,10 +797,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Rekenen gebeurt niet meer in de beurt: de browser haalt de pakketkaart direct daarna op (GET ...&pakket=1),
   // zodat het antwoord niet op de rekenkern hoeft te wachten.
   mens = naarRekenkern(project).mens;
-  const ix = await ixP;
-
-  // Kaarten alleen van echte Roll-kleuren; de browser toont kleurvlak, naam en omschrijving.
-  const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix.c.find((k) => k.n === n)).filter(Boolean).slice(0, 4).map((k: any) => kaart(k));
+  // Kaarten alleen van echte Roll-kleuren; de browser toont kleurvlak, naam en omschrijving. Zonder kaarten wachten
+  // we niet op de kleurenlijst (een formulier is dan meteen klaar).
+  ixP.catch(() => null);
+  const ix = antwoord.kaarten?.length ? await ixP : null;
+  const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix?.c.find((k) => k.n === n)).filter(Boolean).slice(0, 4).map((k: any) => kaart(k));
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
   // Een vaste vraag van het model (maat, muren, onderdelen, lakwerk) wordt een formulier, als er nog iets te vragen is.
