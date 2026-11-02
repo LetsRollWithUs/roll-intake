@@ -1,0 +1,333 @@
+{
+	"bron": "Paint Configurator (productpagina) en WooCommerce Store API",
+	"opgehaald": "2026-11-02T10:52:01.855Z",
+	"verftypes": [
+		{
+			"naam": "Muur- & Plafondverf",
+			"kenmerken": [
+				{
+					"label": "Dekt in één keer",
+					"tekst": "Roll muurverf heeft dekkingsklasse 1 - meestal zijn 1-2 lagen genoeg voor volledige dekking. De extreem matte afwerking is ongevoelig voor licht uit verschillende hoeken en geeft een strak, egaal resultaat."
+				},
+				{
+					"label": "Makkelijk verwerken",
+					"tekst": "Spettert niet, rolt makkelijk uit en droogt egaal op. Te gebruiken met kwast, roller of verfspuit. Perfect voor zowel kleine als grote oppervlakken."
+				},
+				{
+					"label": "Breed inzetbaar",
+					"tekst": "Voor wanden en plafonds binnen. Werkt op glad stucwerk, glasvezel, renovlies en bestaande verflagen. Geschikt voor nieuw en oud."
+				},
+				{
+					"label": "Specificaties",
+					"tekst": "• Extreem mat (geen glans)\r\n• Dekkingsklasse 1 (hoogste dekking)\r\n• Schrobklasse 1 (hoogste wasbestendigheid)\r\n• Rendement: ca. 8-10 m²/L\r\n• Waterbasis, geurarm\r\n• Verpakking: 2,5L, 5L en 10L"
+				},
+				{
+					"label": "Perfect te verspuiten",
+					"tekst": "Speciaal ontwikkeld om onverdund verspoten te worden met een airless spuit. Spuit strak, met minimale overspray, dus minder verfnevel en minder afplakwerk."
+				}
+			],
+			"duurzaamheid": [
+				{
+					"label": "Hoogste luchtkwaliteit certificeringen",
+					"tekst": "Roll verf heeft Indoor Air Comfort Gold - het strengste Europese keurmerk voor schone lucht. Meetbaar bewezen dat er vrijwel niets schadelijks uitkomt (< 5 μg/m³ na 28 dagen, waar norm max 300 is)."
+				},
+				{
+					"label": "Veilig voor elke kamer",
+					"tekst": "Door extreem lage uitstoot ideaal voor babykamers, kinderkamers en slaapkamers. Kamer kan direct weer gebruikt worden."
+				},
+				{
+					"label": "Waterbasis = gezonder",
+					"tekst": "Geen agressieve oplosmiddelen. Schoner voor jou, beter voor het milieu. Schoonmaken met water."
+				},
+				{
+					"label": "Blijft jarenlang mooi",
+					"tekst": "Schrobklasse 1 betekent: jarenlang wasbaar en mooi. Je hoeft niet elk jaar opnieuw te schilderen. Dat scheelt verf, afval en gedoe."
+				},
+				{
+					"label": "Vergeelt niet",
+					"tekst": "Roll verf blijft de kleur die je gekozen hebt. Ook na jaren. Bewaar je restverf - over 2-3 jaar matcht het nog perfect voor kleine bijwerkingen."
+				}
+			],
+			"instructies": [
+				{
+					"label": "Voorbereiding",
+					"tekst": "Muur moet schoon, droog en stevig zijn. Verwijder stof en vet. Vul gaten met plamuur en schuur glad.\r\nZuigende muur? (nieuw stucwerk, gipsplaat)\r\nTest met natte spons: trekt water direct in? Dan eerst voorstrijk gebruiken. Voorkomt vlekken en ongelijke dekking."
+				},
+				{
+					"label": "Aanbrengen",
+					"tekst": "Roer 2 minuten goed door. Werk bij 15-25°C.\r\nMet roller: Breng aan in W-patroon, rol verticaal uit. Werk hele muur in één keer (nat-in-nat).\r\nMet kwast: Voor randen en hoeken. Eerst randen, dan direct grote vlak met roller.\r\nMet spuit (airless): Kan gebruiksklaar en onverdund verspoten worden. Spuitmond 0,017 tot 0,021 inch, druk 150 tot 180 bar.\r\nBij renovlies: Direct na rollen nog één keer licht narollen. Drukt vezels aan."
+				},
+				{
+					"label": "Droogtijden",
+					"tekst": "• Overschilderen: na 4-6 uur\r\n• Volledig droog: na 3 dagen\r\n• Intensief gebruiken: na 28 dagen"
+				},
+				{
+					"label": "Hoeveel lagen?",
+					"tekst": "1-2 lagen voor beste resultaat. Afhankelijk van ondergrond en kleurverschil."
+				},
+				{
+					"label": "Schoonmaken",
+					"tekst": "Roller en kwast direct uitspoelen met water. Vlekken op muur direct wegvegen."
+				},
+				{
+					"label": "Hoeveel heb je nodig?",
+					"tekst": "Ca. 8-10 m² per liter. Gebruik onze calculator voor exacte hoeveelheid."
+				}
+			]
+		},
+		{
+			"naam": "Matte lak",
+			"kenmerken": [
+				{
+					"label": "Voor hout en metaal",
+					"tekst": "Matte PU-lak op waterbasis voor deuren, kozijnen, radiatoren, meubels en andere hout- en metalen oppervlakken. Geschikt voor binnen."
+				},
+				{
+					"label": "Extreem mat en dekkend",
+					"tekst": "Perfect matte afwerking die ongevoelig is voor licht uit verschillende hoeken. Hoge dekking, meestal zijn 1-2 lagen genoeg."
+				},
+				{
+					"label": "Kras- en stootvast",
+					"tekst": "Door PU-versterking harder en duurzamer. Vergeelt niet. Ook geschikt voor radiatoren tot 80°C (gekleurde tinten)."
+				},
+				{
+					"label": "Makkelijk verwerken",
+					"tekst": "Snel droog, goede verloop, onzichtbaar bij te werken. Spat niet. Kan met kwast, roller of spuitapparaat aangebracht worden."
+				},
+				{
+					"label": "Veilig",
+					"tekst": "Voldoet aan DIN EN 71-3 (veilig voor kinderspeelgoed). Speeksel- en zweetecht. Geurarm."
+				},
+				{
+					"label": "Specificaties",
+					"tekst": "• Mat (< 1 GU bij 85°)\r\n• Dekkingsklasse 1\r\n• Schrobklasse 1\r\n• Rendement: ca. 8 m²/L\r\n• Waterbasis, max. 130 g/l VOC\r\n• Verpakking: 0,75L"
+				},
+				{
+					"label": "Perfect te verspuiten",
+					"tekst": "Ook met een airless spuit aan te brengen voor een strak, gelijkmatig resultaat op deuren en kozijnen."
+				}
+			],
+			"duurzaamheid": [
+				{
+					"label": "Hoogste certificeringen",
+					"tekst": "BREEAM-NL Exemplary Level, Indoor Air Comfort Gold, Indoor Air Quality A+. DGNB Navigator gecertificeerd."
+				},
+				{
+					"label": "Extreem lage uitstoot",
+					"tekst": "VOC < 50 g/l (EU-grenswaarde is 130 g/l). Formaldehyde < 3,3 μg/m³, totale VOC na 28 dagen < 5 μg/m³. Gemeten door Eurofins."
+				},
+				{
+					"label": "Veilig voor binnen",
+					"tekst": "Door lage uitstoot ideaal voor kinderkamers, slaapkamers, woonruimtes. Geurarm."
+				},
+				{
+					"label": "Waterbasis",
+					"tekst": "Geen agressieve oplosmiddelen. Gereedschap schoonmaken met water. Beter voor jou en het milieu."
+				},
+				{
+					"label": "Vergeelt niet",
+					"tekst": "Wit blijft wit, kleuren blijven zoals gekozen. Ook na jaren."
+				},
+				{
+					"label": "Duurzaam resultaat",
+					"tekst": "Kras- en stootvast, plakvrij. Blijft jarenlang mooi."
+				}
+			],
+			"instructies": [
+				{
+					"label": "Voorbereiding",
+					"tekst": "Voorbereiding\r\nOndergrond moet schoon, droog, vetvrij en vast zijn.\r\nHout: Onbehandeld? Eerst Roll primer. Harsrijk hout met verdunning afwassen.\r\nMetaal: Ontroesten, ontvetten. Eerst Roll primer.\r\nVerzinkt staal: Ammoniak-wasbeurt volgens instructies, dan Roll primer.\r\nOud lakwerk: Goed opschuren, schoonmaken."
+				},
+				{
+					"label": "Aanbrengen",
+					"tekst": "Roer goed door. Werk bij 10-25°C (niet onder 7°C).\r\nMet kwast: Kunsthaar\r\nMet roller: Korte vacht\r\nAirless: Spuitmond 0,010-0,012 inch, druk 130 bar, max. 5% water verdunnen\r\nTip: Dun aanbrengen.\r\nBij renovlies altijd narollen met vachtroller."
+				},
+				{
+					"label": "Droogtijden",
+					"tekst": "Droogtijden bij 20°C, 65% luchtvochtigheid:\r\n• Stofdroog: ca. 2 uur\r\n• Overschilderbaar: ca. 8-10 uur\r\n• Doorgedroogd en plakvrij: ca. 3 dagen\r\nLagere temperatuur of hogere luchtvochtigheid = langere droogtijd."
+				},
+				{
+					"label": "Hoeveel lagen?",
+					"tekst": "1-2 lagen. Afhankelijk van ondergrond."
+				},
+				{
+					"label": "Schoonmaken",
+					"tekst": "Direct na gebruik met water."
+				},
+				{
+					"label": "Hoeveel nodig?",
+					"tekst": "Ca. 80-100 ml/m² per laag. 0,75L = ca. 7-9 m² per laag."
+				}
+			]
+		},
+		{
+			"naam": "Hoogglanslak",
+			"kenmerken": [
+				{
+					"label": "Voor hout en metaal - binnen en buiten",
+					"tekst": "Hoogglanzende lak op terpentinebasis voor deuren, ramen, kozijnen, hekken, meubels en andere hout- en metalen oppervlakken. Geschikt voor binnen én buiten."
+				},
+				{
+					"label": "Hoogglans voor brillant spiegelglans",
+					"tekst": "Perfecte hoogglanzende afwerking. Zeer goed dekkend, uitstekende verloop."
+				},
+				{
+					"label": "Weersbestendig en duurzaam",
+					"tekst": "Kras- en stootvast, zeer strapazierfähig. Licht- en kleurvastig. Geschikt voor radiatoren tot 80°C (gekleurde tinten)."
+				},
+				{
+					"label": "Professionele verwerking",
+					"tekst": "Lange open tijd voor streepvrije afwerking. Uitstekende verloop voor mooi oppervlak. Aromatenfrei."
+				},
+				{
+					"label": "Specificaties",
+					"tekst": "• Hoogglanzend\r\n• Farbtonbeständigkeit: B 1-3\r\n• Rendement: ca. 80-100 ml/m²\r\n• Terpentinebasis, max. 300 g/l VOC\r\n• Verpakking: 0,75L"
+				},
+				{
+					"label": "Te verspuiten",
+					"tekst": "Geschikt voor het hogedrukpistool, voor een spiegelglad hoogglansresultaat op deuren, kozijnen en hekwerk."
+				}
+			],
+			"duurzaamheid": [
+				{
+					"label": "Duurzaam resultaat",
+					"tekst": "Weersbestendig voor binnen en buiten. Blijft jarenlang mooi door goede kras- en stootvastheid."
+				},
+				{
+					"label": "Licht- en kleurvastig",
+					"tekst": "Kleuren blijven mooi. Let op: wit en lichte kleuren kunnen bij kunstlicht of onvoldoende daglicht licht vergelen - dit is normaal bij alkydlak."
+				},
+				{
+					"label": "VOC-gehalte",
+					"tekst": "300 g/l VOC (EU-grenswaarde voor deze categorie is 300 g/l)."
+				},
+				{
+					"label": "Lange levensduur",
+					"tekst": "Door goede weersbestendigheid en duurzaamheid hoef je niet elk jaar opnieuw te lakken."
+				}
+			],
+			"instructies": [
+				{
+					"label": "Voorbereiding",
+					"tekst": "Voorbereiding\r\nOndergrond moet schoon, droog, vetvrij en vast zijn.\r\nHout: Onbehandeld? Eerst Roll primer. Harsrijk hout met verdunning afwassen.\r\nMetaal: Ontroesten, ontvetten. Eerst Roll primer.\r\nVerzinkt staal: Ammoniak-wasbeurt volgens instructies, dan Roll primer.\r\nOud lakwerk: Goed opschuren, schoonmaken."
+				},
+				{
+					"label": "Aanbrengen",
+					"tekst": "Roer goed door. Werk bij 10-25°C (niet onder 5°C). Zorg voor goede ventilatie!\r\nMet kwast: Natuurhaar\r\nMet roller: Korte vacht of schuimroller\r\nHogedruk spuit: Spuitmond 1,9-2,2 mm, druk 1,8-2,0 bar, max. 10% verdunnen met terpentine\r\nTip: Niet te dik aanbrengen - meerdere dunne lagen beter dan 1 dikke laag."
+				},
+				{
+					"label": "Droogtijden",
+					"tekst": "Droogtijden bij 20°C, 65% luchtvochtigheid:\r\nStofdroog: ca. 7 uur\r\nOverschilderbaar: ca. 24 uur\r\nDoorgedroogd: ca. 7 dagen\r\nLagere temperatuur of hogere luchtvochtigheid = langere droogtijd."
+				},
+				{
+					"label": "Hoeveel lagen?",
+					"tekst": "1-2 lagen voor beste resultaat."
+				},
+				{
+					"label": "Schoonmaken",
+					"tekst": "Direct na gebruik met terpentine, daarna met water en zeep.\r\nVentilatie en veiligheid:\r\n• Raampje open tijdens en na lakken (2-3 dagen)\r\n• Niet roken\r\n• Kinderen/huisdieren eerste 24u wegblijven\r\n• Handschoenen dragen"
+				},
+				{
+					"label": "Hoeveel nodig?",
+					"tekst": "Ca. 80-100 ml/m² per laag. 0,75L = ca. 7-9 m² per laag."
+				}
+			]
+		},
+		{
+			"naam": "Zijdeglanslak",
+			"kenmerken": [
+				{
+					"label": "Voor hout en metaal - binnen en buiten",
+					"tekst": "Zijdeglanzende lak op terpentinebasis voor deuren, ramen, kozijnen, hekken, meubels en andere hout- en metalen oppervlakken. Geschikt voor binnen én buiten."
+				},
+				{
+					"label": "Zijdeglans voor streepvrij zijdeglanzeffect",
+					"tekst": "Perfecte zijdeglanzende afwerking. Zeer goed dekkend, uitstekende verloop."
+				},
+				{
+					"label": "Weersbestendig en duurzaam",
+					"tekst": "Kras- en stootvast, zeer strapazierfähig. Licht- en kleurvastig. Geschikt voor radiatoren tot 80°C (gekleurde tinten)."
+				},
+				{
+					"label": "Professionele verwerking",
+					"tekst": "Lange open tijd voor streepvrije afwerking. Uitstekende verloop voor mooi oppervlak. Arometenvrij."
+				},
+				{
+					"label": "Specificaties",
+					"tekst": "• Zijdeglanzend\r\n• Kleurvastheid: C 1-3\r\n• Rendement: ca. 80-100 ml/m²\r\n• Terpentinebasis, max. 300 g/l VOC\r\n• Verpakking: 0,75L"
+				},
+				{
+					"label": "Te verspuiten",
+					"tekst": "Geschikt voor het hogedrukpistool, voor een egale, streepvrije zijdeglans."
+				}
+			],
+			"duurzaamheid": [
+				{
+					"label": "Duurzaam resultaat",
+					"tekst": "Weersbestendig voor binnen en buiten. Blijft jarenlang mooi door goede kras- en stootvastheid.\r\nLet op: wel ventilatie nodig\r\nOp terpentinebasis - zorg voor goede ventilatie tijdens en na het lakken. Raampje open houden."
+				},
+				{
+					"label": "Licht- en kleurvastig",
+					"tekst": "Kleuren blijven mooi. Let op: wit en lichte kleuren kunnen bij kunstlicht of onvoldoende daglicht licht vergelen - dit is normaal bij alkydlak."
+				},
+				{
+					"label": "VOC-gehalte",
+					"tekst": "300 g/l VOC (EU-grenswaarde voor deze categorie is 300 g/l). Hoger dan waterbasis lak."
+				},
+				{
+					"label": "Lange levensduur",
+					"tekst": "Door goede weersbestendigheid en duurzaamheid hoef je niet elk jaar opnieuw te lakken."
+				}
+			],
+			"instructies": [
+				{
+					"label": "Voorbereiding",
+					"tekst": "Voorbereiding\r\nOndergrond moet schoon, droog, vetvrij en vast zijn.\r\nHout: Onbehandeld? Eerst Roll primer. Harsrijk hout met verdunning afwassen.\r\nMetaal: Ontroesten, ontvetten. Eerst Roll primer.\r\nVerzinkt staal: Ammoniak-wasbeurt volgens instructies, dan Roll primer.\r\nOud lakwerk: Goed opschuren, schoonmaken."
+				},
+				{
+					"label": "Aanbrengen",
+					"tekst": "Roer goed door. Werk bij 10-25°C (niet onder 5°C). Zorg voor goede ventilatie!\r\nMet kwast: Natuurhaar\r\nMet roller: Korte vacht of schuimroller\r\nHogedruk spuit: Spuitmond 1,9-2,2 mm, druk 1,8-2,0 bar, max. 5% verdunnen met terpentine\r\nTip: Niet te dik aanbrengen - meerdere dunne lagen beter dan 1 dikke laag."
+				},
+				{
+					"label": "Droogtijden",
+					"tekst": "Droogtijden bij 20°C, 65% luchtvochtigheid:\r\n• Stofdroog: ca. 7 uur\r\n• Overschilderbaar: ca. 24 uur\r\n• Doorgedroogd: ca. 7 dagen\r\nLagere temperatuur of hogere luchtvochtigheid = langere droogtijd."
+				},
+				{
+					"label": "Hoeveel lagen?",
+					"tekst": "1-2 lagen voor beste resultaat."
+				},
+				{
+					"label": "Schoonmaken",
+					"tekst": "Direct na gebruik met terpentine, daarna met water en zeep.\r\nVentilatie en veiligheid\r\n• Raampje open tijdens en na lakken (2-3 dagen)\r\n• Niet roken\r\n• Kinderen/huisdieren eerste 24u wegblijven\r\n• Handschoenen dragen"
+				},
+				{
+					"label": "Hoeveel nodig?",
+					"tekst": "Ca. 80-100 ml/m² per laag. 0,75L = ca. 7-9 m² per laag."
+				}
+			]
+		}
+	],
+	"producten": [
+		{
+			"soort": "voorstrijk",
+			"productId": 8156,
+			"naam": "Voorstrijk muren",
+			"url": "https://roll.nl/product/voorstrijk-gel/",
+			"tekst": "Roll Fixeer Gel is onze nieuwe standaard voor voorstrijken van wanden en plafonds. De kleurloze, diepwerkende fixeer-gel zet poederende ondergronden zoals gips en stucwerk vast en bereidt de muur echt goed voor. Zo wordt de ondergrond overal gelijk en klaar voor verf en Renovlies. Dat werkt prettiger en zie je terug in een strakker eindbeeld. Voorstrijk zoals het eigenlijk altijd had moeten zijn. Met 2,5 liter kan je 17m² coaten en met 10 liter kan je 68m²."
+		},
+		{
+			"soort": "primer",
+			"productId": 8165,
+			"naam": "Primer hout en metaal",
+			"url": "https://roll.nl/product/primer/",
+			"tekst": "Roll Primer voor hout en metaal is een goed vullende, sneldrogende primer die zorgt voor een strak en gelijkmatig oppervlak vóór het aflakken. Hij hecht uitstekend op hout, metaal, kunststof en bestaande verflagen, en laat zich mooi verwerken met kwast of roller. Dankzij de goede schuurbaarheid werk je eenvoudig toe naar een glad eindresultaat. De primer is mat, heeft een milde geur en is geschikt als stabiele basis voor hoogwaardige lakken, zowel binnen als buiten. Ideaal voor deuren, kozijnen en meubels. \nMet 0,75 liter kan je ± 6,5 m² verven. \nTip van Roll: Voor het allerstrakste resultaat schuur je de primer na droging lichtjes op met ons Schuurblok 2-in-1 (middel/fijn) . Vergeet daarna niet het stof af te nemen voordat je begint met aflakken."
+		},
+		{
+			"soort": "renovlies",
+			"productId": 7833,
+			"naam": "Renovlies behang",
+			"url": "https://roll.nl/product/renovlies-behang/",
+			"tekst": "Roll Renovlies 150 g/m² is ons voorgeschilderde vliesbehang voor muren die direct goed moeten aanvoelen. Het egaliseert kleine oneffenheden, laat zich strak verwerken en zorgt ervoor dat je verf mooier en gelijkmatiger dekt. Dankzij de voorgeschilderde laag zuigt het behang minder verf op, waardoor je sneller een dekkend en strak eindresultaat behaalt. Beschikbaar in 1 rollen van 25 m² en 50 m² (1 meter breed). \nTip van Roll: Gebruik voor het aanbrengen onze Roll Behang lijm . Breng de lijm direct op de muur aan voor een ontspannen verwerking en een naadloos resultaat."
+		}
+	]
+}

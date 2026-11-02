@@ -1,0 +1,20 @@
+{
+	"bron": "https://roll.nl/ruilen-retourneren/",
+	"nagelopen": "2026-11-02",
+	"beheer": "Met de hand bijhouden: elke wijziging op roll.nl/ruilen-retourneren hier overnemen. De bot citeert alleen deze teksten.",
+	"retour": {
+		"termijn": "Aanmelden binnen 14 dagen na ontvangst, via de klantenservice.",
+		"wel": [ "Ongeopende basis-witte verf met intacte verzegeling", "Ongeopende Roll-waaier", "Ongebruikt verfgereedschap in de originele verpakking", "Onbeschadigd behang in de originele folie" ],
+		"niet": [ "Verf die speciaal op kleur is gemengd (alles met een kleurnaam of nummer anders dan wit of transparant)", "Behang dat op maat is gesneden", "Geopende, aangebroken of gebruikte blikken, emmers en testers", "Losse onderdelen uit een voordeelpakket" ],
+		"kosten": "Terugsturen is voor eigen rekening, tenzij Roll een fout maakte. Gaat de hele bestelling retour, dan krijg je ook de verzendkosten van de heenzending terug.",
+		"terugbetaling": "Binnen 7 dagen na ontvangst van de producten in goede, nieuwe staat.",
+		"defect": "Beschadigd, defect of verkeerd geleverd: eerst contact met de klantenservice, dan stuurt Roll een gratis retourlabel."
+	},
+	"verzending": {
+		"gratis": "Gratis verzending vanaf € 150."
+	},
+	"regels_voor_de_bot": [
+		"Gebruik retour nooit als geruststelling bij de hoeveelheid: op kleur gemengde verf kan niet retour.",
+		"Noem geen termijnen, levertijden of kosten die hier niet staan; verwijs dan naar de klantenservice."
+	]
+}

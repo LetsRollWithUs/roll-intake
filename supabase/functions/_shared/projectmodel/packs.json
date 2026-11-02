@@ -1,0 +1,231 @@
+{
+	"bron": "Quiz/src/data/sample-packs.ts en woocommerce-product-ids.ts",
+	"opgehaald": "2026-11-02T10:52:01.868Z",
+	"packs": [
+		{
+			"id": "wit-sample-pack",
+			"naam": "Wit",
+			"productId": 6902,
+			"kleuren": [
+				"Blank Page",
+				"Fresh Sheets",
+				"Milk Foam",
+				"Sugar Whip",
+				"Lazy Linen"
+			],
+			"omschrijving": "Vijf verfijnde wittinten om te vergelijken in jouw ruimte"
+		},
+		{
+			"id": "lichtbeige-sample-pack",
+			"naam": "Lichtbeige",
+			"productId": 13917,
+			"kleuren": [
+				"Snooze Button",
+				"Early Bird",
+				"Cashmere Cloud",
+				"Off Duty",
+				"Sand Salute"
+			],
+			"omschrijving": "Vijf lichte, warme beigetinten voor een zachte basis"
+		},
+		{
+			"id": "beige-sample-pack",
+			"naam": "Beige",
+			"productId": 6873,
+			"kleuren": [
+				"Powder Puff",
+				"Sandy Toes",
+				"Cuddle Mode",
+				"Soft Landing",
+				"Group Hug"
+			],
+			"omschrijving": "Vijf warme beigetinten van zacht tot zandig"
+		},
+		{
+			"id": "greige-sample-pack",
+			"naam": "Greige",
+			"productId": 6897,
+			"kleuren": [
+				"Morning Mist",
+				"Zen Den",
+				"Sunday Sweater",
+				"Taupe Notch"
+			],
+			"omschrijving": "Vier greige tinten tussen grijs en beige in"
+		},
+		{
+			"id": "lichtgrijs-sample-pack",
+			"naam": "Lichtgrijs",
+			"productId": 6904,
+			"kleuren": [
+				"Feather Flow",
+				"Mist Dream",
+				"Grey Gatsby",
+				"Chill Whisper"
+			],
+			"omschrijving": "Vier lichte grijstinten voor een rustige basis"
+		},
+		{
+			"id": "donkergrijs-sample-pack",
+			"naam": "Donkergrijs & Zwart",
+			"productId": 6907,
+			"kleuren": [
+				"Stone Tone",
+				"Rock Rocket",
+				"Shadow Nap",
+				"Onyx Dip",
+				"Dark Ash",
+				"Shut Eye"
+			],
+			"omschrijving": "Zes diepe grijs- en zwarttinten voor statement muren"
+		},
+		{
+			"id": "grijsgroen-sample-pack",
+			"naam": "Grijsgroen",
+			"productId": 6956,
+			"kleuren": [
+				"Sage Blink",
+				"Dawn Fog",
+				"Leaf Love"
+			],
+			"omschrijving": "Drie subtiele grijsgroene tinten"
+		},
+		{
+			"id": "lichtgroen-sample-pack",
+			"naam": "Lichtgroen",
+			"productId": 6951,
+			"kleuren": [
+				"Pistache Please",
+				"Daily Om",
+				"Field Trip",
+				"Olive Wink"
+			],
+			"omschrijving": "Vier frisse lichtgroene tinten van sage tot olijf"
+		},
+		{
+			"id": "donkergroen-sample-pack",
+			"naam": "Donkergroen",
+			"productId": 6958,
+			"kleuren": [
+				"Home Safari",
+				"Lawn Order",
+				"Quiet Wild",
+				"Moss Boss",
+				"Old Forest"
+			],
+			"omschrijving": "Vijf diepe bosgroene tinten"
+		},
+		{
+			"id": "diep-groenblauw-sample-pack",
+			"naam": "Groenblauw",
+			"productId": 6960,
+			"kleuren": [
+				"Easy Does",
+				"Tide Twist",
+				"Hidden Depths",
+				"Lost Orbit"
+			],
+			"omschrijving": "Vier groenblauwe tinten van zacht tot diep"
+		},
+		{
+			"id": "lichtblauw-sample-pack",
+			"naam": "Lichtblauw",
+			"productId": 6955,
+			"kleuren": [
+				"Fizzy Drizzle",
+				"Sky Sofa",
+				"Sweet Horizon",
+				"Ice Breaker",
+				"Daydream Dip"
+			],
+			"omschrijving": "Vijf frisse lichtblauwe tinten"
+		},
+		{
+			"id": "donkerblauw-sample-pack",
+			"naam": "Donkerblauw",
+			"productId": 6959,
+			"kleuren": [
+				"Breeze In",
+				"Cool Story",
+				"Denim Days",
+				"Deep Dive",
+				"Navy Baby",
+				"Night Plunge"
+			],
+			"omschrijving": "Zes klassieke donkerblauwe tinten"
+		},
+		{
+			"id": "roze-sample-pack",
+			"naam": "Roze",
+			"productId": 6946,
+			"kleuren": [
+				"Bubble Gum",
+				"Peach Out",
+				"Flirt Alert",
+				"Couch Crush",
+				"Pinky Promise",
+				"Berry Nice"
+			],
+			"omschrijving": "Zes roze tinten van zacht tot bold"
+		},
+		{
+			"id": "oranje-sample-pack",
+			"naam": "Oranje & Terra",
+			"productId": 6949,
+			"kleuren": [
+				"Siesta Fiesta",
+				"Dulce Glow",
+				"Tan Lines",
+				"Snug Life",
+				"Cozy Cotta",
+				"Fired Up"
+			],
+			"omschrijving": "Zes warme oranje- en terracottatinten"
+		},
+		{
+			"id": "paars-sample-pack",
+			"naam": "Paars",
+			"productId": 6950,
+			"kleuren": [
+				"Milky Lilac",
+				"Dear Diary",
+				"Fable Mystic"
+			],
+			"omschrijving": "Drie paarse tinten van lila tot diep"
+		},
+		{
+			"id": "geel-sample-pack",
+			"naam": "Geel",
+			"productId": 6957,
+			"kleuren": [
+				"Sunny Cheerio",
+				"Honey Drop",
+				"Strike Gold"
+			],
+			"omschrijving": "Drie zonnige gele tinten"
+		},
+		{
+			"id": "rood-sample-pack",
+			"naam": "Rood",
+			"productId": 6948,
+			"kleuren": [
+				"Hot Shot",
+				"Cherry On",
+				"Monk Mood"
+			],
+			"omschrijving": "Drie statement rode tinten"
+		},
+		{
+			"id": "bruin-sample-pack",
+			"naam": "Bruin",
+			"productId": 6961,
+			"kleuren": [
+				"Teddy Bear",
+				"Spiced Latte",
+				"Desert Date",
+				"Fudgy Brownie"
+			],
+			"omschrijving": "Vier warme bruine tinten van karamel tot chocolade"
+		}
+	]
+}
