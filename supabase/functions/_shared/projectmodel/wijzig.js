@@ -72,7 +72,8 @@ export function toepassen( project, aanvraag, opties = {} ) {
 	const vraag = ( w_, tekst, voorstel = null ) => uit.openVragen.push( { wijziging: w_, vraag: tekst, voorstel } );
 	const weiger = ( w_, reden ) => uit.geweigerd.push( { wijziging: w_, reden } );
 
-	for ( const wz of aanvraag.wijzigingen || [] ) {
+	for ( const ruw of aanvraag.wijzigingen || [] ) {
+		const wz = normaliseer( p, ruw );
 		if ( 'ongedaan' === wz.actie ) {
 			const vorige = [ ...p.log ].reverse().find( ( l ) => l.voor );
 			if ( ! vorige ) {
@@ -188,6 +189,39 @@ export function toepassen( project, aanvraag, opties = {} ) {
 	}
 	p.openVragen = [ ...( p.openVragen || [] ), ...uit.openVragen.map( ( q ) => ( { vraag: q.vraag, voorstel: q.voorstel, versie: p.versie } ) ) ];
 	return { ...uit, project: p };
+}
+
+/** Getallen die als tekst binnenkomen ("5", "2,6") worden getallen. */
+const GETAL_VELDEN = [ 'maat.lengte', 'maat.breedte', 'hoogte', 'extra', 'aantal', 'breedte' ];
+
+/**
+ * Maakt een voorstel robuust: een ontbrekende ruimte-ID wordt het type (met een cijfer bij een tweede),
+ * een ontbrekende vlak-ID de soort, en getallen als tekst worden getallen.
+ */
+export function normaliseer( p, ruw ) {
+	const wz = { ...ruw };
+	if ( 'ruimte-erbij' === wz.actie && ! wz.ruimte && wz.type ) {
+		let id = wz.type, i = 1;
+		while ( p.ruimtes.some( ( r ) => r.id === id ) ) {
+			i++;
+			id = wz.type + i;
+		}
+		wz.ruimte = id;
+	}
+	// Eén ruimte en geen ruimte genoemd: dan bedoelt de klant die ruimte.
+	if ( ! wz.ruimte && 1 === p.ruimtes.length && ( wz.vlak || [ 'vlak-erbij', 'kleur' ].includes( wz.actie ) || ( 'zet' === wz.actie && ! [ 'doel', 'spullen', 'wanneer', 'land' ].includes( wz.veld ) ) ) ) {
+		wz.ruimte = p.ruimtes[ 0 ].id;
+	}
+	if ( 'vlak-erbij' === wz.actie && ! wz.vlak && wz.soort ) {
+		wz.vlak = wz.soort;
+	}
+	if ( GETAL_VELDEN.includes( wz.veld ) && 'string' === typeof wz.waarde && /^\s*\d+([.,]\d+)?\s*$/.test( wz.waarde ) ) {
+		wz.waarde = parseFloat( wz.waarde.replace( ',', '.' ) );
+	}
+	if ( 'aantal' === wz.veld && 'number' === typeof wz.waarde ) {
+		wz.waarde = Math.round( wz.waarde );
+	}
+	return wz;
 }
 
 /** Het gegeven achter een veldpad, om te accepteren. */

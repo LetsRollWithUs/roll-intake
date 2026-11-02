@@ -150,14 +150,14 @@ DOEL: de klant eindigt met een passend plan, vertrouwen in het resultaat en een 
 SCOPE VAN DEZE VERSIE: een binnenruimte, muren en eventueel plafond (en een accentmuur). Noemt de klant lakwerk (deuren, kozijnen), meer ruimtes, buitenwerk, trappen of meubels: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
 
 ZO WERK JE ELKE BEURT
-1. Noemt de klant een kleur: eerst zoek_kleur.
+1. Een Roll-kleur of RAL-code mag je direct vastleggen met kleur { "naam": "..." }; de server zoekt hem op. Gebruik zoek_kleur alleen bij een kleur van een ander merk of als je twijfelt aan de naam.
 2. Leg alles wat de klant zegt vast met EEN aanroep van werk_project_bij (alle wijzigingen tegelijk). Ruimte-ID = het type (woonkamer, slaapkamer). Vlak-ID's: muren, plafond, accent. Een nieuwe ruimte krijgt automatisch het vlak muren.
 3. Zekerheid: "zeker" als de klant het duidelijk zegt; "waarschijnlijk" als je het afleidt (dat wordt een zichtbare aanname); "onduidelijk" met een vraag als het dubbelzinnig is en het pakket wezenlijk verandert.
-4. Sluit ALTIJD af met de tool antwoord. Kies de volgende vraag op basis van wat de server teruggeeft (open vragen, status per onderdeel). Stel nooit een vraag waarvan je het antwoord al weet.
+4. Sluit ALTIJD af met de tool antwoord. Stuur werk_project_bij en antwoord in hetzelfde bericht als je zeker weet wat je vastlegt: de server verwerkt eerst de wijzigingen, en als er iets niet lukt krijg je de nieuwe stand en schrijf je je antwoord opnieuw. Kies de volgende vraag op basis van de projectstand (wat ontbreekt of nog gecontroleerd moet worden). Stel nooit een vraag waarvan je het antwoord al weet.
 
 VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen.
 
-DE MUREN NU: vraag het met deze chips: "Geschilderd, licht, glad", "Geschilderd, donker", "Kaal stucwerk of gipsplaat", "Behang", "Structuur of scheuren", "Weet ik niet". "Geschilderd, licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed (allemaal zeker). Kaal = afwerking geen (vraag eventueel stucwerk of gipsplaat). Behang gaat er altijd af; vraag daarna of er scheuren onder zitten. Weet ik niet = afwerking onbekend; zeg dan "we rekenen voorlopig met twee lagen" en noem dat in aannames_getoond. Vocht, schimmel, afbladderende muurverf of beton: zeg dat dit een beoordeling vraagt en zet actie "overdracht".
+DE MUREN NU (en het plafond, als dat meegaat: vraag ze samen, "Hoe zien je muren en plafond er nu uit?", en leg een antwoord voor beide vast tenzij de klant ze apart noemt). Vraag het met deze chips: "Geschilderd, licht, glad", "Geschilderd, donker", "Kaal stucwerk of gipsplaat", "Behang", "Structuur of scheuren", "Weet ik niet". "Geschilderd, licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed (allemaal zeker). Kaal = afwerking geen (vraag eventueel stucwerk of gipsplaat). Behang gaat er altijd af; vraag daarna of er scheuren onder zitten. Weet ik niet = afwerking onbekend; zeg dan "we rekenen voorlopig met twee lagen" en noem dat in aannames_getoond. Vocht, schimmel, afbladderende muurverf of beton: zeg dat dit een beoordeling vraagt en zet actie "overdracht".
 
 DUBBELZINNIG, ALTIJD KORT BEVESTIGEN: "plafond wit laten" (niet schilderen of opnieuw wit?), "nieuwbouw" (kaal of al geschilderd?), "alles wit" (welke onderdelen, welk wit?), "20 vierkante meter" (vloer of muren?).
 
@@ -192,8 +192,19 @@ async function zoekKleur(term: string) {
   if (exact) return { type: "roll", naam: exact.n, omschrijving: exact.d ?? "" };
   const ral = /^ral\s*[-.]?\s*(\d{4})$/i.exec(t);
   const zoek = ral ? `RAL ${ral[1]}` : t;
-  const res = await (await fetch(`${ROLL}/wp-json/ark-kleurmatch/v1/colors?search=${encodeURIComponent(zoek)}&per_page=3`)).json().catch(() => []);
-  const lijst = Array.isArray(res) ? res : [];
+  const km = async (q: string) => { const r = await (await fetch(`${ROLL}/wp-json/ark-kleurmatch/v1/colors?search=${encodeURIComponent(q)}&per_page=5`)).json().catch(() => []); return Array.isArray(r) ? r : []; };
+  let lijst = await km(zoek);
+  // "Nigiri van LAB" vindt niets, "nigiri" wel: probeer de losse woorden en houd treffers die bij de rest passen.
+  if (!lijst.length && !ral) {
+    const woorden = t.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length > 3 && !["kleur", "verf", "van", "voor", "zoals"].includes(x));
+    for (const wd of woorden) {
+      const r = await km(wd);
+      const rest = woorden.filter((x) => x !== wd);
+      const passend = r.filter((x: any) => !rest.length || rest.some((x2) => `${x.brand} ${x.line} ${x.name}`.toLowerCase().includes(x2)));
+      if (passend.length || r.length === 1) { lijst = passend.length ? passend : r; break; }
+    }
+  }
+  lijst = lijst.slice(0, 3);
   if (ral) {
     const r = lijst.find((x: any) => "RAL" === String(x.brand).toUpperCase());
     if (r) return { type: "ral", naam: `RAL ${ral[1]}`, km: { id: r.id, rollNaam: r.rollName, rollCode: r.rollCode, hex: r.hex, ral: true, naam: `RAL ${ral[1]}` } };
@@ -215,7 +226,8 @@ async function stelVoor(familie: string, lh = "maakt niet uit") {
   const ix = await index();
   const f = familie.toLowerCase();
   const slug = ix.f.find((x) => x.s === f || x.n.toLowerCase() === f)?.s ?? f;
-  let lijst = ix.c.filter((k) => (k.c ?? []).includes(slug));
+  // Kleuren die ook bij wit horen (zoals een warm wit in beige) alleen als iemand wit zoekt.
+  let lijst = ix.c.filter((k) => (k.c ?? []).includes(slug) && ("wit" === slug || !(k.c ?? []).includes("wit")));
   const band = (k: Kleur) => { const l = lichtheid(k.h); return l >= 0.75 ? "licht" : l >= 0.45 ? "midden" : "donker"; };
   if (lh !== "maakt niet uit") {
     const gefilterd = lijst.filter((k) => band(k) === lh);
@@ -255,6 +267,25 @@ async function bereken(plan: any) {
   const jj = await res.json();
   if (!jj?.success) throw new Error("rekenkern");
   return jj.data;
+}
+
+/** Kleuren in een voorstel opzoeken: Roll-naam (ook zonder hoofdletters), of RAL via de kleurmatch. */
+async function kleurenOpzoeken(wijzigingen: any[], gevonden: Map<string, any>) {
+  const ix = await index();
+  for (const wz of wijzigingen) {
+    const k = wz?.kleur;
+    if (!k || !k.naam || (k.km && k.km.id)) continue;
+    // Wat zoek_kleur deze beurt vond (een merkkleur met de gegevens uit de kleurmatch).
+    const eerder = gevonden.get(String(k.naam).toLowerCase()) ?? gevonden.get(String(k.merkKleur ?? "").toLowerCase());
+    if (eerder) { wz.kleur = eerder; continue; }
+    const roll = ix.c.find((c) => c.n.toLowerCase() === String(k.naam).trim().toLowerCase());
+    if (roll) { wz.kleur = { type: "roll", naam: roll.n }; continue; }
+    if (/^ral\s*[-.]?\s*\d{4}$/i.test(String(k.naam).trim())) {
+      const r: any = await zoekKleur(String(k.naam));
+      if ("ral" === r.type) wz.kleur = r;
+    }
+  }
+  return wijzigingen;
 }
 
 /** Wat het model van het project te zien krijgt: compact, met herkomst. */
@@ -336,8 +367,6 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     mens = m;
     try { pakket = await bereken(plan); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
   };
-  await herbereken();
-
   const geschiedenis: Anthropic.MessageParam[] = (rij.gesprek as any[]).slice(-10).map((b) => ({ role: "klant" === b.rol ? "user" : "assistant", content: b.tekst || "..." }) as Anthropic.MessageParam);
   // Een gesprek begint altijd met de klant.
   while (geschiedenis.length && "assistant" === geschiedenis[0].role) geschiedenis.shift();
@@ -346,6 +375,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const messages: Anthropic.MessageParam[] = [...geschiedenis, { role: "user", content: `Projectstand nu: ${stand()}\n\n${tikTekst ? tikTekst + "\n" : ""}Klant: ${bericht || "(tikte op een kaart)"}` }];
 
   let antwoord: any = null;
+  const gevonden = new Map<string, any>();
   let tokens = { in: 0, uit: 0, cache: 0 };
   for (let stap = 0; stap < MAX_STAPPEN && !antwoord; stap++) {
     const res = await claude.beta.messages.create({
@@ -355,6 +385,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       tools: TOOLS,
       messages,
       output_config: { effort: "low" },
+      // Zonder nadenken tussen de tools: een gesprek als dit heeft daar weinig aan en het scheelt seconden.
+      // Met PROJECTHULP_DENKEN=adaptive gaat het nadenken weer aan.
+      ...("adaptive" === Deno.env.get("PROJECTHULP_DENKEN") ? {} : { thinking: { type: "between_tools" } }),
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
     } as any);
@@ -372,8 +405,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     const results: Anthropic.ToolResultBlockParam[] = [];
     // Eerst vastleggen en rekenen, dan pas antwoorden: een antwoord naast wijzigingen telt niet.
     const wijzigtOok = calls.some((c) => "werk_project_bij" === c.name);
+    let schoon = true;
+    // Eerst de wijzigingen, dan pas het antwoord bekijken.
+    calls.sort((a, b) => Number("antwoord" === a.name) - Number("antwoord" === b.name));
     for (const c of calls) {
-      if ("antwoord" === c.name && wijzigtOok) {
+      if ("antwoord" === c.name && wijzigtOok && !schoon) {
         results.push({ type: "tool_result", tool_use_id: c.id, content: JSON.stringify({ opnieuw: "De wijzigingen zijn net verwerkt. Schrijf je antwoord opnieuw op basis van de nieuwe stand." }) });
         continue;
       }
@@ -382,14 +418,27 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       try {
         switch (c.name) {
           case "werk_project_bij": {
-            const u = toepassen(project, { aanvraagId: `${aanvraagId}#${stap}`, versie: project.versie, door: "klant-chat", wijzigingen: Array.isArray(inp.wijzigingen) ? inp.wijzigingen : [] }, opties);
+            const voorstel = await kleurenOpzoeken(Array.isArray(inp.wijzigingen) ? inp.wijzigingen : [], gevonden);
+            const u = toepassen(project, { aanvraagId: `${aanvraagId}#${stap}`, versie: project.versie, door: "klant-chat", wijzigingen: voorstel }, opties);
             project = u.project;
             laatsteWijzigingen = laatsteWijzigingen.concat(u.toegepast);
-            await herbereken();
-            out = { toegepast: u.toegepast.length, geweigerd: u.geweigerd.map((x: any) => x.reden), openVragen: u.openVragen.map((x: any) => x.vraag), naar_een_mens: mens, pakket_berekend: !!pakket && !pakket.fout, stand: JSON.parse(stand()) };
+            mens = naarRekenkern(project).mens;
+            schoon = schoon && !u.geweigerd.length && !u.openVragen.length;
+            out = { toegepast: u.toegepast.length, geweigerd: u.geweigerd.map((x: any) => x.reden), openVragen: u.openVragen.map((x: any) => x.vraag), naar_een_mens: mens, stand: JSON.parse(stand()) };
             break;
           }
-          case "zoek_kleur": out = await zoekKleur(String(inp.zoekterm ?? "")); break;
+          case "zoek_kleur": {
+            const z: any = await zoekKleur(String(inp.zoekterm ?? ""));
+            for (const k of [z, ...(z.treffers ?? []), ...(z.mogelijk ?? [])]) {
+              if (k?.naam && k.type && "geen" !== k.type) {
+                gevonden.set(String(k.naam).toLowerCase(), k);
+                if (k.merkKleur) { gevonden.set(String(k.merkKleur).toLowerCase(), k); gevonden.set(`${k.merk} ${k.merkKleur}`.toLowerCase(), k); }
+                if (k.km?.rollNaam) gevonden.set(String(k.km.rollNaam).toLowerCase(), k);
+              }
+            }
+            out = z;
+            break;
+          }
           case "stel_kleuren_voor": out = await stelVoor(String(inp.familie ?? ""), inp.lichtheid); break;
           case "kleurhulp": out = await kleurhulp(project, String(inp.ruimte ?? ""), inp.antwoorden); break;
           case "productinfo": out = productinfo(String(inp.onderwerp ?? "")); break;
@@ -406,13 +455,15 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     if (!antwoord) messages.push({ role: "user", content: results });
   }
   if (!antwoord) antwoord = { tekst: "Even geen antwoord. Probeer het nog een keer, of ga verder met de stappen.", chips: [], kaarten: [], actie: "stappen" };
+  // Een keer rekenen, op het vastgelegde project; de pakketkaart toont deze getallen.
+  await herbereken();
 
   // Kaarten alleen van echte Roll-kleuren; de browser toont kleurvlak, naam en omschrijving.
   const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix.c.find((k) => k.n === n)).filter(Boolean).slice(0, 4).map((k: any) => kaart(k));
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), chips: (antwoord.chips ?? []).slice(0, 6), kaarten, actie: antwoord.actie ?? "geen", aannames_getoond: antwoord.aannames_getoond ?? [] },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), chips: (antwoord.chips ?? []).slice(0, 12), kaarten, actie: antwoord.actie ?? "geen", aannames_getoond: antwoord.aannames_getoond ?? [] },
     project, status, pakket, mens, versie: project.versie, mandPlan: mandPlan(plan, status),
   };
   const nu = new Date().toISOString();
