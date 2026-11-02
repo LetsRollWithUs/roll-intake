@@ -147,7 +147,7 @@ const SYSTEEM = `Je bent Roll, het Nederlandse verfmerk, en je helpt een klant i
 
 DOEL: de klant eindigt met een passend plan, vertrouwen in het resultaat en een duidelijke volgende stap. Elke vraag moet bijdragen aan een mooier resultaat, minder gedoe of een betere aankoop.
 
-SCOPE VAN DEZE VERSIE: een binnenruimte, muren en eventueel plafond (en een accentmuur). Noemt de klant lakwerk (deuren, kozijnen), meer ruimtes, buitenwerk, trappen of meubels: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
+SCOPE VAN DEZE VERSIE: binnenruimtes, muren en eventueel plafond (en een accentmuur); meerdere ruimtes mag. Noemt de klant lakwerk (deuren, kozijnen), buitenwerk, trappen of meubels: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
 
 ZO WERK JE ELKE BEURT
 1. Een Roll-kleur of RAL-code mag je direct vastleggen met kleur { "naam": "..." }; de server zoekt hem op. Gebruik zoek_kleur alleen bij een kleur van een ander merk of als je twijfelt aan de naam.
@@ -164,10 +164,11 @@ DUBBELZINNIG, ALTIJD KORT BEVESTIGEN: "plafond wit laten" (niet schilderen of op
 MAAT: lengte x breedte van de vloer is genoeg. Weet de klant het niet: chips Klein, Gemiddeld, Groot. Noem de hoogte als aanname: "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust" en zet hem in aannames_getoond.
 
 KLEUR (per vlak):
-- Roll-kleur of RAL genoemd en duidelijk gekozen: kleur actie wat "kies", zekerheid zeker. Bevestig kort met naam en tint.
-- Kleur van een ander merk: zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en gebruik daarna alleen de Roll-naam. Noem nooit uit jezelf een ander merk.
-- Geen treffer: zeg dat eerlijk en stel een passende Roll-kleur voor als kaart; de klant kiest die zelf.
-- Richting (familie of sfeer): kleur actie wat "richting", dan stel_kleuren_voor en toon de kleuren als kaarten. Op een kaart kan de klant een favoriet maken, een sample proberen of de kleur kiezen.
+- JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurhulp (dezelfde vragen als de kleurenscan) of van een stylist (online kleuradvies). Jij helpt met een richting, samples, en de weg naar die hulp.
+- Roll-kleur of RAL genoemd en duidelijk gekozen: kleur actie wat "kies", zekerheid zeker. Bevestig neutraal met naam en de omschrijving van de tint ("Sage Blink, licht grijsgroen, staat erin voor de muren").
+- Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en gebruik daarna alleen de Roll-naam. Noem nooit uit jezelf een ander merk.
+- Geen treffer: zeg dat eerlijk en toon Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
+- Richting (familie of sfeer): kleur actie wat "richting", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Op een kaart kan de klant een favoriet maken, een sample proberen of de kleur kiezen. Raad aan ze eerst als sample op de muur te bekijken, en bied de kleurhulp of een stylist aan als de klant hulp wil bij het kiezen.
 - Twijfel tussen kleuren: wat "kandidaat", nooit "kies".
 - Geen idee: bied aan: Help me kiezen (kleurhulp), Laat een stylist meekijken (actie "kleuradvies"), Later kiezen. Kleurhulp: vraag de vragen een voor een met hun keuzes als chips; vul in wat je al weet; daarna kleurhulp met antwoorden en toon de drie kleuren als kaarten.
 - Een sample is een advies, nooit een voorwaarde. Accentmuur alleen voorstellen als de klant een muur noemt of twijfelt of een kleur niet te veel wordt.
@@ -313,12 +314,16 @@ function samenvatting(p: any, status: any) {
   };
 }
 
-/** Alleen onderdelen die klaar zijn gaan mee naar het mandje; samples altijd. */
-function mandPlan(plan: any, status: any) {
-  const klaar = new Set(status.onderdelen.filter((o: any) => "klaar" === o.status).map((o: any) => `${o.ruimte}.${o.vlak}`));
-  const ruimtes = plan.ruimtes.map((r: any) => ({ ...r, vlakken: r.vlakken.filter((v: any) => klaar.has(`${r.id}.${v.id}`)) })).filter((r: any) => r.vlakken.length);
+/** Een plan met alleen de onderdelen in de gegeven statussen; samples en packs gaan altijd mee. */
+function planMet(plan: any, status: any, statussen: string[]) {
+  const mee = new Set(status.onderdelen.filter((o: any) => statussen.includes(o.status)).map((o: any) => `${o.ruimte}.${o.vlak}`));
+  const ruimtes = plan.ruimtes.map((r: any) => ({ ...r, vlakken: r.vlakken.filter((v: any) => mee.has(`${r.id}.${v.id}`)) })).filter((r: any) => r.vlakken.length);
   return { ...plan, ruimtes };
 }
+/** Naar het mandje: alleen wat klaar is om te bestellen. */
+const mandPlan = (plan: any, status: any) => planMet(plan, status, ["klaar"]);
+/** In de pakketkaart: alleen onderdelen waarvan maat en ondergrond bekend zijn (geen verf op een gok). */
+const rekenPlan = (plan: any, status: any) => planMet(plan, status, ["klaar", "te-controleren"]);
 
 /* ---------- de beurt ---------- */
 
@@ -365,7 +370,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const herbereken = async () => {
     const { plan, mens: m } = naarRekenkern(project);
     mens = m;
-    try { pakket = await bereken(plan); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
+    try { pakket = await bereken(rekenPlan(plan, projectStatus(project))); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
   };
   const geschiedenis: Anthropic.MessageParam[] = (rij.gesprek as any[]).slice(-10).map((b) => ({ role: "klant" === b.rol ? "user" : "assistant", content: b.tekst || "..." }) as Anthropic.MessageParam);
   // Een gesprek begint altijd met de klant.
@@ -485,7 +490,7 @@ Deno.serve(async (req) => {
       const status = projectStatus(rij.project);
       const { plan } = naarRekenkern(rij.project);
       let pakket = null;
-      try { pakket = await bereken(plan); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
+      try { pakket = await bereken(rekenPlan(plan, status)); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
       return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status), bijRoll: "bij-roll" === rij.status });
     }
     const body = await req.json();
