@@ -116,6 +116,7 @@ const TOOLS: any[] = [
         vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips of het formulier erbij (maat, ondergrond, onderdelen, lak). Bij eigen: geef chips mee." },
         chips: { type: "array", items: { type: "string" } },
         kaarten: { type: "array", items: { type: "string" }, description: "Namen van Roll-kleuren om als kaart te tonen." },
+        voor: { type: "string", description: "Voor welk onderdeel de kaarten zijn, als pad: woonkamer.muren of slaapkamer2.plafond." },
         aannames: { type: "array", items: { type: "string" }, description: "Aannames die je in de tekst noemt, als pad: woonkamer.hoogte of woonkamer.muren.afwerking." },
         actie: { type: "string", enum: ["geen", "samples", "bestellen", "bewaren", "stappen", "overdracht", "kleuradvies"] },
       },
@@ -168,6 +169,7 @@ KLEUR (per vlak):
 - Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren").
 - Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en leg de Roll-naam vast die zoek_kleur gaf. Noem nooit uit jezelf een ander merk.
 - Geen treffer: zeg dat eerlijk en toon Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
+- Kaarten horen altijd bij een onderdeel: zet antwoord.voor op het pad (woonkamer.muren, hal.plinten). De klant kan op de kaart nog een ander open onderdeel kiezen.
 - Richting: "<ruimte>.muren richting <omschrijving>", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Raad aan ze eerst als sample te bekijken, en bied de kleurhulp of een stylist aan als de klant hulp wil.
 - Twijfel tussen kleuren: kandidaat, nooit kies.
 - Geen idee: vraag "geen-idee" (Help me kiezen, Laat een stylist meekijken met actie "kleuradvies", Later kiezen). Kleurhulp: vraag de vragen een voor een (vraag "eigen", met de keuzes als chips); vul in wat je al weet; daarna kleurhulp met antwoorden en toon de drie kleuren als kaarten.
@@ -648,9 +650,20 @@ function geldigAntwoord(inp: any) {
     vraag: VRAGEN.includes(inp.vraag) ? inp.vraag : "geen",
     chips: tekstLijst(inp.chips),
     kaarten: tekstLijst(inp.kaarten),
+    voor: "string" === typeof inp.voor ? inp.voor.slice(0, 60) : "",
     aannames: tekstLijst(inp.aannames),
     actie: ACTIES.includes(inp.actie) ? inp.actie : "geen",
   };
+}
+
+/** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
+function kaartDoel(project: any, pad?: string) {
+  const [ruimte, vlak] = String(pad ?? "").split(".");
+  const r = project.ruimtes.find((x: any) => x.id === ruimte);
+  if (r?.vlakken.some((v: any) => v.id === vlak)) return { ruimte, vlak };
+  const alle = project.ruimtes.flatMap((x: any) => x.vlakken.map((v: any) => ({ ruimte: x.id, vlak: v.id, open: "gekozen" !== v.kleur.status, muur: "muren" === v.soort })));
+  const doel = alle.find((x: any) => x.open && x.muur && (!r || x.ruimte === r.id)) ?? alle.find((x: any) => x.open) ?? alle[0];
+  return doel ? { ruimte: doel.ruimte, vlak: doel.vlak } : null;
 }
 
 /** Of het plan bewaard is, met het e-mailadres half verborgen (voor de projectkaart). */
@@ -707,7 +720,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     project = u.project;
     tikTekst = "zet" === tik.actie
       ? `De klant koos in de pakketkaart: ${tik.veld} ${tik.waarde}`
-      : `De klant tikte: ${tik.wat ?? tik.actie} ${tik.kleur?.naam ?? ""} ${tik.vlak ? "voor " + tik.vlak : ""}`.trim();
+      : `De klant tikte: ${tik.wat ?? tik.actie} ${tik.kleur?.naam ?? ""} ${tik.vlak ? `voor ${tik.ruimte ? tik.ruimte + "." : ""}${tik.vlak}` : ""}`.trim();
   }
 
   let mens: any[] = [];
@@ -875,7 +888,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Een vaste vraag van het model (maat, muren, onderdelen, lakwerk) wordt een formulier, als er nog iets te vragen is.
   const formulierUit = antwoord.formulier ?? (FORM_VRAGEN[antwoord.vraag] ? maakFormulier(FORM_VRAGEN[antwoord.vraag], project) : null);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
   const nu = new Date().toISOString();
