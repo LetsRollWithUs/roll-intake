@@ -12,7 +12,7 @@ const ROLL = "https://roll.nl/kleurplan/";
 interface Gegeven { waarde: any; bron?: string; geaccepteerd?: boolean }
 interface Vlak { id: string; soort: string; ondergrond: Record<string, Gegeven | null>; kleur: { status: string; gekozen: Gegeven | null; richting?: string; kandidaten: { naam: string }[]; favorieten: { naam: string }[] }; aantal: Gegeven | null; glans: Gegeven | null }
 interface Ruimte { id: string; naam: string; buiten?: boolean; maat: { lengte: Gegeven | null; breedte: Gegeven | null; grootte: Gegeven | null }; hoogte: Gegeven | null; vlakken: Vlak[] }
-interface Project { ruimtes: Ruimte[]; samples?: { naam: string }[]; spullen: Gegeven | null; volgorde?: Gegeven | null }
+interface Project { ruimtes: Ruimte[]; samples?: { naam: string }[]; packs?: { productId: number; naam: string }[]; spullen: Gegeven | null; volgorde?: Gegeven | null }
 interface Bericht { rol: "klant" | "roll"; tekst: string; op?: string }
 interface Rij {
   sessie: string;
@@ -233,7 +233,7 @@ function Detail({ sessie }: { sessie: string }) {
           {(r.project?.ruimtes ?? []).map((ru) => (
             <div key={ru.id} style={{ marginBottom: 12 }}>
               <div style={{ fontWeight: 800 }}>{ru.naam}{ru.buiten ? " (buiten)" : ""}</div>
-              <div style={{ fontSize: 13, opacity: 0.7 }}>{maatTekst(ru)} · muren {String(w(ru.hoogte) ?? 2.6).replace(".", ",")} m hoog</div>
+              <div style={{ fontSize: 13, opacity: 0.7 }}>{maatTekst(ru)} · muren {Number(w(ru.hoogte) ?? 2.6).toFixed(2).replace(".", ",")} m hoog</div>
               <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 14 }}>
                 {ru.vlakken.map((v) => (
                   <li key={v.id} style={{ marginBottom: 4 }}>
@@ -247,6 +247,7 @@ function Detail({ sessie }: { sessie: string }) {
           <div style={{ fontSize: 13, opacity: 0.75 }}>
             Spullen: {w(r.project?.spullen) ?? "nog niet gevraagd"}
             {r.project?.samples?.length ? ` · samples: ${r.project.samples.map((s) => s.naam).join(", ")}` : ""}
+            {r.project?.packs?.length ? ` · sample packs: ${r.project.packs.map((p) => p.naam || p.productId).join(", ")}` : ""}
             {w(r.project?.volgorde) ? ` · volgorde: ${w(r.project?.volgorde) === "verf-erbij" ? "verf alvast erbij" : "eerst samples"}` : ""}
           </div>
           <div style={{ marginTop: 14 }}>
