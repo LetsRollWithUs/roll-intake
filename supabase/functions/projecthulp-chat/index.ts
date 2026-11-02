@@ -556,7 +556,7 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
         if (st) for (const [veld, waarde] of Object.entries(st[0])) zet(r, vl, `ondergrond.${veld}`, waarde);
         if (glans) zet(r, vl, "glans", glans);
         const n = parseInt(String(v.ruimtes[r.id]?.aantallen?.[vl.id] ?? ""), 10);
-        if (TELBAAR.includes(vl.soort) && Number.isInteger(n)) { zet(r, vl, "aantal", n); stuk.push(`${n} ${LAK_NAAM[vl.soort]}`); }
+        if (TELBAAR.includes(vl.soort) && Number.isInteger(n)) { zet(r, vl, "aantal", n); stuk.push(`${n} ${1 === n ? ({ deuren: "deur", kozijnen: "kozijn", radiatoren: "radiator", kasten: "kast" } as Record<string, string>)[vl.soort] : LAK_NAAM[vl.soort]}`); }
         else if (!TELBAAR.includes(vl.soort)) stuk.push(LAK_NAAM[vl.soort] ?? vl.soort);
       }
       delen.push(`${ruimtes.length > 1 ? r.naam + ": " : ""}${stuk.join(", ")}`);
