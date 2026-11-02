@@ -6,7 +6,7 @@ import { deriveExpected, todayKey } from "./lead";
 // (De toolkit-herinnering is geparkeerd; de velden blijven in de database.)
 export interface Notif {
   id: string;
-  kind: "vandaag" | "opvolgen" | "advies" | "versturen" | "check" | "plan" | "taak" | "roll" | "melding";
+  kind: "vandaag" | "opvolgen" | "advies" | "versturen" | "check" | "plan" | "taak" | "roll" | "schilderplan" | "melding";
   title: string;
   sub?: string;
   to?: string;
@@ -26,6 +26,7 @@ export const KIND_LABEL: Record<Notif["kind"], string> = {
   check: "Achteraan gaan",
   taak: "Opvolgtaken",
   roll: "Roll-taken",
+  schilderplan: "Schilderplan",
   melding: "Systeem",
 };
 
@@ -145,6 +146,18 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
           to: `/beheer/${i.id}`,
         });
       }
+    }
+    // Jouw schilderplan: klanten die om hulp vroegen en nog niet zijn overgenomen.
+    const { data: sp } = await supabase.from("projecthulp_chat").select("sessie,code,email,overdracht_op,overdracht_kanaal")
+      .not("code", "is", null).not("overdracht_op", "is", null).not("status", "in", "(bij-roll,afgerond)")
+      .order("overdracht_op", { ascending: true }).limit(20);
+    for (const c of (sp as any[]) ?? []) {
+      out.push({
+        id: `schilderplan-${c.sessie}`, kind: "schilderplan",
+        title: `Schilderplan ${c.code}: klant vraagt om hulp${werkdagenSinds(c.overdracht_op) >= 1 ? " (al een werkdag)" : ""}`,
+        sub: `Via ${c.overdracht_kanaal === "mail" ? "mail" : "WhatsApp"} op ${fmtD(c.overdracht_op)}${c.email ? ` · ${c.email}` : ""}`,
+        to: `/beheer/schilderplan/${c.sessie}`,
+      });
     }
     const { data: al } = await supabase.from("system_alerts").select("id,message").is("acknowledged_at", null).order("created_at", { ascending: false }).limit(20);
     for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/beheer/meldingen" });

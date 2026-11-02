@@ -1067,7 +1067,9 @@ Deno.serve(async (req) => {
       const rij = await laad(sessie);
       if (!rij) return j({ fout: "Geen gesprek gevonden." }, 404);
       const code = rij.code ?? Array.from(crypto.getRandomValues(new Uint8Array(4))).map((x) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[x % 32]).join("");
-      await db.from("projecthulp_chat").update({ code, updated_at: new Date().toISOString() }).eq("sessie", sessie);
+      // Moment en kanaal van de vraag: daarmee staat hij bovenaan in beheer/schilderplan en telt hij in het belletje.
+      const nu = new Date().toISOString();
+      await db.from("projecthulp_chat").update({ code, overdracht_op: nu, overdracht_kanaal: "mail" === body.overdracht ? "mail" : "whatsapp", ...("afgerond" === rij.status ? { status: "actief" } : {}), updated_at: nu }).eq("sessie", sessie);
       return j({ code, tekst: `Hoi Roll, ik heb een vraag over mijn schilderplan (code ${code}).` });
     }
     const bericht = String(body.bericht ?? "").slice(0, MAX_TEKENS);
