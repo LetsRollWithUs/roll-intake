@@ -169,6 +169,7 @@ KLEUR (per vlak):
 - Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren").
 - Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en leg de Roll-naam vast die zoek_kleur gaf. Noem nooit uit jezelf een ander merk.
 - Geen treffer: zeg dat eerlijk en toon Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
+- Bij kleurkaarten toont de server het passende sample pack (vijf kleuren om thuis naast elkaar te vergelijken) en de knop voor online kleuradvies. Raad bij een richting het sample pack aan om te vergelijken, en noem dat een stylist altijd kan meekijken; noem geen prijzen.
 - Kaarten horen altijd bij een onderdeel: zet antwoord.voor op het pad (woonkamer.muren, hal.plinten). De klant kan op de kaart nog een ander open onderdeel kiezen.
 - Richting: "<ruimte>.muren richting <omschrijving>", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Raad aan ze eerst als sample te bekijken, en bied de kleurhulp of een stylist aan als de klant hulp wil.
 - Twijfel tussen kleuren: kandidaat, nooit kies.
@@ -741,6 +742,28 @@ function geldigAntwoord(inp: any) {
   };
 }
 
+/** Kleurrichting (familie uit stel_kleuren_voor, met licht of donker) naar het sample pack met die naam. */
+function packNaam(familie: string, lichtheid?: string) {
+  const donker = "donker" === lichtheid;
+  const m: Record<string, string> = {
+    wit: "Wit", beige: donker ? "Beige" : "Lichtbeige", greige: "Greige", grijs: donker ? "Donkergrijs & Zwart" : "Lichtgrijs", zwart: "Donkergrijs & Zwart",
+    groen: donker ? "Donkergroen" : "Lichtgroen", grijsgroen: "Grijsgroen", blauwgroen: "Groenblauw", blauw: donker ? "Donkerblauw" : "Lichtblauw",
+    roze: "Roze", oranje: "Oranje & Terra", rood: "Rood", paars: "Paars", geel: "Geel", bruin: "Bruin",
+  };
+  return m[String(familie ?? "").toLowerCase()] ?? "";
+}
+/**
+ * Het sample pack bij de getoonde kaarten, om thuis te vergelijken: het pack van de richting die de bot opzocht,
+ * anders het pack met de meeste van dezelfde kleuren (minstens twee).
+ */
+function packVoor(namen: string[], project: any, richting: { familie: string; lichtheid?: string } | null) {
+  const opNaam = richting ? PACKS.packs.find((p: any) => p.naam === packNaam(richting.familie, richting.lichtheid)) : null;
+  const opKleur = PACKS.packs.map((p: any) => ({ p, n: p.kleuren.filter((k: string) => namen.includes(k)).length })).sort((a: any, b: any) => b.n - a.n)[0];
+  const p = opNaam ?? (opKleur && opKleur.n >= 2 ? opKleur.p : null);
+  if (!p) return null;
+  return { productId: p.productId, naam: p.naam, omschrijving: p.omschrijving ?? "", kleuren: p.kleuren, inPakket: (project.packs ?? []).some((x: any) => x.productId === p.productId) };
+}
+
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
 function kaartDoel(project: any, pad?: string) {
   const [ruimte, vlak] = String(pad ?? "").split(".");
@@ -803,7 +826,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     if (tik.kleur) await metKleuren();
     const u = toepassen(project, { aanvraagId: aanvraagId + "#t", versie: project.versie, door: "klant-kaart", wijzigingen: [{ zekerheid: "zeker", ...tik }] }, opties);
     project = u.project;
-    tikTekst = "zet" === tik.actie
+    tikTekst = "pack" === tik.actie
+      ? `De klant zette het sample pack ${tik.naam ?? ""} in zijn pakket`
+      : "zet" === tik.actie
       ? `De klant koos in de pakketkaart: ${tik.veld} ${tik.waarde}`
       : `De klant tikte: ${tik.wat ?? tik.actie} ${tik.kleur?.naam ?? ""} ${tik.vlak ? `voor ${tik.ruimte ? tik.ruimte + "." : ""}${tik.vlak}` : ""}`.trim();
   }
@@ -854,6 +879,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const messages: Anthropic.MessageParam[] = [...geschiedenis, { role: "user", content: `Projectstand:\n${stand(project)}\n\n${tikTekst ? tikTekst + "\n" : ""}Klant: ${bericht || (formulier ? "(formulier ingevuld)" : "zet" === tik?.actie ? "(koos in de pakketkaart, staat al vast)" : "(tikte op een kaart)")}` }];
 
   const gevonden = new Map<string, any>();
+  let richting: { familie: string; lichtheid?: string } | null = null;
   let tokens: any = { in: 0, uit: 0, cache: 0, t: { laden: Date.now() - start, model: 0, rekenen: 0, opslaan: 0 } };
   for (let stap = 0; stap < MAX_STAPPEN && !antwoord; stap++) {
     const haiku = model.includes("haiku");
@@ -949,7 +975,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
             out = z;
             break;
           }
-          case "stel_kleuren_voor": out = await stelVoor(String(inp.familie ?? ""), inp.lichtheid); break;
+          case "stel_kleuren_voor": richting = { familie: String(inp.familie ?? ""), lichtheid: inp.lichtheid }; out = await stelVoor(String(inp.familie ?? ""), inp.lichtheid); break;
           case "kleurhulp": out = await kleurhulp(project, String(inp.ruimte ?? ""), inp.antwoorden); break;
           case "productinfo": out = productinfo(String(inp.onderwerp ?? "")); break;
           case "voorwaarden": out = VOORWAARDEN; break;
@@ -984,7 +1010,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const vraagForm = FORM_VRAGEN[antwoord.vraag];
   const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm ? maakFormulier(vraagForm, project) : null);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), pack: kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null, kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
   const nu = new Date().toISOString();

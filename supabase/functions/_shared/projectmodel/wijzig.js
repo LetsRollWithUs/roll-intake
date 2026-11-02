@@ -172,6 +172,22 @@ export function toepassen( project, aanvraag, opties = {} ) {
 				uit.toegepast.push( wz );
 				break;
 			}
+			case 'pack': {
+				// Een sample pack (WooCommerce-product met SKU SMP-PCK-*): vijf kleuren om naast elkaar te vergelijken.
+				p.packs = p.packs || [];
+				const id = Number( wz.productId );
+				if ( ! Number.isInteger( id ) || id <= 0 ) {
+					weiger( wz, 'Onbekend sample pack.' );
+					break;
+				}
+				if ( 'weg' === wz.wat ) {
+					p.packs = p.packs.filter( ( x ) => x.productId !== id );
+				} else if ( ! p.packs.some( ( x ) => x.productId === id ) ) {
+					p.packs.push( { productId: id, naam: String( wz.naam || '' ).slice( 0, 60 ) } );
+				}
+				uit.toegepast.push( wz );
+				break;
+			}
 			default:
 				weiger( wz, 'Onbekende actie.' );
 		}
