@@ -1,20 +1,38 @@
 {
 	"bron": "https://roll.nl/ruilen-retourneren/",
-	"nagelopen": "2026-11-02",
-	"beheer": "Met de hand bijhouden: elke wijziging op roll.nl/ruilen-retourneren hier overnemen. De bot citeert alleen deze teksten.",
+	"nagelopen": "2026-11-03",
+	"beheer": "Met de hand bijhouden: elke wijziging op roll.nl/ruilen-retourneren hier overnemen. Levertijden en klantenservice volgens Ingmar (3 nov 2026); de contactpagina zegt nog 16:00 voor verf en moet worden bijgewerkt. De bot citeert alleen deze teksten.",
 	"retour": {
 		"termijn": "Aanmelden binnen 14 dagen na ontvangst, via de klantenservice.",
-		"wel": [ "Ongeopende basis-witte verf met intacte verzegeling", "Ongeopende Roll-waaier", "Ongebruikt verfgereedschap in de originele verpakking", "Onbeschadigd behang in de originele folie" ],
-		"niet": [ "Verf die speciaal op kleur is gemengd (alles met een kleurnaam of nummer anders dan wit of transparant)", "Behang dat op maat is gesneden", "Geopende, aangebroken of gebruikte blikken, emmers en testers", "Losse onderdelen uit een voordeelpakket" ],
+		"wel": [
+			"Ongeopende basis-witte verf met intacte verzegeling",
+			"Ongeopende Roll-waaier",
+			"Ongebruikt verfgereedschap in de originele verpakking",
+			"Onbeschadigd behang in de originele folie"
+		],
+		"niet": [
+			"Verf die speciaal op kleur is gemengd (alles met een kleurnaam of nummer anders dan wit of transparant)",
+			"Behang dat op maat is gesneden",
+			"Geopende, aangebroken of gebruikte blikken, emmers en testers",
+			"Losse onderdelen uit een voordeelpakket"
+		],
 		"kosten": "Terugsturen is voor eigen rekening, tenzij Roll een fout maakte. Gaat de hele bestelling retour, dan krijg je ook de verzendkosten van de heenzending terug.",
 		"terugbetaling": "Binnen 7 dagen na ontvangst van de producten in goede, nieuwe staat.",
 		"defect": "Beschadigd, defect of verkeerd geleverd: eerst contact met de klantenservice, dan stuurt Roll een gratis retourlabel."
 	},
 	"verzending": {
-		"gratis": "Gratis verzending vanaf € 150."
+		"gratis": "Gratis verzending vanaf € 150.",
+		"verf": "Verf (ook behang) besteld voor 23:59 op maandag tot en met donderdag of op zondag, is meestal de volgende dag in huis, 's avonds. Op vrijdag besteld voor 9:00: meestal dezelfde avond in huis. Op vrijdag na 9:00 of in het weekend tot zondag 23:59 besteld: maandagavond.",
+		"samples": "Samples besteld voor 16:00 zijn meestal de volgende dag in huis; op vrijdag voor 16:00 besteld komen ze zaterdag.",
+		"let_op": "Zitten verf en samples in dezelfde bestelling, of gaat het naar België, dan weet de klantenservice de precieze levertijd."
 	},
 	"regels_voor_de_bot": [
 		"Gebruik retour nooit als geruststelling bij de hoeveelheid: op kleur gemengde verf kan niet retour.",
+		"Levertijden noem je met 'meestal'; beloof nooit een vaste bezorgdatum.",
 		"Noem geen termijnen, levertijden of kosten die hier niet staan; verwijs dan naar de klantenservice."
-	]
+	],
+	"klantenservice": {
+		"bereikbaar": "Maandag tot en met vrijdag van 9:00 tot 17:00, in het weekend gesloten.",
+		"kanalen": "WhatsApp (via roll.nl/contact), mail naar hello@roll.nl, bellen naar 085 369 62 44, of het formulier op roll.nl/contact."
+	}
 }

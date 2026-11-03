@@ -159,6 +159,7 @@ function eindKlopt( sleutel, verwacht, r, alle ) {
 	if ( ! ru ) return false;
 	if ( delen[ 1 ] === 'maat' ) return waardeGelijk( w( ru.maat[ delen[ 2 ] ] ), verwacht );
 	if ( delen[ 1 ] === 'hoogte' ) return waardeGelijk( w( ru.hoogte ), verwacht );
+	if ( delen[ 1 ] === 'glas' ) return ( ru.glas ?? [] ).length === verwacht;
 	const vl = vlakVan( ru, delen[ 1 ] );
 	if ( delen.length === 2 ) return verwacht === 'bestaat niet' ? ! vl : !! vl;
 	if ( ! vl ) return false;
@@ -259,6 +260,11 @@ async function draaiGesprek( g ) {
 			if ( ok === null ) continue;
 			checks++;
 			if ( ! ok ) fouten.push( `eind ${ k } is niet "${ Array.isArray( v ) ? v.join( ', ' ) : v }" (wel: ${ JSON.stringify( eindWaarde( k, r ) ) })` );
+		}
+		// Wat er in een antwoord moet staan, bijvoorbeeld "digitale assistent" op de vraag of het een mens is.
+		for ( const [ beurt, patroon ] of Object.entries( g.antwoordBevat ?? {} ) ) {
+			checks++;
+			if ( ! new RegExp( patroon, 'i' ).test( antwoorden[ Number( beurt ) ]?.tekst ?? '' ) ) fouten.push( `antwoord ${ beurt } bevat niet /${ patroon }/` );
 		}
 		for ( const zin of g.nooit ?? [] ) {
 			const k = nooitGebeurd( zin, r );
