@@ -17,10 +17,11 @@ export const MERKEN = [
 const LAB = /\bLAB\b/;
 /** Waar onze verf vandaan komt of wat erop lijkt: nooit noemen, ook niet als de klant het zelf noemt. */
 export const NOOIT_MERKEN = [ 'Relius', 'Ecotex' ];
-const NOOIT_RE = new RegExp( '\\b(' + NOOIT_MERKEN.join( '|' ) + ')\\b', 'i' );
 
 const esc = ( s ) => s.replace( /[.*+?^${}()|[\]\\]/g, '\\$&' );
-const MERK_RE = new RegExp( '\\b(' + MERKEN.map( esc ).join( '|' ) + ')\\b', 'i' );
+const lijstRe = ( lijst ) => new RegExp( '\\b(' + lijst.map( esc ).join( '|' ) + ')\\b', 'i' );
+const MERK_RE = lijstRe( MERKEN );
+const NOOIT_RE = lijstRe( NOOIT_MERKEN );
 
 /**
  * De regels. `mag` zegt wanneer iets toch mag: als de klant het zelf noemde, of als de bot het uit een
@@ -33,10 +34,10 @@ export const REGELS = [
 		// Een verftester is 50 ml: dat mag uit de voorwaarden.
 		return ( t.match( re ) || [] ).find( ( m ) => ! ( /^50\s?ml$/i.test( m ) && c.tools.has( 'voorwaarden' ) ) ) || null;
 	} },
-	{ id: 'leverancier', uitleg: 'Noem nooit Relius of Ecotex, ook niet als de klant ernaar vraagt.', re: NOOIT_RE },
+	{ id: 'leverancier', uitleg: 'Noem nooit de merken waar onze verf vandaan komt (zoals Relius en Ecotex), ook niet als de klant ernaar vraagt.', zoek: ( t, c ) => ( t.match( c.nooitRe ) || [] )[ 0 ] || null },
 	{ id: 'hex', uitleg: 'Noem geen HEX- of kleurcodes.', re: /#[0-9a-f]{6}\b/i },
 	{ id: 'merk', uitleg: 'Noem geen ander verfmerk of andere winkel, tenzij de klant het zelf noemde (dan een keer bevestigen).', zoek: ( t, c ) => {
-		const m = t.match( MERK_RE ) || t.match( LAB );
+		const m = t.match( c.merkRe ) || t.match( LAB );
 		if ( ! m ) return null;
 		const genoemd = m[ 0 ] === 'LAB' ? /\bLAB\b/i.test( c.klant ) : c.klant.toLowerCase().includes( m[ 0 ].toLowerCase() );
 		return genoemd ? null : m[ 0 ];
@@ -52,11 +53,17 @@ export const REGELS = [
 /**
  * Loopt een antwoord na.
  * @param {string} tekst
- * @param {{ klant?: string, tools?: Iterable<string> }} ctx klant = alles wat de klant in dit gesprek schreef; tools = tools van deze beurt.
+ * @param {{ klant?: string, tools?: Iterable<string>, merken?: string[], nooitMerken?: string[] }} ctx klant = alles wat de klant in dit gesprek schreef;
+ *   tools = tools van deze beurt; merken en nooitMerken = de lijsten uit de kennisbank (anders de vaste lijsten hierboven).
  * @return {{ id: string, uitleg: string, stuk: string }[]}
  */
 export function controleer( tekst, ctx = {} ) {
-	const c = { klant: String( ctx.klant ?? '' ), tools: new Set( ctx.tools ?? [] ) };
+	const c = {
+		klant: String( ctx.klant ?? '' ),
+		tools: new Set( ctx.tools ?? [] ),
+		merkRe: ctx.merken?.length ? lijstRe( ctx.merken ) : MERK_RE,
+		nooitRe: ctx.nooitMerken?.length ? lijstRe( ctx.nooitMerken ) : NOOIT_RE,
+	};
 	const t = String( tekst ?? '' );
 	const fouten = [];
 	for ( const r of REGELS ) {

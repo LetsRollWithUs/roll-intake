@@ -211,7 +211,26 @@ VOLGENDE STAP (antwoord.actie): "samples" als er samples klaarstaan en de kleur 
 
 /** Voorwaarden plus de prijs van het online kleuradvies, live uit de webshop: zo klopt een aanbieding vanzelf, ook als hij stopt. */
 let adviesPrijs: { op: number; tekst: string } | null = null;
+/** De kennisbank uit beheer (intake.roll.nl/beheer/kennisbank), 5 minuten bewaard. Lukt laden niet, dan voorwaarden.json. */
+let kb: { op: number; voorwaarden: any; merken: string[] | null; nooit: string[] | null } | null = null;
+async function kennisbank() {
+  if (kb && Date.now() - kb.op < 5 * 60_000) return kb;
+  const { data, error } = await db.from("kennisbank").select("sleutel,soort,tekst").eq("actief", true);
+  if (error || !data?.length) return kb ?? { op: 0, voorwaarden: VOORWAARDEN, merken: null, nooit: null };
+  const v: any = {};
+  let merken: string[] | null = null, nooit: string[] | null = null;
+  for (const r of data) {
+    const waarde = "lijst" === r.soort ? String(r.tekst).split("\n").map((x) => x.trim()).filter(Boolean) : r.tekst;
+    if ("merken.concurrenten" === r.sleutel) { merken = waarde; continue; }
+    if ("merken.nooit" === r.sleutel) { nooit = waarde; continue; }
+    const [a, b] = String(r.sleutel).split(".");
+    if (b) v[a] = { ...(v[a] ?? {}), [b]: waarde }; else v[a] = waarde;
+  }
+  kb = { op: Date.now(), voorwaarden: v, merken, nooit };
+  return kb;
+}
 async function voorwaarden() {
+  const basis = (await kennisbank()).voorwaarden;
   if (!adviesPrijs || Date.now() - adviesPrijs.op > 10 * 60_000) {
     const eur = (c: unknown) => `€ ${(Number(c) / 100).toLocaleString("nl-NL")}`;
     let tekst = "Online kleuradvies: 30 minuten videobellen met een stylist van Roll. Normaal € 59; of er een aanbieding loopt, zie je bij het boeken.";
@@ -226,10 +245,10 @@ async function voorwaarden() {
       adviesPrijs = { op: Date.now(), tekst };
     } catch {
       // Webshop even niet bereikbaar: de vaste tekst, en straks opnieuw proberen.
-      return { ...VOORWAARDEN, kleuradvies: tekst };
+      return { ...basis, kleuradvies: tekst };
     }
   }
-  return { ...VOORWAARDEN, kleuradvies: adviesPrijs.tekst + " Boeken via de knop Boek online kleuradvies." };
+  return { ...basis, kleuradvies: adviesPrijs.tekst + " Boeken via de knop Boek online kleuradvies." };
 }
 
 async function zoekKleur(term: string) {
@@ -940,7 +959,8 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const gevonden = new Map<string, any>();
   // Uitgaande controle (zie _shared/controle.js): wat de klant zelf schreef mag de bot terugzeggen (zijn eigen merk).
   const klantAlles = [...(rij.gesprek as any[]).filter((b) => "klant" === b.rol).map((b) => b.tekst), bericht].join(" ");
-  const controleCtx = () => ({ klant: klantAlles, tools: toolLog.map((x) => x.tool) });
+  const merkenKb = await kennisbank().catch(() => null);
+  const controleCtx = () => ({ klant: klantAlles, tools: toolLog.map((x) => x.tool), merken: merkenKb?.merken ?? undefined, nooitMerken: merkenKb?.nooit ?? undefined });
   const controleLog: any[] = [];
   let herkansing = false;
   let richting: { familie: string; lichtheid?: string } | null = null;
