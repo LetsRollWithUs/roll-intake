@@ -189,6 +189,7 @@ function nooitGebeurd( zin, r ) {
 	if ( /badkamermuren als klaar/.test( zin ) ) return ( r.status?.onderdelen ?? [] ).some( ( o ) => o.ruimte.startsWith( 'badkamer' ) && o.vlak === 'muren' && o.status === 'klaar' );
 	if ( /benaderde kleur automatisch/.test( zin ) ) return ( p?.ruimtes ?? [] ).some( ( x ) => x.vlakken.some( ( v ) => w( v.kleur.gekozen )?.type === 'merk-benaderd' && v.kleur.gekozen.door !== 'klant-kaart' ) );
 	if ( /gereedschap geselecteerd/.test( zin ) ) return w( p?.spullen ) === 'niets';
+	if ( /een kleur voor de muren gekozen/.test( zin ) ) return [ ...gekozenSet( p ) ].some( ( x ) => x.includes( '.muren:' ) );
 	return null; // tekstregels (behang, dekking, retour) vangt de vaste controle
 }
 

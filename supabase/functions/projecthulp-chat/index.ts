@@ -33,7 +33,6 @@ const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MODEL = Deno.env.get("PROJECTHULP_MODEL") ?? "claude-sonnet-5-5";
 const ROLL = "https://roll.nl";
-const ENGINE = `${SB_URL}/functions/v1/advies-engine`;
 const MAX_BERICHTEN = 40;
 const MAX_TEKENS = 1000;
 const MAX_STAPPEN = 6;
@@ -87,15 +86,6 @@ const TOOLS: any[] = [
     },
   },
   {
-    name: "kleurhulp",
-    description: "De korte kleurhulp (zelfde vragen als de kleurenscan). Zonder antwoorden: de vragen met hun keuzes. Met antwoorden: drie kleuren met waarom en het passende sample pack.",
-    input_schema: {
-      type: "object",
-      properties: { ruimte: { type: "string" }, antwoorden: { type: "object", description: "Vraag-ID naar gekozen waarde(n)." } },
-      required: ["ruimte"],
-    },
-  },
-  {
     name: "productinfo",
     description: "Gecontroleerde productinformatie (droogtijd, voorbereiding, geschiktheid, lagen). Antwoord alleen hieruit.",
     input_schema: { type: "object", properties: { onderwerp: { type: "string", enum: ["muurverf", "voorstrijk", "renovlies", "primer", "lak"] } }, required: ["onderwerp"] },
@@ -135,7 +125,7 @@ SCOPE VAN DEZE VERSIE: binnenruimtes (muren, plafond, accentmuur) en lakwerk: de
 FORMULIEREN: bij vraag "maat", "ondergrond", "onderdelen" of "lak" toont de server een kort formulier in de chat; vraag in je tekst dus kort en noem de keuzes niet zelf op. "onderdelen" = welke onderdelen per ruimte meegaan (muren, plafond, lakwerk); "lak" = aantallen, staat en glans van het lakwerk. Na een formulier krijg je de nieuwe stand; vraag wat er dan nog ontbreekt.
 
 ZO WERK JE ELKE BEURT
-1. Heb je eerst informatie nodig (zoek_kleur, stel_kleuren_voor, kleurhulp, productinfo, voorwaarden), vraag die dan eerst op.
+1. Heb je eerst informatie nodig (zoek_kleur, stel_kleuren_voor, productinfo, voorwaarden), vraag die dan eerst op.
 2. Daarna in EEN bericht: EERST antwoord (de klant ziet je tekst meteen verschijnen), DAN werk_bij met alles wat de klant zei, in korte regels (zie OPDRACHTEN). Een Roll-kleur of RAL-code mag je direct vastleggen; de server zoekt hem op. Gebruik zoek_kleur alleen bij een kleur van een ander merk of als je twijfelt aan de naam. De server verwerkt de regels voor hij je antwoord toont; lukt iets niet, dan krijg je de stand terug en schrijf je opnieuw. Kies de volgende vraag op basis van de projectstand. Stel nooit een vraag waarvan je het antwoord al weet. Houd alles kort: geen uitleg in de tools en geen tekst buiten de tools; de klant ziet alleen antwoord.
 3. Is iets dubbelzinnig en verandert het het pakket wezenlijk: leg dat deel niet vast maar vraag het (vraag "eigen" met chips). Leg het deel dat wel duidelijk is (de ruimte, een maat, een kleurrichting) wel meteen vast.
 4. Gebruik je een vakterm (voorstrijk, renovlies, primer), leg hem in een paar woorden uit.
@@ -157,6 +147,7 @@ VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst me
 DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij). Gaat het plafond mee, vraag ze samen ("Hoe zien je muren en plafond er nu uit?") en leg een antwoord voor beide vast tenzij de klant ze apart noemt.
 - "Geschilderd, wit of heel licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed.
 - "Geschilderd, met duidelijk kleur" = afwerking muurverf, kleurNu donker (structuur glad ? en conditie goed ? als aanname).
+- Noemt de klant terloops de kleur die de muren nu hebben ("nu is het wit", "nu zijn ze donkergroen"): leg meteen afwerking muurverf en kleurNu vast (wit, lichtgrijs of licht = licht; duidelijk kleur of donker = donker), en vraag daarna niet meer hoe de muren eruitzien, hooguit naar structuur of scheuren als dat nog open is. Dat is de huidige kleur, geen keuze voor de nieuwe.
 - "Kaal stucwerk of gipsplaat" = afwerking geen. "Behang" = afwerking behang; behang gaat er altijd af; vraag daarna of er scheuren onder zitten.
 - "Structuur of scheuren": vraag welke van de twee (vraag eigen).
 - "Weet ik niet" of "geen idee wat erop zit" = afwerking onbekend, structuur onbekend en conditie onbekend (alle drie vastleggen); zeg "we rekenen voorlopig met twee lagen" en zet het pad in aannames.
@@ -168,15 +159,20 @@ DUBBELZINNIG, ALTIJD KORT BEVESTIGEN: "plafond wit laten" (niet schilderen of op
 MAAT: ramen, deuren en schuifpuien trekken we niet af (liever iets te veel verf dan te weinig); beloof dus niet dat je er rekening mee houdt. Lengte x breedte van de vloer is genoeg; anders vraag "maat". Chip "Ongeveer ... (klein)" = ruimte grootte klein, "(gemiddeld)" = grootte middel, "(groot)" = grootte groot. Noem de hoogte als aanname: "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust" en zet ruimte.hoogte in aannames.
 
 KLEUR (per vlak):
-- JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurhulp (dezelfde vragen als de kleurenscan) of van een stylist (online kleuradvies). Jij helpt met een richting, samples, en de weg naar die hulp.
-- Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren").
+- JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurenscan op advies.roll.nl of van een stylist (online kleuradvies). Jij helpt met een richting, sample packs, en de weg naar die hulp.
+- Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren"). Bij een RAL-kleur noem je alleen de code ("RAL 9010 staat erin voor de muren"); verzin geen omschrijving of naam.
 - Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en leg de Roll-naam vast die zoek_kleur gaf. Noem nooit uit jezelf een ander merk.
 - Geen treffer: zeg dat eerlijk en vraag of de klant de naam of het merk kan controleren. Toon daarnaast Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
-- Bij kleurkaarten toont de server het passende sample pack (vijf kleuren om thuis naast elkaar te vergelijken) en de knop voor online kleuradvies. Raad bij een richting het sample pack aan om te vergelijken, en noem dat een stylist altijd kan meekijken; noem geen prijzen.
+- Bij kleurkaarten toont de server het passende sample pack (een handvol kleuren om thuis naast elkaar te vergelijken) en de knop voor online kleuradvies. Raad bij een richting het sample pack aan om te vergelijken, en noem dat een stylist altijd kan meekijken; noem geen prijzen.
 - Kaarten horen altijd bij een onderdeel: zet antwoord.voor op het pad (woonkamer.muren, hal.plinten). De klant kan op de kaart nog een ander open onderdeel kiezen.
-- Richting: "<ruimte>.muren richting <omschrijving>", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Raad aan ze eerst als sample te bekijken, en bied de kleurhulp of een stylist aan als de klant hulp wil.
+- Richting: "<ruimte>.muren richting <omschrijving>", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Raad aan ze eerst als sample te bekijken, en bied de kleurenscan of een stylist aan als de klant hulp wil.
 - Duidelijke keuze = kies: "ik wil X", "doe die maar", "die eerste", "die wil ik", "X van merk Y wil ik" (dan de Roll-naam die zoek_kleur gaf). Twijfel tussen kleuren = kandidaat, nooit kies. Alleen "lijkt op", "zoiets als" of "in de richting van" een kleur is geen keuze: leg de gevonden kleur dan vast als kandidaat en vraag of de klant hem wil.
-- Geen idee: vraag "geen-idee" (Help me kiezen, Laat een stylist meekijken met actie "kleuradvies", Later kiezen). Kleurhulp: vraag de vragen een voor een (vraag "eigen", met de keuzes als chips); vul in wat je al weet; daarna kleurhulp met antwoorden en toon de drie kleuren als kaarten.
+- Kleur nog onbekend ("geen idee", "weet ik nog niet") en geen richting genoemd: vraag "geen-idee". De server zet vier keuzes erbij; noem ze in je tekst niet allemaal op, zeg alleen kort dat de klant kan kiezen hoe hij verder wil.
+  - "Ik weet de richting": vraag welke richting (licht of donker, welke kleurfamilie); daarna richting vastleggen, stel_kleuren_voor en de kleuren als kaarten met het sample pack.
+  - "Doe de kleurenscan": de scan op advies.roll.nl opent in een nieuw tabblad en je plan blijft hier staan. Zeg kort dat de klant daarna terug kan komen met de uitkomst: de kleuren noemen die hij wil proberen, dan zet je de samples of het sample pack in zijn pakket. Leg nog niets vast.
+  - "Boek online kleuradvies": de boekpagina opent in een nieuw tabblad; zeg dat het plan hier bewaard blijft. Leg niets vast.
+  - "Later kiezen": leg geen kleur vast; de kleur blijft open en de verf komt erbij zodra hij kiest. Ga door met wat nog ontbreekt (onderdelen, maat, de muren nu, lakwerk).
+- Terug met de uitkomst van de kleurenscan ("uit de scan kwamen X, Y en Z"): leg die kleuren vast als kandidaat (nooit kies, tenzij de klant er duidelijk een kiest), toon ze als kaarten voor dat onderdeel en vraag welke hij als sample wil. Je zegt niets over welke het beste is.
 - Een sample is een advies, nooit een voorwaarde. Accentmuur alleen als de klant een muur noemt of twijfelt of een kleur niet te veel wordt.
 - Wanneer de klant wil beginnen (vraag "wanneer") alleen als het past, bij twijfel over kleur.
 
@@ -198,7 +194,7 @@ TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Hooguit drie zinnen voor 
 
 NOOIT: een HEX-code of mengcode noemen; zelf liters, aantallen blikken of bedragen noemen (die staan in de pakketkaart); dekking beloven ("een laag is genoeg", "dekt altijd"): zeg "we rekenen met een laag" of "met twee lagen"; retour noemen als geruststelling (op kleur gemengde verf kan niet retour); voorwaarden of productinformatie noemen die niet uit productinfo of voorwaarden komt; renovlies of verf over behang adviseren.
 
-UITKOMST ALS ER NOG KLEUREN OPEN ZIJN: verf voor een onderdeel zonder gekozen kleur verkopen we niet; de pakketkaart toont dan alleen samples. Zijn er nog kleuren open en is minstens een onderdeel al klaar (staat [klaar] in de stand) en is volgorde nog ?: vraag "volgorde" ("Wil je eerst de samples bekijken, of zetten we de verf voor de kleuren die al vaststaan alvast klaar?"). "Eerst de samples" = volgorde samples-eerst; "Zet de verf ... alvast klaar" = volgorde verf-erbij. Is nog geen onderdeel klaar, vraag het dan niet: help met kleur (samples, kleurhulp, stylist). Zeg nooit dat de verf al klaarstaat als volgorde samples-eerst is.
+UITKOMST ALS ER NOG KLEUREN OPEN ZIJN: verf voor een onderdeel zonder gekozen kleur verkopen we niet; de pakketkaart toont dan alleen samples. Zijn er nog kleuren open en is minstens een onderdeel al klaar (staat [klaar] in de stand) en is volgorde nog ?: vraag "volgorde" ("Wil je eerst de samples bekijken, of zetten we de verf voor de kleuren die al vaststaan alvast klaar?"). "Eerst de samples" = volgorde samples-eerst; "Zet de verf ... alvast klaar" = volgorde verf-erbij. Is nog geen onderdeel klaar, vraag het dan niet: help met kleur (sample packs, kleurenscan, stylist). Zeg nooit dat de verf al klaarstaat als volgorde samples-eerst is.
 
 VOLGENDE STAP (antwoord.actie): "samples" als er samples klaarstaan en de kleur nog open is; "bestellen" als onderdelen klaar zijn; "bewaren" bij later verder; "geen" als je nog een vraag stelt.`;
 
@@ -254,24 +250,6 @@ async function stelVoor(familie: string, lh = "maakt niet uit") {
   }
   lijst = lijst.sort((a, b) => lichtheid(b.h) - lichtheid(a.h)).slice(0, 4);
   return { kleuren: lijst.map((k) => ({ type: "roll", naam: k.n, omschrijving: k.d ?? "" })) };
-}
-
-async function kleurhulp(project: any, ruimteId: string, antwoorden?: Record<string, unknown>) {
-  if (!antwoorden || !Object.keys(antwoorden).length) {
-    const v = await (await fetch(ENGINE)).json();
-    return { vragen: (v.vragen ?? []).map((q: any) => ({ id: q.id, vraag: q.vraag ?? q.titel, meerdere: !!(q.meerdere || q.multi), keuzes: (q.opties ?? []).map((o: any) => ({ waarde: o.waarde, label: o.label })) })) };
-  }
-  const r = project.ruimtes.find((x: any) => x.id === ruimteId);
-  const ruimte: Record<string, unknown> = { type: r?.type ?? "woonkamer" };
-  const l = w(r?.maat?.lengte), b = w(r?.maat?.breedte);
-  if (l && b) ruimte.vloer_m2 = Math.round(l * b * 10) / 10; else ruimte.grootte = w(r?.maat?.grootte, "middel");
-  const { families, ...rest } = antwoorden as any;
-  const res = await (await fetch(ENGINE, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ versie: 1, bron: "projecthulp-chat", sessie: "ph_" + project.id, ruimte, antwoorden: rest, families: families ?? [], log: true }) })).json();
-  const kleuren = (res.kleuren ?? []).slice(0, 3).map((c: any) => ({ type: "roll", naam: c.naam, label: c.label ?? "", waarom: (c.waarom ?? []).slice(0, 2) }));
-  const namen = new Set(kleuren.map((k: any) => k.naam));
-  // Een pack alleen als het de aanbevolen kleuren echt bevat.
-  const pack = PACKS.packs.map((p: any) => ({ p, n: p.kleuren.filter((k: string) => namen.has(k)).length })).sort((a: any, b: any) => b.n - a.n)[0];
-  return { kleuren, pack: pack && pack.n >= 2 ? { naam: pack.p.naam, productId: pack.p.productId, kleuren: pack.p.kleuren } : null };
 }
 
 function productinfo(onderwerp: string) {
@@ -384,6 +362,8 @@ function maatSchatting(type: string) {
   });
 }
 const maatChips = (type: string) => maatSchatting(type).map((x) => x.label);
+// Kleur nog onbekend. De plugin maakt van de scan en het kleuradvies links in een nieuw tabblad (chat.js, CHIP_LINK).
+const GEEN_IDEE = ["Ik weet de richting", "Doe de kleurenscan", "Boek online kleuradvies", "Later kiezen"];
 function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
   switch (vraag) {
     case "ondergrond": return ["Geschilderd, wit of heel licht, glad", "Geschilderd, met duidelijk kleur (zoals groen, grijs of donker)", "Kaal stucwerk of gipsplaat", "Behang", "Structuur of scheuren", "Weet ik niet"];
@@ -393,8 +373,8 @@ function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
       const r = project.ruimtes.find((x: any) => !(telt(x.maat.lengte) && telt(x.maat.breedte)) && !telt(x.maat.grootte)) ?? project.ruimtes[0];
       return r ? [...maatChips(r.type), "Weet ik niet"] : [];
     }
-    case "kleurroute": return ["Ik weet mijn kleur", "Ik heb een richting", "Help me kiezen", "Laat een stylist meekijken", "Later kiezen"];
-    case "geen-idee": return ["Help me kiezen", "Laat een stylist meekijken", "Later kiezen"];
+    case "kleurroute": return ["Ik weet mijn kleur", ...GEEN_IDEE];
+    case "geen-idee": return GEEN_IDEE;
     case "wanneer": return ["Binnen een week", "Over een paar weken", "Weet ik nog niet"];
     case "volgorde": return ["Eerst de samples", "Zet de verf voor de gekozen kleuren alvast klaar"];
     default: return eigen.slice(0, 12);
@@ -792,7 +772,7 @@ async function beoordeel(b: any) {
     model: "claude-haiku-5-5",
     max_tokens: 400,
     system: `Je beoordeelt een antwoord van de chat van Roll (verfmerk) aan een klant. Regels:
-1. Geen eigen kleuradvies: de bot zegt niet dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kiest geen kleur voor de klant. Een richting tonen, samples, kleurhulp of een stylist aanbieden mag wel.
+1. Geen eigen kleuradvies: de bot zegt niet dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kiest geen kleur voor de klant. Een richting tonen, samples, de kleurenscan of een stylist aanbieden mag wel.
 2. Toon: warm, kort, je-vorm, positief, geen druk of nepdeadline, geen negatieve framing (niet "laatste kans", "nog steeds").
 3. Hooguit drie zinnen voor de vraag; geen vakjargon zonder uitleg.
 4. Eerlijk: belooft niets wat niet zeker is (dekking, levertijd), verzint geen productfeiten.
@@ -1016,7 +996,6 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
             break;
           }
           case "stel_kleuren_voor": richting = { familie: String(inp.familie ?? ""), lichtheid: inp.lichtheid }; out = await stelVoor(String(inp.familie ?? ""), inp.lichtheid); break;
-          case "kleurhulp": out = await kleurhulp(project, String(inp.ruimte ?? ""), inp.antwoorden); break;
           case "productinfo": out = productinfo(String(inp.onderwerp ?? "")); break;
           case "voorwaarden": out = VOORWAARDEN; break;
           case "antwoord": {
