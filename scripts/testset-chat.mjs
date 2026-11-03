@@ -10,7 +10,7 @@
  * Vrijgavenormen (zie het plan): alle kritieke gevallen slagen, 95% van alle controles slaagt, geen enkele
  * fout uit de vaste controle en geen eigen kleuradvies. Niet gehaald = exitcode 1 (scripts/vrijgeven.sh stopt dan).
  *
- * Gebruik: node scripts/testset-chat.mjs [--alleen k01,g03] [--zonder-beoordeling]
+ * Gebruik: node scripts/testset-chat.mjs [--alleen k01,g03] [--zonder-beoordeling] [--model gemini-3.5-flash-lite]
  * Omgeving: CHAT_URL (standaard de testkopie), TESTSET_DIR, PARALLEL (standaard 4).
  * Kosten: ongeveer 165 beurten van ± 1 cent plus de beoordelingen, samen ± $2 per volledige run.
  */
@@ -27,6 +27,8 @@ const TOKEN = 'vergelijk-7d3f9a';
 const args = process.argv.slice( 2 );
 const ALLEEN = args.includes( '--alleen' ) ? String( args[ args.indexOf( '--alleen' ) + 1 ] ?? '' ).split( ',' ) : null;
 const BEOORDELEN = ! args.includes( '--zonder-beoordeling' );
+// Een ander model dan de live chat, om modellen te vergelijken (de chat staat dat alleen toe met de testsleutel).
+const MODEL = args.includes( '--model' ) ? String( args[ args.indexOf( '--model' ) + 1 ] ?? '' ) : '';
 
 const berichten = JSON.parse( readFileSync( join( TESTSET, 'berichten.json' ), 'utf8' ) ).gevallen;
 const gesprekken = JSON.parse( readFileSync( join( TESTSET, 'gesprekken.json' ), 'utf8' ) ).gesprekken;
@@ -50,7 +52,7 @@ const HANDMATIG = new Set( [ 'g04', 'g25', 'g26', 'g27' ] );
 const rid = () => Math.random().toString( 36 ).slice( 2 ).padEnd( 10, '0' ).slice( 0, 10 );
 async function post( body, poging = 0 ) {
 	try {
-		const r = await fetch( CHAT_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify( { test: TOKEN, ...body } ) } );
+		const r = await fetch( CHAT_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify( { test: TOKEN, ...( MODEL && ! body.beoordeel ? { model: MODEL } : {} ), ...body } ) } );
 		const d = await r.json();
 		if ( d.fout && poging < 1 && r.status >= 500 ) return post( body, poging + 1 );
 		return d;
@@ -324,7 +326,7 @@ const herkansingen = resultaten.reduce( ( t, r ) => t + ( r.herkansingen ?? 0 ),
 const regels = [
 	`# Testset Jouw schilderplan, ${ new Date().toISOString().slice( 0, 16 ).replace( 'T', ' ' ) }`,
 	'',
-	`Tegen: ${ CHAT_URL }. Duur ${ Math.round( ( Date.now() - start ) / 1000 ) } s.`,
+	`Tegen: ${ CHAT_URL }${ MODEL ? `, model ${ MODEL }` : '' }. Duur ${ Math.round( ( Date.now() - start ) / 1000 ) } s.`,
 	'',
 	`**${ geslaagd ? 'Geslaagd' : 'Niet geslaagd' }.** Score ${ ( score * 100 ).toFixed( 1 ) }% van ${ totaalChecks } controles (norm 95%). Kritiek mis: ${ kritiekMis.length } (norm 0). Fouten in de vaste controle na de herkansing: ${ tekstFouten.length } (norm 0). Eigen kleuradvies: ${ kleuradvies.length } (norm 0). Herkansingen door de controle: ${ herkansingen }.`,
 	'',
