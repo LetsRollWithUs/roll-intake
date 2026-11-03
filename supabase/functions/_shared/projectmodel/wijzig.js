@@ -333,6 +333,12 @@ function zet( p, r, v, wz, ctx ) {
 		if ( 'afwerking' === b && 'behang' === waarde ) {
 			v.ondergrond.kleurNu = null;
 		}
+	} else if ( 'renovlies' === a ) {
+		// Renovlies erbij: op muren met scheuren, of op nieuw stucwerk zodat er later geen scheurtjes komen.
+		if ( ! [ 'muren', 'accent' ].includes( v.soort ) || 'boolean' !== typeof waarde ) {
+			return weiger( wz, 'Renovlies hoort bij de muren.' );
+		}
+		v.renovlies = g( waarde );
 	} else if ( 'glans' === a ) {
 		if ( ! lak || ! GLANS.includes( waarde ) ) {
 			return weiger( wz, 'Glans hoort alleen bij lakwerk.' );

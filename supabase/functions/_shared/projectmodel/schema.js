@@ -25,7 +25,7 @@ export const VLAK_SOORTEN = [ ...VERF_SOORTEN, ...LAK_SOORTEN ];
 export const ONDERGROND = {
 	verf: {
 		materiaal: [ 'stucwerk', 'gipsplaat', 'beton', 'onbekend' ],
-		afwerking: [ 'geen', 'muurverf', 'behang', 'onbekend' ],
+		afwerking: [ 'geen', 'muurverf', 'renovlies', 'behang', 'onbekend' ],
 		kleurNu: [ 'licht', 'midden', 'donker', 'onbekend' ],
 		structuur: [ 'glad', 'structuur', 'onbekend' ],
 		conditie: [ 'goed', 'scheurtjes', 'scheuren', 'bladdert', 'vocht', 'onbekend' ],

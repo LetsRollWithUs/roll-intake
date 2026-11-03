@@ -15,6 +15,9 @@ export const MERKEN = [
 ];
 // LAB alleen in hoofdletters: "lab" komt ook in gewone woorden voor.
 const LAB = /\bLAB\b/;
+/** Waar onze verf vandaan komt of wat erop lijkt: nooit noemen, ook niet als de klant het zelf noemt. */
+export const NOOIT_MERKEN = [ 'Relius', 'Ecotex' ];
+const NOOIT_RE = new RegExp( '\\b(' + NOOIT_MERKEN.join( '|' ) + ')\\b', 'i' );
 
 const esc = ( s ) => s.replace( /[.*+?^${}()|[\]\\]/g, '\\$&' );
 const MERK_RE = new RegExp( '\\b(' + MERKEN.map( esc ).join( '|' ) + ')\\b', 'i' );
@@ -25,7 +28,12 @@ const MERK_RE = new RegExp( '\\b(' + MERKEN.map( esc ).join( '|' ) + ')\\b', 'i'
  */
 export const REGELS = [
 	{ id: 'bedrag', uitleg: 'Noem geen bedragen of prijzen; die staan in de pakketkaart.', re: /€\s?\d|\b\d+(?:[.,]\d{1,2})?\s?(?:euro|eur)\b/i, mag: ( c ) => c.tools.has( 'voorwaarden' ) },
-	{ id: 'liters', uitleg: 'Noem geen liters, blikken of aantallen verf; die staan in de pakketkaart.', re: /\b\d+(?:[.,]\d+)?\s?(?:liter|liters|l|ml)\b|\b\d+\s?(?:blik|blikken|potten|emmers)\b/i },
+	{ id: 'liters', uitleg: 'Noem geen liters, blikken of aantallen verf; die staan in de pakketkaart.', zoek: ( t, c ) => {
+		const re = /\b\d+(?:[.,]\d+)?\s?(?:liter|liters|l|ml)\b|\b\d+\s?(?:blik|blikken|potten|emmers)\b/gi;
+		// Een verftester is 50 ml: dat mag uit de voorwaarden.
+		return ( t.match( re ) || [] ).find( ( m ) => ! ( /^50\s?ml$/i.test( m ) && c.tools.has( 'voorwaarden' ) ) ) || null;
+	} },
+	{ id: 'leverancier', uitleg: 'Noem nooit Relius of Ecotex, ook niet als de klant ernaar vraagt.', re: NOOIT_RE },
 	{ id: 'hex', uitleg: 'Noem geen HEX- of kleurcodes.', re: /#[0-9a-f]{6}\b/i },
 	{ id: 'merk', uitleg: 'Noem geen ander verfmerk of andere winkel, tenzij de klant het zelf noemde (dan een keer bevestigen).', zoek: ( t, c ) => {
 		const m = t.match( MERK_RE ) || t.match( LAB );

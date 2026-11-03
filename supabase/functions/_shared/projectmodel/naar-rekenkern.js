@@ -35,6 +35,10 @@ export function verfOndergrond( ond ) {
 	if ( 'geen' === afwerking ) {
 		return { ...uit, ondergrond: 'nieuw' };
 	}
+	if ( 'renovlies' === afwerking ) {
+		// Renovlies of glasvezel op de muur: gewoon overschilderen. Voorgeschilderd telt als een lichte muur.
+		return { ...uit, ondergrond: { midden: 'donker', donker: 'donker', onbekend: 'onbekend' }[ kleurNu ] || 'licht' };
+	}
 	if ( 'muurverf' === afwerking ) {
 		// De rekenkern kent nog geen middentint per vlak: die rekenen we als donker (een laag extra eerder dan te weinig).
 		const nu = { licht: 'licht', midden: 'donker', donker: 'donker' }[ kleurNu ];
@@ -107,7 +111,7 @@ export function naarRekenkern( project ) {
 				if ( o.mens ) {
 					mens.push( { ruimte: r.id, vlak: v.id, reden: o.mens } );
 				}
-				Object.assign( uit, { ondergrond: o.ondergrond, staat: o.staat, structuur: o.structuur, behang: o.behang } );
+				Object.assign( uit, { ondergrond: o.ondergrond, staat: o.staat, structuur: o.structuur, behang: o.behang, renovlies: !! w( v.renovlies ) } );
 				if ( 'accent' === v.soort ) {
 					uit.breedte = w( v.breedte, '' );
 					uit.hoogte = w( v.hoogte, '' );
