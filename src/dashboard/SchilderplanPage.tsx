@@ -33,7 +33,7 @@ interface Rij {
 }
 
 const VELDEN = "sessie,code,status,email,bewaard_op,overdracht_op,overdracht_kanaal,overgenomen_door,overgenomen_op,notitie,bron,created_at,updated_at,project";
-const VLAK: Record<string, string> = { muren: "Muren", plafond: "Plafond", accent: "Accentmuur", deuren: "Deuren", kozijnen: "Kozijnen", plinten: "Plinten", lambrisering: "Lambrisering", radiatoren: "Radiatoren", kasten: "Kasten" };
+const VLAK: Record<string, string> = { muren: "Muren", plafond: "Plafond", accent: "Accentmuur", deuren: "Deuren", kozijnen: "Kozijnen", plinten: "Plinten", lambrisering: "Lambrisering", radiatoren: "Radiatoren", kasten: "Kasten", trap: "Trap", meubel: "Meubel" };
 const w = (g: Gegeven | null | undefined) => (g && g.waarde != null ? g.waarde : null);
 
 type Fase = "open" | "bij-roll" | "afgerond" | "actief";
@@ -120,6 +120,7 @@ function Lijst() {
       <h1 className="rd-h2" style={{ margin: "0 0 4px" }}>Schilderplan</h1>
       <p className="rd-sub" style={{ marginTop: 0 }}>
         Gesprekken uit Jouw schilderplan. Vraagt een klant om hulp, dan staat hij hier met de code uit zijn WhatsApp of mail.
+        {" "}<Link to="/beheer/nakijken" className="rd-textlink">Nakijken</Link> laat zien waar de controle Charlie tegenhield.
       </p>
       <div style={{ display: "flex", gap: 8, margin: "12px 0", flexWrap: "wrap", alignItems: "center" }}>
         <button className={`rd-plan-chip${scope === "open" && !zoek ? " is-on" : ""}`} onClick={() => { setZoek(""); setScope("open"); }}>Vraagt om hulp ({tel("open")})</button>

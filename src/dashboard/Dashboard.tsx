@@ -23,6 +23,7 @@ import { KlantKaart } from "./klant/KlantKaart";
 import { NotificationsPage } from "./NotificationsPage";
 import { SchilderplanPage } from "./SchilderplanPage";
 import { KennisbankPage } from "./KennisbankPage";
+import { NakijkenPage } from "./NakijkenPage";
 import { loadNotifications } from "./notifications";
 
 // Menubalk in roll.nl-stijl: paarse afgeronde balk, wit menu, roze Roll-logo in het midden.
@@ -153,6 +154,7 @@ export function Dashboard() {
                         <Link to="/beheer/taken">Roll-taken</Link>
                         <Link to="/beheer/schilderplan">Schilderplan</Link>
                         <Link to="/beheer/kennisbank">Kennisbank chat</Link>
+                        <Link to="/beheer/nakijken">Nakijken chat</Link>
                         <Link to="/beheer/intakes">Alle intakes</Link>
                         <Link to="/beheer/boekingen">Boekingen</Link>
                         <Link to="/beheer/cadeaucodes">Cadeaucodes</Link>
@@ -211,6 +213,7 @@ export function Dashboard() {
       <Route path="schilderplan" element={<SchilderplanPage />} />
       <Route path="schilderplan/:sessie" element={<SchilderplanPage />} />
       <Route path="kennisbank" element={<KennisbankPage />} />
+      <Route path="nakijken" element={<NakijkenPage />} />
       <Route path=":id" element={<IntakeDetail />} />
     </Routes>,
   );

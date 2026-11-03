@@ -93,7 +93,12 @@ const TOOLS: any[] = [
   },
   {
     name: "voorwaarden",
-    description: "Retour, verzending, levertijden, klantenservice, samples, betalen, afhalen, spullen, lakwerk buiten, schilders en de prijs van het online kleuradvies. Noem nooit voorwaarden die hier niet staan.",
+    description: "Retour, verzending, levertijden, klantenservice, samples, betalen, afhalen, spullen, lakwerk buiten, trap en meubels lakken, schilders en de prijs van het online kleuradvies. Noem nooit voorwaarden die hier niet staan.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "pakket",
+    description: "De actuele berekening, zoals in de pakketkaart: m² per onderdeel, per regel aantal, product, lagen en bedrag, en het totaal. Alleen gebruiken als de klant vraagt hoeveel verf het is, wat het kost of waarom. Noem alleen getallen die hier staan.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -104,7 +109,7 @@ const TOOLS: any[] = [
     input_schema: {
       type: "object",
       properties: {
-        tekst: { type: "string", description: "Kort, je-vorm. Stelde de klant een vraag, beantwoord die dan eerst; daarna hooguit drie zinnen voor je eigen vraag. Geen liters of bedragen, behalve uit voorwaarden." },
+        tekst: { type: "string", description: "Kort, je-vorm. Stelde de klant een vraag, beantwoord die dan eerst; daarna hooguit drie zinnen voor je eigen vraag. Geen liters of bedragen, behalve uit voorwaarden of pakket." },
         vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips of het formulier erbij (maat, ondergrond, onderdelen, lak). Bij eigen: geef chips mee." },
         chips: { type: "array", items: { type: "string" } },
         kaarten: { type: "array", items: { type: "string" }, description: "Namen van Roll-kleuren om als kaart te tonen." },
@@ -126,7 +131,9 @@ SAMPLEKORTING: gaat het over samples bestellen, dan mag je (hooguit een keer per
 
 DOEL: de klant eindigt met een passend plan, vertrouwen in het resultaat en een duidelijke volgende stap. Elke vraag moet bijdragen aan een mooier resultaat, minder gedoe of een betere aankoop.
 
-SCOPE VAN DEZE VERSIE: binnenruimtes (muren, plafond, accentmuur) en lakwerk: deuren, kozijnen, plinten, lambrisering en radiatoren binnen, en deuren en kozijnen buiten; meerdere ruimtes mag. Noemt de klant trappen, meubels of buitenmuren: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
+SCOPE VAN DEZE VERSIE: binnenruimtes (muren, plafond, accentmuur) en lakwerk: deuren, kozijnen, plinten, lambrisering, radiatoren en een trap binnen, deuren en kozijnen buiten, en meubels (kast, commode, tafel, stoel); meerdere ruimtes mag. Noemt de klant buitenmuren of een gevel: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
+TRAP: lakwerk binnen, meestal in de hal: "hal vlak trap" en "hal.trap aantal 1" (het aantal trappen). Daarna vraag "lak" (staat, glans).
+MEUBEL: een meubel is een eigen ruimte met één lakvlak: ruimte anders "Commode" | vlak- anders muren | vlak anders meubel | anders.meubel m2 3 ? (gebruik het id dat de ruimte krijgt, bijvoorbeeld anders2 als anders al bestaat). Schat het te schilderen oppervlak als aanname: stoel of nachtkastje 1, tafel 2, commode of dressoir 3, kledingkast of boekenkast 6 m²; noemt de klant de maat, gebruik die. Vraag daarna "lak": hout of metaal, kaal of al gelakt, glans. Kaal hout krijgt primer; die zet de rekenkern in het pakket. Een meubel heeft geen muren of plafond.
 
 FORMULIEREN: bij vraag "maat", "ondergrond", "onderdelen" of "lak" toont de server een kort formulier in de chat; vraag in je tekst dus kort en noem de keuzes niet zelf op. "onderdelen" = welke onderdelen per ruimte meegaan (muren, plafond, lakwerk); "lak" = aantallen, staat en glans van het lakwerk. Na een formulier krijg je de nieuwe stand; vraag wat er dan nog ontbreekt.
 
@@ -169,7 +176,7 @@ MAAT: gewone ramen en deuren trekken we niet af (dat is onze marge: liever iets 
 KLEUR (per vlak):
 - JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurenscan op advies.roll.nl of van een stylist (online kleuradvies). Jij helpt met een richting, sample packs, en de weg naar die hulp.
 - Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren"). Bij een RAL-kleur noem je alleen de code ("RAL 9010 staat erin voor de muren"); verzin geen omschrijving of naam.
-- Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en leg die vast met "<ruimte>.muren kies <de naam die zoek_kleur gaf>" (kies, niet kandidaat): de klant noemde een duidelijke kleur. Noem nooit uit jezelf een ander merk.
+- Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je na in Roll-verf, als optische match; bij ons heet hij ..."). Zeg niet dat het dezelfde verf of exact dezelfde kleur is en leg die vast met "<ruimte>.muren kies <de naam die zoek_kleur gaf>" (kies, niet kandidaat): de klant noemde een duidelijke kleur. Noem nooit uit jezelf een ander merk.
 - Wijst de klant een kleur af ("Daily Om vind ik te grijs", "die niet"): leg "<ruimte>.muren afwijzen <naam>" vast, ook als je in dezelfde beurt een richting vastlegt.
 - Zeg alleen "staat erin" als je het in deze beurt met werk_bij hebt vastgelegd.
 - Geen treffer: zeg dat eerlijk en vraag of de klant de naam of het merk kan controleren. Toon daarnaast Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
@@ -202,7 +209,7 @@ BEVESTIG NEUTRAAL: wat de klant over zijn ruimte zegt, bevestig je zonder oordee
 
 TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Hooguit drie zinnen voor de vraag. Positief, geen druk, geen nepdeadlines. Geen emoji, geen gedachtestreepjes.
 
-NOOIT: een HEX-code of mengcode noemen; zelf liters, aantallen blikken of bedragen noemen (die staan in de pakketkaart; alleen bedragen uit voorwaarden, zoals gratis verzending en de samplekorting, mag je noemen); dekking beloven ("een laag is genoeg", "dekt altijd"): zeg "we rekenen met een laag" of "met twee lagen"; retour noemen als geruststelling (op kleur gemengde verf kan niet retour); voorwaarden of productinformatie noemen die niet uit productinfo of voorwaarden komt; renovlies of verf over behang adviseren.
+NOOIT: een HEX-code of mengcode noemen; zelf liters, aantallen blikken of bedragen uitrekenen of verzinnen. Vraagt de klant hoeveel verf het is, wat het kost of waarom, vraag dan "pakket" op en noem alleen de getallen die daar staan (en bedragen uit voorwaarden, zoals gratis verzending en de samplekorting); dekking beloven ("een laag is genoeg", "dekt altijd"): zeg "we rekenen met een laag" of "met twee lagen"; retour noemen als geruststelling (op kleur gemengde verf kan niet retour); voorwaarden of productinformatie noemen die niet uit productinfo of voorwaarden komt; renovlies of verf over behang adviseren.
 
 UITKOMST ALS ER NOG KLEUREN OPEN ZIJN: verf voor een onderdeel zonder gekozen kleur verkopen we niet; de pakketkaart toont dan alleen samples. Zijn er nog kleuren open en is minstens een onderdeel al klaar (staat [klaar] in de stand) en is volgorde nog ?: vraag "volgorde" ("Wil je eerst de samples bekijken, of zetten we de verf voor de kleuren die al vaststaan alvast klaar?"). "Eerst de samples" = volgorde samples-eerst; "Zet de verf ... alvast klaar" = volgorde verf-erbij. Is nog geen onderdeel klaar, vraag het dan niet: help met kleur (sample packs, kleurenscan, stylist). Zeg nooit dat de verf al klaarstaat als volgorde samples-eerst is.
 
@@ -310,6 +317,18 @@ function productinfo(onderwerp: string) {
   return PRODUCTINFO.producten.find((p: any) => p.soort === onderwerp) ?? { fout: "Geen informatie; verwijs naar de klantenservice." };
 }
 
+/** De berekening zoals de pakketkaart, voor de tool "pakket": de bot mag deze getallen uitleggen, niet zelf rekenen. */
+async function pakketUitleg(project: any) {
+  const d = await bereken(naarRekenkern(project).plan);
+  return {
+    per_ruimte: (d.ruimtes ?? []).map((r: any) => ({ naam: r.naam, vlakken: (r.m2?.vlakken ?? []).filter((v: any) => v.m2).map((v: any) => ({ soort: v.soort, m2: Math.round(v.m2 * 10) / 10, aantal: v.aantal ?? undefined })) })),
+    regels: (d.regels ?? []).map((r: any) => ({ aantal: r.aantal, product: r.titel, toelichting: r.detail || r.voordeel || undefined, bedrag: r.totaal })),
+    totaal: d.totaal,
+    verzending: d.verzending,
+    uitleg: "Muurverf rekenen we met ongeveer 8 m² per liter per laag, en we ronden af naar hele blikken. Gewone ramen en deuren tellen mee als marge. Of het een of twee lagen zijn, hangt af van de ondergrond en het kleurverschil.",
+  };
+}
+
 async function bereken(plan: any) {
   const body = new URLSearchParams({ action: "roll_vc_kleurplan", wat: "bereken", plan: JSON.stringify(plan) });
   const res = await fetch(`${ROLL}/wp-admin/admin-ajax.php`, { method: "POST", body });
@@ -353,7 +372,7 @@ function stand(p: any) {
       const s2 = st.onderdelen.find((x: any) => x.ruimte === r.id && x.vlak === v.id);
       const mist = s2 ? [...s2.ontbreekt, ...s2.controleren].join(",") : "";
       const lakInfo = isLak(v.soort) ? `; aantal ${g(v.aantal)}; glans ${g(v.glans)}` : "";
-      regels.push(`  ${r.id}.${v.id}: ${kl}; ${o || "ondergrond ?"}${v.breedte ? `; breedte ${g(v.breedte)}` : ""}${w(v.renovlies) ? "; renovlies erbij" : ""}${lakInfo} [${s2?.status}${mist ? ": " + mist : ""}]`);
+      regels.push(`  ${r.id}.${v.id}: ${kl}; ${o || "ondergrond ?"}${v.breedte ? `; breedte ${g(v.breedte)}` : ""}${w(v.renovlies) ? "; renovlies erbij" : ""}${v.m2 ? `; m2 ${g(v.m2)}` : ""}${lakInfo} [${s2?.status}${mist ? ": " + mist : ""}]`);
     }
   }
   regels.push(`spullen ${g(p.spullen)}; wanneer ${g(p.wanneer)}; volgorde ${g(p.volgorde)}; samples ${(p.samples ?? []).map((x: any) => x.naam).join(", ") || "geen"}${p.doel ? `; doel ${w(p.doel)}` : ""}`);
@@ -442,7 +461,7 @@ function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
 }
 /* ---------- formulierkaarten ---------- */
 
-const TELBAAR = ["deuren", "kozijnen", "radiatoren", "kasten"];
+const TELBAAR = ["deuren", "kozijnen", "radiatoren", "kasten", "trap"];
 const LAK_BINNEN = ["deuren", "kozijnen", "plinten", "lambrisering", "radiatoren"];
 const LAK_BUITEN = ["deuren", "kozijnen"];
 const VOLGT_UIT_MAAT = ["plinten", "lambrisering"];
@@ -454,7 +473,8 @@ const murenNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) && (nu
 const lakNodig = (r: any) => r.vlakken.some((v: any) => isLak(v.soort) && (null == w(v.ondergrond.afwerking) || !telt(v.glans) || (TELBAAR.includes(v.soort) && null == w(v.aantal))));
 /** Een ruimte die alleen lakwerk heeft (de tegel "Alleen deuren, kozijnen of plinten"). */
 const alleenLak = (r: any) => /^lakwerk/.test(r.id);
-const keuzesVan = (r: any) => (r.buiten ? LAK_BUITEN : alleenLak(r) ? LAK_BINNEN : ["muren", "plafond", ...LAK_BINNEN]);
+// Een trap kies je in de hal of bij alleen lakwerk binnen; een meubel heeft alleen zichzelf.
+const keuzesVan = (r: any) => (r.vlakken.some((v: any) => "meubel" === v.soort) ? ["meubel"] : r.buiten ? LAK_BUITEN : alleenLak(r) ? [...LAK_BINNEN, "trap"] : ["muren", "plafond", ...LAK_BINNEN, ...("hal" === r.type ? ["trap"] : [])]);
 
 /**
  * Het formulier dat de browser als kaart in de chat toont. Bij meer ruimtes één formulier voor alle ruimtes die
@@ -833,9 +853,11 @@ function kaartDoel(project: any, pad?: string) {
  */
 const BEOORDELAAR = Deno.env.get("PROJECTHULP_BEOORDELAAR") ?? "claude-haiku-5-5";
 async function beoordeel(b: any) {
-  const vraag = { model: BEOORDELAAR, max_tokens: 400, system: BEOORDEEL_REGELS, messages: [{ role: "user", content: `Klant: ${String(b.klant ?? "").slice(0, 1500)}\n\nAntwoord van de bot: ${String(b.antwoord ?? "").slice(0, 1500)}` }] };
-  const res: any = isGemini(BEOORDELAAR)
-    ? await geminiStap({ model: BEOORDELAAR, system: vraag.system, tools: [], messages: vraag.messages, maxTokens: 400 })
+  // De testset mag een ander model laten beoordelen (bijvoorbeeld als het tegoed van de ene aanbieder op is).
+  const model = /^(claude-(haiku|sonnet|opus)-[\d-]+|gemini-[\w.-]+)$/.test(String(b.model ?? "")) ? String(b.model) : BEOORDELAAR;
+  const vraag = { model, max_tokens: 400, system: BEOORDEEL_REGELS, messages: [{ role: "user", content: `Klant: ${String(b.klant ?? "").slice(0, 1500)}\n\nAntwoord van de bot: ${String(b.antwoord ?? "").slice(0, 1500)}` }] };
+  const res: any = isGemini(model)
+    ? await geminiStap({ model, system: vraag.system, tools: [], messages: vraag.messages, maxTokens: 400 })
     : await claude.messages.create(vraag as any);
   const tekst = (res.content as any[]).filter((c) => "text" === c.type).map((c) => c.text).join("");
   try { return JSON.parse(tekst.slice(tekst.indexOf("{"), tekst.lastIndexOf("}") + 1)); } catch { return { ok: null, waarom: "Beoordeling niet leesbaar", ruw: tekst.slice(0, 300) }; }
@@ -1071,6 +1093,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
           case "stel_kleuren_voor": richting = { familie: String(inp.familie ?? ""), lichtheid: inp.lichtheid }; out = await stelVoor(String(inp.familie ?? ""), inp.lichtheid); break;
           case "productinfo": out = productinfo(String(inp.onderwerp ?? "")); break;
           case "voorwaarden": out = await voorwaarden(); break;
+          case "pakket": out = await pakketUitleg(project).catch(() => ({ fout: "De berekening lukte even niet; verwijs naar de pakketkaart." })); break;
           case "antwoord": {
             antwoord = geldigAntwoord(inp);
             if (!antwoord && verstuurd) { meld("opnieuw"); verstuurd = ""; }
@@ -1117,11 +1140,15 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   mens = naarRekenkern(project).mens;
   // Vraagt de klant of hij met een mens praat, dan zeggen we altijd eerlijk dat het de digitale assistent is.
   if (/\b(echte? (persoon|mens)|een mens|een bot|chatbot|robot|ben je (een )?(ai|bot|mens|medewerker)|met wie (praat|chat) ik)\b/i.test(bericht) && !/digitale assistent/i.test(antwoord.tekst)) {
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "mens", stuk: String(antwoord.tekst).slice(0, 120) }] });
     antwoord.tekst = "Je praat met Charlie, de digitale assistent van Roll. Wil je liever iemand van Roll spreken, dan kan dat via WhatsApp.";
     if (["geen", undefined].includes(antwoord.actie)) antwoord.actie = "overdracht";
   }
   // Vocht of schimmel wil Roll altijd zelf zien, ook als het model vergat dat vast te leggen.
-  if (/\b(vocht|schimmel|lekkage)\b/i.test(bericht) && !/\bgeen (vocht|schimmel|lekkage)\b/i.test(bericht) && !["overdracht", "stappen"].includes(antwoord.actie)) antwoord.actie = "overdracht";
+  if (/\b(vocht|schimmel|lekkage)\b/i.test(bericht) && !/\bgeen (vocht|schimmel|lekkage)\b/i.test(bericht) && !["overdracht", "stappen"].includes(antwoord.actie)) {
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "vocht", stuk: "overdracht gezet" }] });
+    antwoord.actie = "overdracht";
+  }
   // Kaarten alleen van echte Roll-kleuren; de browser toont kleurvlak, naam en omschrijving. Zonder kaarten wachten
   // we niet op de kleurenlijst (een formulier is dan meteen klaar).
   ixP.catch(() => null);

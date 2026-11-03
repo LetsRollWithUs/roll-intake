@@ -10,7 +10,7 @@
  * Vrijgavenormen (zie het plan): alle kritieke gevallen slagen, 95% van alle controles slaagt, geen enkele
  * fout uit de vaste controle en geen eigen kleuradvies. Niet gehaald = exitcode 1 (scripts/vrijgeven.sh stopt dan).
  *
- * Gebruik: node scripts/testset-chat.mjs [--alleen k01,g03] [--zonder-beoordeling] [--model gemini-3.5-flash-lite]
+ * Gebruik: node scripts/testset-chat.mjs [--alleen k01,g03] [--zonder-beoordeling] [--model gemini-3.5-flash-lite] [--beoordelaar gemini-3.5-flash]
  * Omgeving: CHAT_URL (standaard de testkopie), TESTSET_DIR, PARALLEL (standaard 4).
  * Kosten: ongeveer 165 beurten van ± 1 cent plus de beoordelingen, samen ± $2 per volledige run.
  */
@@ -29,6 +29,7 @@ const ALLEEN = args.includes( '--alleen' ) ? String( args[ args.indexOf( '--alle
 const BEOORDELEN = ! args.includes( '--zonder-beoordeling' );
 // Een ander model dan de live chat, om modellen te vergelijken (de chat staat dat alleen toe met de testsleutel).
 const MODEL = args.includes( '--model' ) ? String( args[ args.indexOf( '--model' ) + 1 ] ?? '' ) : '';
+const BEOORDELAAR = args.includes( '--beoordelaar' ) ? String( args[ args.indexOf( '--beoordelaar' ) + 1 ] ?? '' ) : '';
 
 const berichten = JSON.parse( readFileSync( join( TESTSET, 'berichten.json' ), 'utf8' ) ).gevallen;
 const gesprekken = JSON.parse( readFileSync( join( TESTSET, 'gesprekken.json' ), 'utf8' ) ).gesprekken;
@@ -63,7 +64,7 @@ async function post( body, poging = 0 ) {
 }
 async function beoordeel( klant, antwoord ) {
 	if ( ! BEOORDELEN || ! antwoord ) return null;
-	return post( { sessie: 'testsetbeoordelingxxxxxxxxx', beoordeel: { klant, antwoord } } );
+	return post( { sessie: 'testsetbeoordelingxxxxxxxxx', beoordeel: { klant, antwoord, ...( BEOORDELAAR ? { model: BEOORDELAAR } : {} ) } } );
 }
 
 /* ---------- het plan lezen ---------- */
