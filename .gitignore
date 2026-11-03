@@ -21,3 +21,4 @@ build_output.txt
 .env*
 *.tsbuildinfo
 supabase/.temp/
+testset-resultaten/

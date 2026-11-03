@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "sync:packs": "node scripts/sync-sample-packs.mjs",
-    "sync:collection": "node scripts/sync-collection.mjs"
+    "sync:collection": "node scripts/sync-collection.mjs",
+    "testset": "node scripts/testset-chat.mjs",
+    "vrijgeven": "bash scripts/vrijgeven.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

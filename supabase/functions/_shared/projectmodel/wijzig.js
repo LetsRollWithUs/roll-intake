@@ -261,7 +261,8 @@ function pakGegeven( p, r, v, veld ) {
 function zet( p, r, v, wz, ctx ) {
 	const { door, op, vraag, weiger, toegepast } = ctx;
 	const bron = bronVan( wz.zekerheid );
-	const g = ( waarde ) => gegeven( waarde, bron, door, { op } );
+	// Een aanname zet een gelijke waarde die de klant al zei of accepteerde niet terug naar "nog te controleren".
+	const g = ( waarde, oud ) => ( oud && 'aangenomen' === bron && oud.waarde === waarde && ( oud.geaccepteerd || 'gezegd' === oud.bron ) ? oud : gegeven( waarde, bron, door, { op } ) );
 	const [ a, b ] = String( wz.veld || '' ).split( '.' );
 	const waarde = wz.waarde;
 
@@ -297,11 +298,11 @@ function zet( p, r, v, wz, ctx ) {
 			if ( ander && waarde * ander > grens ) {
 				return vraag( wz, `Is je ${ r.naam.toLowerCase() } echt ${ waarde } bij ${ ander } meter?`, { veld: wz.veld, waarde } );
 			}
-			r.maat[ b ] = g( waarde );
+			r.maat[ b ] = g( waarde, r.maat[ b ] );
 		} else if ( 'maat' === a && 'grootte' === b && [ 'klein', 'middel', 'groot' ].includes( waarde ) ) {
-			r.maat.grootte = g( waarde );
+			r.maat.grootte = g( waarde, r.maat.grootte );
 		} else if ( 'hoogte' === a && binnen( waarde, GRENZEN.hoogte ) ) {
-			r.hoogte = g( waarde );
+			r.hoogte = g( waarde, r.hoogte );
 		} else if ( 'extra' === a && binnen( waarde, GRENZEN.extra ) ) {
 			r.extra = g( waarde );
 		} else if ( 'glas' === a && Array.isArray( waarde ) && waarde.every( ( x ) => binnen( x.breedte, GRENZEN.glasBreedte ) && binnen( x.hoogte, GRENZEN.glasHoogte ) ) ) {
@@ -327,7 +328,7 @@ function zet( p, r, v, wz, ctx ) {
 		if ( ! velden[ b ] || ! velden[ b ].includes( waarde ) ) {
 			return weiger( wz, 'Die ondergrond past niet bij dit vlak.' );
 		}
-		v.ondergrond[ b ] = g( waarde );
+		v.ondergrond[ b ] = g( waarde, v.ondergrond[ b ] );
 		// Behang gaat er altijd af: daarna is de muur kaal; de conditie vragen we opnieuw.
 		if ( 'afwerking' === b && 'behang' === waarde ) {
 			v.ondergrond.kleurNu = null;
@@ -372,7 +373,8 @@ function kleur( p, r, v, wz, ctx ) {
 			return weiger( wz, 'Geen richting opgegeven.' );
 		}
 		k.richting = wz.richting.trim();
-		if ( 'gekozen' !== k.status ) {
+		// Een richting erbij maakt een twijfel tussen kandidaten niet ongedaan.
+		if ( 'gekozen' !== k.status && 'twijfelt' !== k.status ) {
 			k.status = 'richting';
 		}
 		return toegepast.push( wz );

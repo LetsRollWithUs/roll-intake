@@ -20,6 +20,7 @@ import { RUIMTE_NAMEN, VLOER, isLak, nieuwProject, naarRekenkern, projectStatus,
 import PRODUCTINFO from "../_shared/projectmodel/productinfo.json" with { type: "json" };
 import PACKS from "../_shared/projectmodel/packs.json" with { type: "json" };
 import VOORWAARDEN from "../_shared/projectmodel/voorwaarden.json" with { type: "json" };
+import { controleer, opschonen, zonderFouten } from "../_shared/controle.js";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -136,7 +137,8 @@ FORMULIEREN: bij vraag "maat", "ondergrond", "onderdelen" of "lak" toont de serv
 ZO WERK JE ELKE BEURT
 1. Heb je eerst informatie nodig (zoek_kleur, stel_kleuren_voor, kleurhulp, productinfo, voorwaarden), vraag die dan eerst op.
 2. Daarna in EEN bericht: EERST antwoord (de klant ziet je tekst meteen verschijnen), DAN werk_bij met alles wat de klant zei, in korte regels (zie OPDRACHTEN). Een Roll-kleur of RAL-code mag je direct vastleggen; de server zoekt hem op. Gebruik zoek_kleur alleen bij een kleur van een ander merk of als je twijfelt aan de naam. De server verwerkt de regels voor hij je antwoord toont; lukt iets niet, dan krijg je de stand terug en schrijf je opnieuw. Kies de volgende vraag op basis van de projectstand. Stel nooit een vraag waarvan je het antwoord al weet. Houd alles kort: geen uitleg in de tools en geen tekst buiten de tools; de klant ziet alleen antwoord.
-3. Is iets dubbelzinnig en verandert het het pakket wezenlijk: leg het niet vast maar vraag het (vraag "eigen" met chips).
+3. Is iets dubbelzinnig en verandert het het pakket wezenlijk: leg dat deel niet vast maar vraag het (vraag "eigen" met chips). Leg het deel dat wel duidelijk is (de ruimte, een maat, een kleurrichting) wel meteen vast.
+4. Gebruik je een vakterm (voorstrijk, renovlies, primer), leg hem in een paar woorden uit.
 
 OPDRACHTEN (een per regel; ruimte-ID = het type, met een cijfer bij een tweede: woonkamer, slaapkamer2; vlakken: muren, plafond, accent; een nieuwe ruimte heeft al muren):
 ruimte woonkamer            | ruimte- keuken
@@ -157,33 +159,40 @@ DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij). Gaat het plafond
 - "Geschilderd, met duidelijk kleur" = afwerking muurverf, kleurNu donker (structuur glad ? en conditie goed ? als aanname).
 - "Kaal stucwerk of gipsplaat" = afwerking geen. "Behang" = afwerking behang; behang gaat er altijd af; vraag daarna of er scheuren onder zitten.
 - "Structuur of scheuren": vraag welke van de twee (vraag eigen).
-- "Weet ik niet" = afwerking onbekend; zeg "we rekenen voorlopig met twee lagen" en zet het pad in aannames.
-- Vocht, schimmel, afbladderende muurverf of beton: zeg dat dit een beoordeling vraagt en zet actie "overdracht".
+- "Weet ik niet" of "geen idee wat erop zit" = afwerking onbekend, structuur onbekend en conditie onbekend (alle drie vastleggen); zeg "we rekenen voorlopig met twee lagen" en zet het pad in aannames.
+- Zegt de klant zelf "glad" of "wit en glad", dan is dat gezegd: structuur glad en conditie goed (zonder " ?").
+- Vocht, schimmel, afbladderende muurverf of beton: leg het vast (conditie vocht, conditie bladdert, materiaal beton), zeg dat dit een beoordeling vraagt en zet actie "overdracht".
 
 DUBBELZINNIG, ALTIJD KORT BEVESTIGEN: "plafond wit laten" (niet schilderen of opnieuw wit?), "nieuwbouw" (kaal of al geschilderd?), "alles wit" (welke onderdelen, welk wit?), "20 vierkante meter" (vloer of muren?).
 
-MAAT: lengte x breedte van de vloer is genoeg; anders vraag "maat". Chip "Ongeveer ... (klein)" = ruimte grootte klein, "(gemiddeld)" = grootte middel, "(groot)" = grootte groot. Noem de hoogte als aanname: "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust" en zet ruimte.hoogte in aannames.
+MAAT: ramen, deuren en schuifpuien trekken we niet af (liever iets te veel verf dan te weinig); beloof dus niet dat je er rekening mee houdt. Lengte x breedte van de vloer is genoeg; anders vraag "maat". Chip "Ongeveer ... (klein)" = ruimte grootte klein, "(gemiddeld)" = grootte middel, "(groot)" = grootte groot. Noem de hoogte als aanname: "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust" en zet ruimte.hoogte in aannames.
 
 KLEUR (per vlak):
 - JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurhulp (dezelfde vragen als de kleurenscan) of van een stylist (online kleuradvies). Jij helpt met een richting, samples, en de weg naar die hulp.
 - Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren").
 - Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je, bij ons heet hij ...") en leg de Roll-naam vast die zoek_kleur gaf. Noem nooit uit jezelf een ander merk.
-- Geen treffer: zeg dat eerlijk en toon Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
+- Geen treffer: zeg dat eerlijk en vraag of de klant de naam of het merk kan controleren. Toon daarnaast Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
 - Bij kleurkaarten toont de server het passende sample pack (vijf kleuren om thuis naast elkaar te vergelijken) en de knop voor online kleuradvies. Raad bij een richting het sample pack aan om te vergelijken, en noem dat een stylist altijd kan meekijken; noem geen prijzen.
 - Kaarten horen altijd bij een onderdeel: zet antwoord.voor op het pad (woonkamer.muren, hal.plinten). De klant kan op de kaart nog een ander open onderdeel kiezen.
 - Richting: "<ruimte>.muren richting <omschrijving>", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Raad aan ze eerst als sample te bekijken, en bied de kleurhulp of een stylist aan als de klant hulp wil.
-- Twijfel tussen kleuren: kandidaat, nooit kies.
+- Duidelijke keuze = kies: "ik wil X", "doe die maar", "die eerste", "die wil ik", "X van merk Y wil ik" (dan de Roll-naam die zoek_kleur gaf). Twijfel tussen kleuren = kandidaat, nooit kies. Alleen "lijkt op", "zoiets als" of "in de richting van" een kleur is geen keuze: leg de gevonden kleur dan vast als kandidaat en vraag of de klant hem wil.
 - Geen idee: vraag "geen-idee" (Help me kiezen, Laat een stylist meekijken met actie "kleuradvies", Later kiezen). Kleurhulp: vraag de vragen een voor een (vraag "eigen", met de keuzes als chips); vul in wat je al weet; daarna kleurhulp met antwoorden en toon de drie kleuren als kaarten.
 - Een sample is een advies, nooit een voorwaarde. Accentmuur alleen als de klant een muur noemt of twijfelt of een kleur niet te veel wordt.
 - Wanneer de klant wil beginnen (vraag "wanneer") alleen als het past, bij twijfel over kleur.
 
-LAKWERK: vraag welke onderdelen meegaan (vraag "onderdelen") en daarna aantallen, staat en glans (vraag "lak"). De kleur van lakwerk kiest de klant zelf: wit, zelfde als de muren, een bijpassende wittint of een andere kleur; nooit automatisch wit. "Wit zoals nu" = kies Blank Page. Houtrot, eerder gelakte muren of vermoeden van loodhoudende verf: actie "overdracht".
+LAKWERK: zegt de klant hoe het lakwerk nu is, leg dat vast ("de deuren zijn wit gelakt" = <ruimte>.deuren afwerking lak en <ruimte>.deuren kleurNu licht; "kaal hout" = afwerking geen en materiaal hout). De kleur die het nu heeft is geen keuze voor de nieuwe kleur. Vraag welke onderdelen meegaan (vraag "onderdelen") en daarna aantallen, staat en glans (vraag "lak"). De kleur van lakwerk kiest de klant zelf: wit, zelfde als de muren, een bijpassende wittint of een andere kleur; nooit automatisch wit. "Wit zoals nu" = kies Blank Page. Houtrot, eerder gelakte muren of vermoeden van loodhoudende verf: actie "overdracht".
 
 KLEUR VAN PLAFOND EN LAKWERK: is de muurkleur gekozen (of kiest de klant die later) en staan plafond of lakwerk nog zonder kleur, vraag het dan een keer kort met vraag "kleur": de server toont snelle keuzes (wit, zelfde als de muren, bijpassende wittint, lichtere tint, andere kleur, later). Kiest de klant "andere kleur", toon dan kaarten met antwoord.voor op dat onderdeel.
 
 PLAFOND: vraag een keer "Gaat het plafond ook mee?" (vraag "plafond"). "Ja, wit" = vlak <ruimte> plafond en <ruimte>.plafond kies Blank Page. "Ja, in de muurkleur" = dezelfde kleur als de muren.
 
 SPULLEN: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder.
+
+ONGEDAAN: "maak dat ongedaan" of "terug" met maar een wijziging in de vorige beurt = opdracht ongedaan. Bevatte de vorige beurt meerdere dingen (kleur en plafond), vraag dan eerst wat de klant terug wil en zeg niet dat het al is teruggedraaid.
+
+HERHAAL JEZELF NIET: toon dezelfde kaarten en dezelfde uitleg (samples, stylist) niet elke beurt opnieuw. Reageer op wat de klant net deed (een sample gekozen, een vraag beantwoord) en ga door naar wat nog ontbreekt.
+
+BEVESTIG NEUTRAAL: wat de klant over zijn ruimte zegt, bevestig je zonder oordeel ("Genoteerd", "staat erin"); zeg niet dat iets een goede basis, mooie start of goede keuze is.
 
 TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Hooguit drie zinnen voor de vraag. Positief, geen druk, geen nepdeadlines. Geen emoji, geen gedachtestreepjes.
 
@@ -774,6 +783,27 @@ function kaartDoel(project: any, pad?: string) {
   return doel ? { ruimte: doel.ruimte, vlak: doel.vlak } : null;
 }
 
+/**
+ * Alleen voor de testset (met TEST_TOKEN): beoordeelt een antwoord op toon en op wat Roll niet wil, met Haiku.
+ * De vaste regels (bedragen, merken, retour) controleert de testset zelf; dit kijkt naar wat regels niet vangen.
+ */
+async function beoordeel(b: any) {
+  const res = await claude.messages.create({
+    model: "claude-haiku-5-5",
+    max_tokens: 400,
+    system: `Je beoordeelt een antwoord van de chat van Roll (verfmerk) aan een klant. Regels:
+1. Geen eigen kleuradvies: de bot zegt niet dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kiest geen kleur voor de klant. Een richting tonen, samples, kleurhulp of een stylist aanbieden mag wel.
+2. Toon: warm, kort, je-vorm, positief, geen druk of nepdeadline, geen negatieve framing (niet "laatste kans", "nog steeds").
+3. Hooguit drie zinnen voor de vraag; geen vakjargon zonder uitleg.
+4. Eerlijk: belooft niets wat niet zeker is (dekking, levertijd), verzint geen productfeiten.
+5. Past bij wat de klant zei; negeert de klant niet.
+Antwoord alleen met JSON: {"ok": true|false, "regels": [nummers die niet goed gaan], "waarom": "korte uitleg in het Nederlands"}.`,
+    messages: [{ role: "user", content: `Klant: ${String(b.klant ?? "").slice(0, 1500)}\n\nAntwoord van de bot: ${String(b.antwoord ?? "").slice(0, 1500)}` }],
+  } as any);
+  const tekst = (res.content as any[]).filter((c) => "text" === c.type).map((c) => c.text).join("");
+  try { return JSON.parse(tekst.slice(tekst.indexOf("{"), tekst.lastIndexOf("}") + 1)); } catch { return { ok: null, waarom: "Beoordeling niet leesbaar", ruw: tekst.slice(0, 300) }; }
+}
+
 /** Of het plan bewaard is, met het e-mailadres half verborgen (voor de projectkaart). */
 function bewaardInfo(rij: any) {
   if (!rij?.bewaard_op) return null;
@@ -791,7 +821,7 @@ async function laad(sessie: string) {
 
 type Meld = (soort: "tekst" | "opnieuw", data?: unknown) => void;
 
-async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null) {
+async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null, metTest = false) {
   const start = Date.now();
   // Alleen in de testset: "model:denken" om de denkstand te vergelijken (uit, tussen, adaptief).
   const [model, denkTest] = modelKeuze.split(":");
@@ -872,13 +902,23 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     }
   }
 
-  const geschiedenis: Anthropic.MessageParam[] = (rij.gesprek as any[]).slice(-10).map((b) => ({ role: "klant" === b.rol ? "user" : "assistant", content: b.tekst || "..." }) as Anthropic.MessageParam);
+  // De getoonde kaarten horen bij het geheugen: "doe die eerste maar" verwijst naar een kaart, niet naar de tekst.
+  const geschiedenis: Anthropic.MessageParam[] = (rij.gesprek as any[]).slice(-10).map((b) => {
+    const kaartNamen = (b.uit?.antwoord?.kaarten ?? []).map((k: any) => k.naam).filter(Boolean);
+    const tekst = (b.tekst || "...") + (kaartNamen.length ? `\n[getoonde kaarten, in deze volgorde: ${kaartNamen.join(", ")}]` : "");
+    return { role: "klant" === b.rol ? "user" : "assistant", content: tekst } as Anthropic.MessageParam;
+  });
   // Een gesprek begint altijd met de klant.
   while (geschiedenis.length && "assistant" === geschiedenis[0].role) geschiedenis.shift();
   // Zelfde rol twee keer achter elkaar mag; de API voegt ze samen.
   const messages: Anthropic.MessageParam[] = [...geschiedenis, { role: "user", content: `Projectstand:\n${stand(project)}\n\n${tikTekst ? tikTekst + "\n" : ""}Klant: ${bericht || (formulier ? "(formulier ingevuld)" : "zet" === tik?.actie ? "(koos in de pakketkaart, staat al vast)" : "(tikte op een kaart)")}` }];
 
   const gevonden = new Map<string, any>();
+  // Uitgaande controle (zie _shared/controle.js): wat de klant zelf schreef mag de bot terugzeggen (zijn eigen merk).
+  const klantAlles = [...(rij.gesprek as any[]).filter((b) => "klant" === b.rol).map((b) => b.tekst), bericht].join(" ");
+  const controleCtx = () => ({ klant: klantAlles, tools: toolLog.map((x) => x.tool) });
+  const controleLog: any[] = [];
+  let herkansing = false;
   let richting: { familie: string; lichtheid?: string } | null = null;
   let tokens: any = { in: 0, uit: 0, cache: 0, t: { laden: Date.now() - start, model: 0, rekenen: 0, opslaan: 0 } };
   for (let stap = 0; stap < MAX_STAPPEN && !antwoord; stap++) {
@@ -983,6 +1023,23 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
             antwoord = geldigAntwoord(inp);
             if (!antwoord && verstuurd) { meld("opnieuw"); verstuurd = ""; }
             out = antwoord ? { ok: true } : { fout: "Antwoord onvolledig: geef tekst en vraag." };
+            if (antwoord) {
+              antwoord.tekst = opschonen(antwoord.tekst);
+              const fouten = controleer(antwoord.tekst, controleCtx());
+              if (fouten.length) {
+                controleLog.push({ poging: herkansing ? 2 : 1, fouten: fouten.map((f: any) => ({ id: f.id, stuk: f.stuk })) });
+                if (verstuurd) { meld("opnieuw"); verstuurd = ""; }
+                if (!herkansing) {
+                  // Een keer opnieuw laten schrijven, met de regels erbij.
+                  herkansing = true;
+                  antwoord = null;
+                  out = { afgekeurd: fouten.map((f: any) => f.uitleg), opdracht: "Schrijf je antwoord opnieuw met de tool antwoord, zonder deze punten. De wijzigingen zijn al verwerkt: roep werk_bij niet opnieuw aan." };
+                } else {
+                  // Tweede keer mis: de zinnen met een fout gaan eruit.
+                  antwoord.tekst = zonderFouten(antwoord.tekst, controleCtx());
+                }
+              }
+            }
             break;
           }
           default: out = { fout: "onbekende tool" };
@@ -996,6 +1053,13 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     if (!antwoord) messages.push({ role: "user", content: results });
   }
   if (!antwoord) antwoord = { tekst: "Even geen antwoord. Probeer het nog een keer, of ga verder met de stappen.", vraag: "geen", actie: "stappen" };
+  // Laatste vangnet voor elk antwoord (ook losse tekst zonder tool): opschonen en zinnen met een fout eruit.
+  antwoord.tekst = opschonen(String(antwoord.tekst ?? ""));
+  const restFouten = controleer(antwoord.tekst, controleCtx());
+  if (restFouten.length) {
+    controleLog.push({ poging: "vangnet", fouten: restFouten.map((f: any) => ({ id: f.id, stuk: f.stuk })) });
+    antwoord.tekst = zonderFouten(antwoord.tekst, controleCtx());
+  }
   // Rekenen gebeurt niet meer in de beurt: de browser haalt de pakketkaart direct daarna op (GET ...&pakket=1),
   // zodat het antwoord niet op de rekenkern hoeft te wachten.
   mens = naarRekenkern(project).mens;
@@ -1006,11 +1070,18 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix?.c.find((k) => k.n === n)).filter(Boolean).slice(0, 4).map((k: any) => kaart(k));
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
+  // Noemt het antwoord de standaardhoogte, dan is dat een zichtbare aanname: doorgaan = akkoord (ook als het model
+  // vergat hem bij aannames te zetten).
+  if (/2,60\s?m/.test(String(antwoord.tekst ?? ""))) {
+    const extra = project.ruimtes.filter((r: any) => !telt(r.hoogte)).map((r: any) => `${r.id}.hoogte`);
+    antwoord.aannames = [...new Set([...(antwoord.aannames ?? []), ...extra])];
+  }
   // Een vaste vraag van het model (maat, muren, onderdelen, lakwerk) wordt een formulier, als er nog iets te vragen is.
   const vraagForm = FORM_VRAGEN[antwoord.vraag];
   const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm ? maakFormulier(vraagForm, project) : null);
   const uit = {
     antwoord: { tekst: String(antwoord.tekst ?? ""), pack: kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null, kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
   const nu = new Date().toISOString();
@@ -1020,7 +1091,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const t2 = Date.now();
   await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu });
   tokens.t.opslaan = Date.now() - t2;
-  await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || formTekst || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model: modelKeuze, tokens, duur_ms: Date.now() - start });
+  await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || formTekst || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model: modelKeuze, controle: controleLog.length ? controleLog : null, tokens, duur_ms: Date.now() - start });
   return uit;
 }
 
@@ -1059,6 +1130,13 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const sessie = String(body.sessie ?? "");
     if (!/^[a-z0-9]{24,64}$/i.test(sessie)) return j({ fout: "Ongeldige sessie." }, 400);
+    if (TEST_TOKEN === body.test && body.beoordeel) return j(await beoordeel(body.beoordeel));
+    if (TEST_TOKEN === body.test && body.opruimen) {
+      // Testset-gesprekken weg (sessies die met "testset" beginnen), met hun log.
+      const { data: weg } = await db.from("projecthulp_chat").delete().like("sessie", "testset%").select("sessie");
+      await db.from("projecthulp_chat_log").delete().like("sessie", "testset%");
+      return j({ verwijderd: (weg ?? []).length });
+    }
     if (body.bewaard && "object" === typeof body.bewaard) {
       const rij = await laad(sessie);
       if (!rij) return j({ fout: "Geen plan gevonden." }, 404);
@@ -1103,7 +1181,7 @@ Deno.serve(async (req) => {
     if (!bericht.trim() && !body.tik && !formulier) return j({ fout: "Leeg bericht." }, 400);
     const aanvraagId = String(body.aanvraagId ?? crypto.randomUUID()).slice(0, 64);
     const model = TEST_TOKEN === body.test && /^claude-(haiku|sonnet|opus)-[\d-]+(:(uit|tussen|adaptive))?$/.test(String(body.model ?? "")) ? String(body.model) : MODEL;
-    if (!body.stroom) return j(await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, undefined, formulier));
+    if (!body.stroom) return j(await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, undefined, formulier, TEST_TOKEN === body.test));
     const enc = new TextEncoder();
     const sse = new ReadableStream({
       async start(ctrl) {
