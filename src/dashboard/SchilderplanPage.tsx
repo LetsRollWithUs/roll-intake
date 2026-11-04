@@ -7,7 +7,7 @@ import { formatDate } from "./ui";
 // Alleen beheerders zien deze tabel (RLS is_admin). De klant krijgt een code mee in WhatsApp of mail.
 
 const CHAT = "https://lsboujprrvhntgbvlvyu.supabase.co/functions/v1/projecthulp-chat";
-const ROLL = "https://roll.nl/kleurplan/";
+const ROLL = "https://roll.nl/schilderproject/";
 
 interface Gegeven { waarde: any; bron?: string; geaccepteerd?: boolean }
 interface Vlak { id: string; soort: string; ondergrond: Record<string, Gegeven | null>; kleur: { status: string; gekozen: Gegeven | null; richting?: string; kandidaten: { naam: string }[]; favorieten: { naam: string }[] }; aantal: Gegeven | null; glans: Gegeven | null }
