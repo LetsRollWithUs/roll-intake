@@ -208,7 +208,7 @@ export function toepassen( project, aanvraag, opties = {} ) {
 }
 
 /** Getallen die als tekst binnenkomen ("5", "2,6") worden getallen. */
-const GETAL_VELDEN = [ 'maat.lengte', 'maat.breedte', 'hoogte', 'extra', 'aantal', 'breedte' ];
+const GETAL_VELDEN = [ 'maat.lengte', 'maat.breedte', 'hoogte', 'extra', 'aantal', 'breedte', 'm2' ];
 
 /**
  * Maakt een voorstel robuust: een ontbrekende ruimte-ID wordt het type (met een cijfer bij een tweede),
@@ -333,6 +333,11 @@ function zet( p, r, v, wz, ctx ) {
 		if ( 'afwerking' === b && 'behang' === waarde ) {
 			v.ondergrond.kleurNu = null;
 		}
+	} else if ( 'm2' === a ) {
+		if ( 'meubel' !== v.soort || ! binnen( waarde, GRENZEN.meubelM2 ) ) {
+			return weiger( wz, 'Een eigen oppervlak hoort bij een meubel, tussen 0,3 en 20 m².' );
+		}
+		v.m2 = g( waarde );
 	} else if ( 'renovlies' === a ) {
 		// Renovlies erbij: op muren met scheuren, of op nieuw stucwerk zodat er later geen scheurtjes komen.
 		if ( ! [ 'muren', 'accent' ].includes( v.soort ) || 'boolean' !== typeof waarde ) {

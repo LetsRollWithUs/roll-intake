@@ -59,6 +59,8 @@ export const GRENZEN = {
 	extra: [ 0, 200 ],
 	aantal: [ 0, 20 ],
 	accentBreedte: [ 0.5, 20 ],
+	// Een meubel in m² te schilderen oppervlak: een stoel ± 1, een commode ± 3, een kledingkast ± 6.
+	meubelM2: [ 0.3, 20 ],
 	accentHoogte: [ 0.5, 6 ],
 	glasBreedte: [ 0.5, 12 ],
 	glasHoogte: [ 0.5, 4 ],

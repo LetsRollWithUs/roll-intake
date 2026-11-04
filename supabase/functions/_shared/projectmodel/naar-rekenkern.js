@@ -102,7 +102,7 @@ export function naarRekenkern( project ) {
 		// dus we ronden naar beneden af (liever iets te veel verf).
 		const glasM2 = r.glas.reduce( ( t, g ) => t + ( w( g.breedte, 0 ) * w( g.hoogte, 0 ) ), 0 );
 		const vlakken = r.vlakken.map( ( v ) => {
-			const uit = { id: v.id, soort: v.soort, kleur: 'muren' === v.soort ? null : kleurNaarKern( v.kleur ), aantal: w( v.aantal, '' ), m2: '' };
+			const uit = { id: v.id, soort: v.soort, kleur: 'muren' === v.soort ? null : kleurNaarKern( v.kleur ), aantal: w( v.aantal, '' ), m2: 'meubel' === v.soort ? w( v.m2, '' ) : '' };
 			if ( isLak( v.soort ) ) {
 				uit.ondergrond = lakOndergrond( v.ondergrond );
 				uit.glans = r.buiten && 'mat' === w( v.glans ) ? 'zijdeglans' : w( v.glans, 'mat' );

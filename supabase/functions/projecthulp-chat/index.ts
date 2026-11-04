@@ -144,7 +144,7 @@ ZO WERK JE ELKE BEURT
 4. Gebruik je een vakterm (voorstrijk, renovlies, primer), leg hem in een paar woorden uit.
 
 OPDRACHTEN (een per regel; ruimte-ID = het type, met een cijfer bij een tweede: woonkamer, slaapkamer2; vlakken: muren, plafond, accent; een nieuwe ruimte heeft al muren):
-ruimte woonkamer            | ruimte- keuken
+ruimte woonkamer            | ruimte- keuken   (types: woonkamer, slaapkamer, keuken, eetkamer, badkamer, toilet, hal, werkkamer, kinderkamer, anders; een kinderkamer is type kinderkamer, geen slaapkamer)
 vlak woonkamer plafond      | vlak- woonkamer plafond   (lakwerk: vlak woonkamer deuren; ook kozijnen, plinten, lambrisering, radiatoren)
 woonkamer.deuren aantal 3   | woonkamer.deuren glans zijdeglans (mat/zijdeglans/hoogglans; buiten nooit mat)
 lakwerk buiten: ruimte anders "Lakwerk buiten" | anders buiten ja | vlak- anders muren | vlak anders deuren
@@ -163,7 +163,7 @@ DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij). Gaat het plafond
 - "Geschilderd, wit of heel licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed.
 - "Geschilderd, met duidelijk kleur" = afwerking muurverf, kleurNu donker (structuur glad ? en conditie goed ? als aanname).
 - Noemt de klant terloops de kleur die de muren nu hebben ("nu is het wit", "nu zijn ze donkergroen"): leg meteen afwerking muurverf en kleurNu vast (wit, lichtgrijs of licht = licht; duidelijk kleur of donker = donker), en vraag daarna niet meer hoe de muren eruitzien, hooguit naar structuur of scheuren als dat nog open is. Dat is de huidige kleur, geen keuze voor de nieuwe.
-- "Kaal stucwerk of gipsplaat" = afwerking geen. "Renovlies of glasvezel" = afwerking renovlies: daar schilder je gewoon overheen (voorgeschilderd telt als een lichte muur; is het in een duidelijke kleur geschilderd, zet dan ook kleurNu donker). "Ander behang" (papier, vinyl, met print) = afwerking behang; dat gaat er eerst af; vraag daarna of er scheuren onder zitten.
+- "Kaal stucwerk of gipsplaat" = afwerking geen. "Net neergezet" of "nieuw, nog nooit geschilderd" (gipsplaat of stucwerk) = ook afwerking geen, met het materiaal erbij; vraag dat niet na. Alleen het woord "nieuwbouw" zegt dat niet: leg dan geen afwerking als zeker vast. "Renovlies of glasvezel" = afwerking renovlies: daar schilder je gewoon overheen (voorgeschilderd telt als een lichte muur; is het in een duidelijke kleur geschilderd, zet dan ook kleurNu donker). "Ander behang" (papier, vinyl, met print) = afwerking behang; dat gaat er eerst af; vraag daarna of er scheuren onder zitten.
 - "Structuur of scheuren": vraag welke van de twee (vraag eigen).
 - "Weet ik niet" of "geen idee wat erop zit" = afwerking onbekend, structuur onbekend en conditie onbekend (alle drie vastleggen); zeg "we rekenen voorlopig met twee lagen" en zet het pad in aannames.
 - Zegt de klant zelf "glad" of "wit en glad", dan is dat gezegd: structuur glad en conditie goed (zonder " ?").
@@ -445,7 +445,7 @@ const maatChips = (type: string) => maatSchatting(type).map((x) => x.label);
 const GEEN_IDEE = ["Ik weet de richting", "Doe de kleurenscan", "Boek online kleuradvies", "Later kiezen"];
 function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
   switch (vraag) {
-    case "ondergrond": return ["Geschilderd, wit of heel licht, glad", "Geschilderd, met duidelijk kleur (zoals groen, grijs of donker)", "Kaal stucwerk of gipsplaat", "Behang", "Structuur of scheuren", "Weet ik niet"];
+    case "ondergrond": return ["Geschilderd, wit of heel licht, glad", "Geschilderd, met duidelijk kleur (zoals groen, grijs of donker)", "Kaal stucwerk of gipsplaat", "Renovlies of glasvezel", "Ander behang", "Structuur of scheuren", "Weet ik niet"];
     case "plafond": return ["Nee", "Ja, wit", "Ja, in de muurkleur", "Weet ik nog niet"];
     case "spullen": return ["Nog niets, zet alles klaar", "Ik heb al spullen", "Er komt een schilder"];
     case "maat": {
