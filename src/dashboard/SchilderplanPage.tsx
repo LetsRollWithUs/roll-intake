@@ -26,13 +26,15 @@ interface Rij {
   overgenomen_op: string | null;
   notitie: string | null;
   bron: string | null;
+  mand_op: string | null;
+  mand_soort: string | null;
   created_at: string;
   updated_at: string | null;
   project: Project;
   gesprek?: Bericht[];
 }
 
-const VELDEN = "sessie,code,status,email,bewaard_op,overdracht_op,overdracht_kanaal,overgenomen_door,overgenomen_op,notitie,bron,created_at,updated_at,project";
+const VELDEN = "sessie,code,status,email,bewaard_op,overdracht_op,overdracht_kanaal,overgenomen_door,overgenomen_op,notitie,bron,mand_op,mand_soort,created_at,updated_at,project";
 const VLAK: Record<string, string> = { muren: "Muren", plafond: "Plafond", accent: "Accentmuur", deuren: "Deuren", kozijnen: "Kozijnen", plinten: "Plinten", lambrisering: "Lambrisering", radiatoren: "Radiatoren", kasten: "Kasten", trap: "Trap", meubel: "Meubel" };
 const w = (g: Gegeven | null | undefined) => (g && g.waarde != null ? g.waarde : null);
 
@@ -171,9 +173,12 @@ function Detail({ sessie }: { sessie: string }) {
   const [notitie, setNotitie] = useState("");
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState("");
+  const [orders, setOrders] = useState<{ order_id: number; status: string | null; totaal: number | null; soort: string | null; besteld_op: string | null }[]>([]);
 
   const laad = async () => {
     const { data } = await supabase.from("projecthulp_chat").select(VELDEN + ",gesprek").eq("sessie", sessie).maybeSingle();
+    const { data: os } = await supabase.from("projecthulp_chat_order").select("order_id,status,totaal,soort,besteld_op").eq("sessie", sessie).order("order_id");
+    setOrders((os as any[]) ?? []);
     setR((data as unknown as Rij) ?? null);
     setNotitie((data as any)?.notitie ?? "");
     setLoading(false);
@@ -218,6 +223,12 @@ function Detail({ sessie }: { sessie: string }) {
         {r.overdracht_op ? ` · vroeg om hulp ${formatDate(r.overdracht_op)} via ${r.overdracht_kanaal === "mail" ? "mail" : "WhatsApp"}` : ""}
         {r.overgenomen_door ? ` · overgenomen door ${r.overgenomen_door} (${formatDate(r.overgenomen_op)})` : ""}
       </p>
+      {(r.mand_op || orders.length > 0) && (
+        <p className="rd-sub" style={{ marginTop: 0 }}>
+          {r.mand_op ? `Klikte op bestellen ${formatDate(r.mand_op)}${r.mand_soort === "samples" ? " (samples)" : ""}` : ""}
+          {orders.map((o) => ` · order ${o.order_id}: € ${Number(o.totaal ?? 0).toFixed(2).replace(".", ",")}, ${o.soort === "beide" ? "verf en samples" : o.soort ?? ""} (${o.status})`).join("")}
+        </p>
+      )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0 16px" }}>
         {f !== "bij-roll" && <button className="rd-plan-chip is-on" disabled={bezig} onClick={neemOver}>Neem over</button>}

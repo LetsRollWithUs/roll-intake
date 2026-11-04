@@ -4,6 +4,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { confirmPaid, cancelBooking, createCreditFromOrder, createThuisFromOrder } from "../_shared/confirm.ts";
 import { attributeCommission, voidCommission, flagSamplesOrdered } from "../_shared/commission.ts";
+import { koppelChatOrder } from "../_shared/chat-order.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -44,6 +45,9 @@ Deno.serve(async (req) => {
 
   const paid = ["processing", "completed", "on-hold"].includes(order.status);
   const dead = ["cancelled", "failed", "refunded"].includes(order.status);
+
+  // Jouw schilderplan: order uit een chatgesprek bijhouden (betaald, en later geannuleerd of terugbetaald).
+  if (paid || dead) await koppelChatOrder(admin, order);
 
   if (paid) {
     const col = bookingId ? "id" : "woo_order_id";

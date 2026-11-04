@@ -63,6 +63,9 @@ const kaart = (k: Kleur) => ({ naam: k.n, omschrijving: k.d ?? "", hex: k.h, afb
 
 /* ---------- tools ---------- */
 
+/** Voor de inzichten in beheer (InzichtenPage.tsx): dezelfde lijst. */
+const ONDERWERPEN = ["kleur", "product", "hoeveelheid", "prijs", "korting", "levering", "retour", "aanbrengen", "ondergrond", "advies", "bestellen", "anders"];
+
 const TOOLS: any[] = [
   {
     name: "werk_bij",
@@ -116,8 +119,10 @@ const TOOLS: any[] = [
         voor: { type: "string", description: "Voor welk onderdeel de kaarten zijn, als pad: woonkamer.muren of slaapkamer2.plafond." },
         aannames: { type: "array", items: { type: "string" }, description: "Aannames die je in de tekst noemt, als pad: woonkamer.hoogte of woonkamer.muren.afwerking." },
         actie: { type: "string", enum: ["geen", "samples", "bestellen", "bewaren", "stappen", "overdracht", "kleuradvies"] },
+        onderwerp: { type: "string", enum: ONDERWERPEN, description: "Onzichtbaar voor de klant, voor de inzichten van Roll: waar ging het laatste bericht van de klant vooral over." },
+        onbeantwoord: { type: "boolean", description: "Onzichtbaar voor de klant. true als de klant iets vroeg waar je geen zeker antwoord op had, omdat het niet in voorwaarden of productinfo staat (ook als je dan naar de klantenservice verwijst). Anders false." },
       },
-      required: ["tekst", "vraag"],
+      required: ["tekst", "vraag", "onderwerp", "onbeantwoord"],
     },
   },
 ];
@@ -812,6 +817,8 @@ function geldigAntwoord(inp: any) {
     voor: "string" === typeof inp.voor ? inp.voor.slice(0, 60) : "",
     aannames: tekstLijst(inp.aannames),
     actie: ACTIES.includes(inp.actie) ? inp.actie : "geen",
+    onderwerp: ONDERWERPEN.includes(inp.onderwerp) ? inp.onderwerp : null,
+    onbeantwoord: true === inp.onbeantwoord,
   };
 }
 
@@ -1191,7 +1198,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const vraagForm = FORM_VRAGEN[antwoord.vraag];
   const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm ? maakFormulier(vraagForm, project) : null);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), pack: kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null, kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), pack: kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null, kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
@@ -1202,7 +1209,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const t2 = Date.now();
   await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu });
   tokens.t.opslaan = Date.now() - t2;
-  await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || formTekst || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model: modelKeuze, controle: controleLog.length ? controleLog : null, tokens, duur_ms: Date.now() - start });
+  await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || formTekst || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model: modelKeuze, controle: controleLog.length ? controleLog : null, onderwerp: antwoord.onderwerp ?? null, onbeantwoord: antwoord.onderwerp ? !!antwoord.onbeantwoord : null, tokens, duur_ms: Date.now() - start });
   return uit;
 }
 
@@ -1255,6 +1262,11 @@ Deno.serve(async (req) => {
       const nu = new Date().toISOString();
       await db.from("projecthulp_chat").update({ bewaard_op: nu, ...(email ? { email } : {}), updated_at: nu }).eq("sessie", sessie);
       return j({ bewaard: bewaardInfo({ ...rij, bewaard_op: nu, email: email ?? rij.email }) });
+    }
+    // De klik op bestellen, voor de inzichten. updated_at blijft staan: dit is geen gespreksactiviteit.
+    if (body.mand) {
+      await db.from("projecthulp_chat").update({ mand_op: new Date().toISOString(), mand_soort: "samples" === body.mand ? "samples" : "bestelling" }).eq("sessie", sessie);
+      return j({ ok: true });
     }
     if (body.deel) {
       const rij = await laad(sessie);
