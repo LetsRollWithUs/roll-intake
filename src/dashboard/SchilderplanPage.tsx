@@ -148,6 +148,7 @@ function Lijst() {
                     </div>
                     <div style={{ fontSize: 14, marginTop: 4 }}>{samenvatting(r.project)}</div>
                     {rs.length > 0 && <div style={{ fontSize: 13, marginTop: 4, color: "var(--rd-pink-dark)", fontWeight: 600 }}>Beoordelen: {rs.join("; ")}</div>}
+                    {r.status === "bij-roll" && r.overgenomen_op && r.updated_at && new Date(r.updated_at) > new Date(r.overgenomen_op) && <div style={{ fontSize: 13, marginTop: 4, fontWeight: 700 }}>Nieuw bericht van de klant na de overname</div>}
                     <div style={{ fontSize: 12, opacity: 0.55, marginTop: 6 }}>
                       {r.overdracht_op ? `Vroeg om hulp ${formatDate(r.overdracht_op)} via ${r.overdracht_kanaal === "mail" ? "mail" : "WhatsApp"}` : `Laatst actief ${formatDate(r.updated_at ?? r.created_at)}`}
                       {r.overgenomen_door ? ` · overgenomen door ${r.overgenomen_door}` : ""}

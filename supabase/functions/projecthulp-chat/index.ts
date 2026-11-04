@@ -887,6 +887,30 @@ async function laad(sessie: string) {
 
 type Meld = (soort: "tekst" | "opnieuw", data?: unknown) => void;
 
+const BIJ_ROLL_EERST = "Iemand van Roll kijkt nu met je mee. We komen zo snel mogelijk bij je terug, tijdens kantoortijden. Je bericht staat erbij.";
+const BIJ_ROLL_DAARNA = "Dank je, ook dit bericht staat erbij. We komen zo snel mogelijk bij je terug, tijdens kantoortijden.";
+
+/** Overgenomen door Roll: Charlie antwoordt niet meer en het model draait niet. Het plan blijft zoals het is en het bericht bewaren we voor de medewerker. */
+async function beurtBijRoll(rij: any, aanvraagId: string, bericht: string, formulier: any) {
+  const start = Date.now();
+  const project = rij.project;
+  const overgenomen = rij.overgenomen_op ? new Date(rij.overgenomen_op).getTime() : 0;
+  const alGezegd = (rij.gesprek as any[]).some((b) => "bij-roll" === b.vast && new Date(b.op).getTime() >= overgenomen);
+  const tekst = alGezegd ? BIJ_ROLL_DAARNA : BIJ_ROLL_EERST;
+  const klant = bericht || (formulier ? "(De klant vulde een formulier in)" : "(De klant tikte op een knop)");
+  const status = projectStatus(project);
+  const { plan, mens } = naarRekenkern(project);
+  const antwoord = { tekst, pack: null, kaartenVoor: null, chips: [], kaarten: [], actie: "geen", aannames: [], formulier: null };
+  const uit = { antwoord, project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), bijRoll: true };
+  const nu = new Date().toISOString();
+  const gesprek = [...(rij.gesprek as any[]),
+    { rol: "klant", tekst: klant, aanvraagId, op: nu },
+    { rol: "roll", tekst, aanvraagId, op: nu, vast: "bij-roll", uit: { antwoord } }];
+  await db.from("projecthulp_chat").update({ gesprek, updated_at: nu }).eq("sessie", rij.sessie);
+  await db.from("projecthulp_chat_log").insert({ sessie: rij.sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: klant.replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: [], tools: [], model: "bij-roll", duur_ms: Date.now() - start });
+  return uit;
+}
+
 async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null, metTest = false) {
   const start = Date.now();
   // Alleen in de testset: "model:denken" om de denkstand te vergelijken (uit, tussen, adaptief).
@@ -901,6 +925,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Opnieuw geprobeerd: hetzelfde antwoord, niets dubbel.
   const eerder = (rij.gesprek as any[]).find((b) => b.aanvraagId === aanvraagId && "roll" === b.rol);
   if (eerder) return { ...eerder.uit, herhaald: true };
+  if ("bij-roll" === rij.status) return await beurtBijRoll(rij, aanvraagId, bericht, formulier);
   if ((rij.gesprek as any[]).filter((b) => "klant" === b.rol).length >= MAX_BERICHTEN) {
     return { fout: "Dit gesprek is lang geworden. Ga verder met de stappen of stuur ons een bericht.", actie: "stappen" };
   }

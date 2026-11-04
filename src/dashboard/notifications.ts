@@ -159,6 +159,18 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
         to: `/beheer/schilderplan/${c.sessie}`,
       });
     }
+    // Overgenomen gesprekken: de klant typte na de overname nog iets in de chat (Charlie antwoordt dan niet meer).
+    const { data: spRoll } = await supabase.from("projecthulp_chat").select("sessie,code,overgenomen_op,updated_at")
+      .eq("status", "bij-roll").order("updated_at", { ascending: false }).limit(20);
+    for (const c of (spRoll as any[]) ?? []) {
+      if (!c.overgenomen_op || !c.updated_at || new Date(c.updated_at) <= new Date(c.overgenomen_op)) continue;
+      out.push({
+        id: `schilderplan-nieuw-${c.sessie}-${c.updated_at}`, kind: "schilderplan",
+        title: `Schilderplan${c.code ? ` ${c.code}` : ""}: nieuw bericht van de klant`,
+        sub: `In de chat op ${fmtD(c.updated_at)}, na de overname`,
+        to: `/beheer/schilderplan/${c.sessie}`,
+      });
+    }
     const { data: al } = await supabase.from("system_alerts").select("id,message").is("acknowledged_at", null).order("created_at", { ascending: false }).limit(20);
     for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/beheer/meldingen" });
   }
