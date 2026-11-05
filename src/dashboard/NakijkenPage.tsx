@@ -33,6 +33,8 @@ const UITLEG: Record<string, string> = {
   behang: "adviseerde over behang heen te schilderen",
   intern: "praatte over zijn instructies",
   mens: "beantwoordde de vraag of het een mens is niet goed (vangnet zette het recht)",
+  erin: "zei dat een kleur erin stond die nog niet gekozen was",
+  "mens-te-snel": "bood te snel iemand van Roll aan (vangnet haalde het weg)",
   vocht: "zette vocht of schimmel niet door naar Roll (vangnet deed het)",
 };
 const POGING = (p: number | string) => ("vangnet" === p ? "Vangnet" : 2 === p ? "Tweede poging" : "Eerste poging");

@@ -149,6 +149,7 @@ function eindKlopt( sleutel, verwacht, r, alle ) {
 	if ( [ 'conflict', 'pakketkaart', 'bestellen', 'project', 'ontvangen-status' ].includes( sleutel ) ) return null;
 	if ( sleutel === 'mens' ) return ( r.mens ?? [] ).some( ( m ) => String( m.reden ).includes( String( verwacht ).split( ' ' )[ 0 ] ) ) || alle.some( ( x ) => x.antwoord?.actie === 'overdracht' );
 	if ( sleutel === 'doorverwijzing' ) return alle.some( ( x ) => [ 'stappen', 'overdracht' ].includes( x.antwoord?.actie ) );
+	if ( sleutel === 'zonder' ) return ( p?.zonder ?? [] ).some( ( x ) => String( x ).toLowerCase().includes( String( verwacht ).toLowerCase() ) );
 	if ( sleutel === 'samples' ) return verwacht.every( ( n ) => ( p?.samples ?? [] ).some( ( s ) => zelfde( s.naam, n ) ) );
 	if ( [ 'spullen', 'wanneer' ].includes( sleutel ) ) return alt( w( p?.[ sleutel ] ) );
 	if ( sleutel === 'doel' ) return String( w( p?.doel ) ?? '' ).toLowerCase().includes( String( verwacht ).toLowerCase() );
@@ -268,6 +269,15 @@ async function draaiGesprek( g ) {
 		for ( const [ beurt, patroon ] of Object.entries( g.antwoordBevat ?? {} ) ) {
 			checks++;
 			if ( ! new RegExp( patroon, 'i' ).test( antwoorden[ Number( beurt ) ]?.tekst ?? '' ) ) fouten.push( `antwoord ${ beurt } bevat niet /${ patroon }/` );
+		}
+		for ( const [ beurt, patroon ] of Object.entries( g.antwoordNiet ?? {} ) ) {
+			checks++;
+			if ( new RegExp( patroon, 'i' ).test( antwoorden[ Number( beurt ) ]?.tekst ?? '' ) ) fouten.push( `antwoord ${ beurt } bevat ten onrechte /${ patroon }/` );
+		}
+		for ( const [ beurt, min ] of Object.entries( g.kaartenMin ?? {} ) ) {
+			checks++;
+			const n = antwoorden[ Number( beurt ) ]?.antwoord?.kaarten?.length ?? 0;
+			if ( n < min ) fouten.push( `antwoord ${ beurt } toont ${ n } kaarten, minstens ${ min } verwacht` );
 		}
 		for ( const zin of g.nooit ?? [] ) {
 			const k = nooitGebeurd( zin, r );

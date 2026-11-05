@@ -189,6 +189,21 @@ export function toepassen( project, aanvraag, opties = {} ) {
 				uit.toegepast.push( wz );
 				break;
 			}
+			case 'zonder': {
+				// Gereedschap dat de klant niet wil: weg uit het pakket en de winkelwagen, met 'terug' zet je het weer aan.
+				const naam = String( wz.naam || '' ).trim().slice( 0, 60 );
+				if ( naam.length < 4 ) {
+					weiger( wz, 'Welk product moet eruit?' );
+					break;
+				}
+				const klein = naam.toLowerCase();
+				p.zonder = ( p.zonder || [] ).filter( ( x ) => x.toLowerCase() !== klein );
+				if ( 'terug' !== wz.wat ) {
+					p.zonder.push( naam );
+				}
+				uit.toegepast.push( wz );
+				break;
+			}
 			default:
 				weiger( wz, 'Onbekende actie.' );
 		}
@@ -345,6 +360,19 @@ function zet( p, r, v, wz, ctx ) {
 			return weiger( wz, 'Renovlies hoort bij de muren.' );
 		}
 		v.renovlies = g( waarde );
+	} else if ( 'lagen' === a ) {
+		// De klant kiest zelf 1 of 2 lagen; "standaard" laat ons weer rekenen. Alleen muren en plafond: lak heeft eigen regels.
+		if ( lak || 'meubel' === v.soort ) {
+			return weiger( wz, 'Het aantal lagen kies je alleen voor muren en plafond.' );
+		}
+		const n = Number( waarde );
+		if ( 1 === n || 2 === n ) {
+			v.lagen = g( n );
+		} else if ( 'standaard' === waarde ) {
+			v.lagen = null;
+		} else {
+			return weiger( wz, 'Kies 1 of 2 lagen.' );
+		}
 	} else if ( 'glans' === a ) {
 		if ( ! lak || ! GLANS.includes( waarde ) ) {
 			return weiger( wz, 'Glans hoort alleen bij lakwerk.' );

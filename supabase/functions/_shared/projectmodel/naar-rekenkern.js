@@ -111,7 +111,7 @@ export function naarRekenkern( project ) {
 				if ( o.mens ) {
 					mens.push( { ruimte: r.id, vlak: v.id, reden: o.mens } );
 				}
-				Object.assign( uit, { ondergrond: o.ondergrond, staat: o.staat, structuur: o.structuur, behang: o.behang, renovlies: !! w( v.renovlies ) } );
+				Object.assign( uit, { ondergrond: o.ondergrond, staat: o.staat, structuur: o.structuur, behang: o.behang, renovlies: !! w( v.renovlies ), lagen: w( v.lagen, '' ) } );
 				if ( 'accent' === v.soort ) {
 					uit.breedte = w( v.breedte, '' );
 					uit.hoogte = w( v.hoogte, '' );
@@ -141,6 +141,7 @@ export function naarRekenkern( project ) {
 			// Weten we het niet, dan bieden we de spullen aan zonder vinkje.
 			tools: 'onbekend' === spullen ? [] : null,
 			uit: [],
+			zonder: project.zonder || [],
 			samples: ( project.samples || [] ).map( ( s ) => ( { naam: s.naam, type: s.type || 'sticker' } ) ),
 			packs: project.packs || [],
 			land: w( project.land, 'NL' ),
