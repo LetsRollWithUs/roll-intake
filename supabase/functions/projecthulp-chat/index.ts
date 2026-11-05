@@ -215,7 +215,7 @@ PLAFOND: vraag een keer "Wil je het plafond ook schilderen?" (vraag "plafond"). 
 
 SPULLEN: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder. Vraagt de klant om een schilderpakket, set of gereedschap, dan is dat een opdracht: spullen niets, vraag pakket op en noem kort welke set erin staat. Staat spullen al vast, vraag er dan niet meer naar.
 JE PAKKET: vraagt de klant wat er in zijn pakket staat, waarom iets erin staat, of wil hij iets eruit, gebruik dan ALTIJD eerst de tool pakket. Daar staan de verf, de voorbereiding en het gereedschap met per product waarom het erbij hoort; leg dat uit in een zin. Zeg nooit dat iets er niet in staat zonder pakket te hebben opgevraagd. Wil de klant gereedschap niet ("haal het schuurblok eruit", "ik ga niet vullen, dus niet nodig"): "zonder <productnaam uit pakket>" en bevestig het. Verf haal je er niet uit: dat gaat via de maat of de kleur. Zeg bij een nieuw product dat niet vanzelf spreekt erbij waarom het erin staat (een extra roller voor de tweede kleur, een schuurblok voor gevulde scheurtjes). Praat tegen de klant over "je plan" en "je pakket", nooit over "je stand".
-LAGEN: wij rekenen het aantal lagen uit, maar de klant beslist. Wil hij 1 laag (of 2): leg het vast met "<ruimte>.muren lagen 1" en "<ruimte>.plafond lagen 1" voor de onderdelen die hij bedoelt; noemt hij er geen, dan alle muren en plafonds die op 2 lagen staan. Doe dat meteen, zonder iemand van Roll erbij. Zeg daarbij kort en vriendelijk: "We rekenen nu met 1 laag. Op een donkere ondergrond of bij een uitgesproken kleur kan een tweede laag nodig zijn, dan heb je wat meer verf nodig." Beloof niet dat 1 laag genoeg is. Vraagt hij alleen of het kan, zeg dat het kan met dezelfde opmerking, en vraag of je het zo zal doen. Terug naar onze berekening: "<ruimte>.muren lagen standaard".
+LAGEN: wij rekenen het aantal lagen uit, maar de klant beslist. Wil hij 1 laag (of 2): leg het vast met "<ruimte>.muren lagen 1" en "<ruimte>.plafond lagen 1" voor de onderdelen die hij bedoelt; noemt hij er geen, dan alle muren en plafonds die op 2 lagen staan. Doe dat meteen, zonder iemand van Roll erbij. Zeg daarbij kort en vriendelijk: "We rekenen nu met 1 laag. Op een donkere ondergrond of bij een uitgesproken kleur kan een tweede laag nodig zijn, dan heb je wat meer verf nodig." Beloof niet dat 1 laag genoeg is. Noem die opmerking alleen als de klant zelf om minder lagen vraagt; gaat het gesprek niet over lagen, zeg er dan niets over. Vraagt hij alleen of het kan, zeg dat het kan met dezelfde opmerking, en vraag of je het zo zal doen. Terug naar onze berekening: "<ruimte>.muren lagen standaard".
 RUIMTE ERBIJ: wil de klant een ruimte toevoegen en noemt hij niet welke, zet dan vraag "ruimte" (de server toont de keuze). Vraag dan niet naar de ruimte die er al staat. Noemt hij de ruimte wel, leg hem vast en vraag "onderdelen".
 VRAGEN HERHALEN: stel een vraag niet opnieuw als de klant net iets anders vroeg. Beantwoord dat en laat het daarbij; de klant komt er zelf op terug.
 
@@ -910,8 +910,13 @@ function packVoor(namen: string[], project: any, richting: { familie: string; li
   const opNaam = richting ? PACKS.packs.find((p: any) => p.naam === packNaam(richting.familie, richting.lichtheid)) : null;
   const opKleur = PACKS.packs.map((p: any) => ({ p, n: p.kleuren.filter((k: string) => namen.includes(k)).length })).sort((a: any, b: any) => b.n - a.n)[0];
   const p = opNaam ?? (opKleur && opKleur.n >= 2 ? opKleur.p : null);
-  if (!p) return null;
-  return { productId: p.productId, naam: p.naam, omschrijving: p.omschrijving ?? "", kleuren: p.kleuren, inPakket: (project.packs ?? []).some((x: any) => x.productId === p.productId) };
+  return p ? packKaart(p, project) : null;
+}
+const packKaart = (p: any, project: any) => ({ productId: p.productId, naam: p.naam, omschrijving: p.omschrijving ?? "", kleuren: p.kleuren, inPakket: (project.packs ?? []).some((x: any) => x.productId === p.productId) });
+/** Alle packs van een familie: licht en donker als die verschillen, zodat de klant kiest welke past. */
+function packsVanFamilie(familie: string, project: any) {
+  const namen = [...new Set([packNaam(familie, "licht"), packNaam(familie, "donker")])];
+  return namen.map((n) => PACKS.packs.find((p: any) => p.naam === n)).filter(Boolean).map((p: any) => packKaart(p, project));
 }
 
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
@@ -1030,7 +1035,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     if (f && namen.length && doel) {
       project = toepassen(project, { aanvraagId: aanvraagId + "#t", versie: project.versie, door: "klant-kaart", wijzigingen: [{ actie: "kleur", ruimte: doel.ruimte, vlak: doel.vlak, wat: "richting", richting: f.n.toLowerCase(), zekerheid: "zeker" }] }, opties).project;
       tikTekst = f.n;
-      antwoord = { tekst: `Dit zijn al onze kleuren in ${f.n.toLowerCase()}, van licht naar donker. Bekijk ze thuis het best als sample; met een sample pack vergelijk je ze naast elkaar. Wil je hulp bij het kiezen, dan kan een stylist altijd meekijken.`, vraag: "wit" === f.s ? "eigen" : "geen", chips: "wit" === f.s ? RAL_WIT : [], kaarten: namen, voor: `${doel.ruimte}.${doel.vlak}`, actie: "geen", alleKaarten: true };
+      antwoord = { tekst: `Dit zijn al onze kleuren in ${f.n.toLowerCase()}, van licht naar donker. Bekijk ze thuis het best als sample; met een sample pack vergelijk je ze naast elkaar. Wil je hulp bij het kiezen, dan kan een stylist altijd meekijken.`, vraag: "wit" === f.s ? "eigen" : "geen", chips: "wit" === f.s ? RAL_WIT : [], kaarten: namen, voor: `${doel.ruimte}.${doel.vlak}`, actie: "geen", alleKaarten: true, packsVan: f.s };
     } else tikTekst = String(tik.naam ?? "");
   } else if (tik && "object" === typeof tik) {
     if (tik.kleur) await metKleuren();
@@ -1302,6 +1307,10 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     controleLog.push({ poging: "vangnet", fouten: [{ id: "vocht", stuk: "overdracht gezet" }] });
     antwoord.actie = "overdracht";
   }
+  // De waarschuwing over een tweede laag hoort alleen bij een gesprek over lagen.
+  if (!/\b(laag|lagen|dek\w*)\b/i.test(bericht) && /\btweede laag\b[^.!?]*\bnodig\b/i.test(String(antwoord.tekst))) {
+    antwoord.tekst = zinnenVan(antwoord.tekst).filter((z) => !/\btweede laag\b[^.!?]*\bnodig\b/i.test(z)).join("").trim() || "Genoteerd.";
+  }
   // Iemand van Roll alleen als de klant erom vraagt of als er een reden is. Anders lost Charlie het zelf op en biedt hij het niet steeds aan.
   const mensNodig = VRAAGT_MENS.test(bericht) || OVER_MENS.test(String(vorige?.tekst ?? "")) || mens.length > 0 || !!antwoord.onbeantwoord || toolLog.some((x) => "voorwaarden" === x.tool) || !!formulier;
   if (!mensNodig && ("overdracht" === antwoord.actie || OVER_MENS.test(String(antwoord.tekst)))) {
@@ -1348,8 +1357,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   if ("richting" === antwoord.vraag) { familiesTonen = true; antwoord.vraag = "geen"; }
   const families = familiesTonen ? familiesVoorKeuze(await ixP) : null;
   if (families) antwoord.chips = [];
+  const packs = antwoord.packsVan ? packsVanFamilie(antwoord.packsVan, project) : [];
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null, kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
