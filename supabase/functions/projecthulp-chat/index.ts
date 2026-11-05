@@ -74,7 +74,7 @@ const TOOLS: any[] = [
   },
   {
     name: "zoek_kleur",
-    description: "Zet een kleurnaam, RAL-code of kleur van een ander merk om naar een Roll-kleur. Altijd gebruiken voor je een genoemde kleur vastlegt.",
+    description: "Zoekt een kleurnaam, RAL- of NCS-code, of kleur van een ander merk. RAL en NCS houden hun eigen naam, andere merken worden een Roll-kleur. Altijd gebruiken voor je een genoemde kleur vastlegt.",
     input_schema: { type: "object", properties: { zoekterm: { type: "string" } }, required: ["zoekterm"] },
   },
   {
@@ -180,7 +180,7 @@ MAAT: gewone ramen en deuren trekken we niet af (dat is onze marge: liever iets 
 
 KLEUR (per vlak):
 - JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurenscan op advies.roll.nl of van een stylist (online kleuradvies). Jij helpt met een richting, sample packs, en de weg naar die hulp.
-- Roll-kleur of RAL duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren"). Bij een RAL-kleur noem je alleen de code ("RAL 9010 staat erin voor de muren"); verzin geen omschrijving of naam.
+- Roll-kleur, RAL of NCS duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren"). Bij een RAL- of NCS-kleur noem je alleen de code ("RAL 9010 staat erin voor de muren", "NCS S 1050-Y staat erin"), nooit een Roll-naam; verzin geen omschrijving of naam.
 - Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je na in Roll-verf, als optische match; bij ons heet hij ..."). Zeg niet dat het dezelfde verf of exact dezelfde kleur is en leg die vast met "<ruimte>.muren kies <de naam die zoek_kleur gaf>" (kies, niet kandidaat): de klant noemde een duidelijke kleur. Noem nooit uit jezelf een ander merk.
 - Wijst de klant een kleur af ("Daily Om vind ik te grijs", "die niet"): leg "<ruimte>.muren afwijzen <naam>" vast, ook als je in dezelfde beurt een richting vastlegt.
 - Zeg alleen "staat erin" als je het in deze beurt met werk_bij hebt vastgelegd.
@@ -272,11 +272,14 @@ async function zoekKleur(term: string) {
   const exact = ix.c.find((k) => k.n.toLowerCase() === t.toLowerCase());
   if (exact) return { type: "roll", naam: exact.n, omschrijving: exact.d ?? "" };
   const ral = /^ral\s*[-.]?\s*(\d{4})$/i.exec(t);
-  const zoek = ral ? `RAL ${ral[1]}` : t;
+  // NCS staat in de database als "S 1050-Y (NCS Edition 2 '95)": zoeken op "S 1050-Y".
+  const ncs = /^(?:ncs\s*[-:]?\s*)(?:s\s*)?(\d{4}-[a-z0-9]+)$/i.exec(t) ?? /^s\s*(\d{4}-[a-z0-9]+)$/i.exec(t);
+  const ncsCode = ncs ? `S ${ncs[1].toUpperCase()}` : "";
+  const zoek = ral ? `RAL ${ral[1]}` : ncsCode || t;
   const km = async (q: string) => { const r = await (await fetch(`${ROLL}/wp-json/ark-kleurmatch/v1/colors?search=${encodeURIComponent(q)}&per_page=5`)).json().catch(() => []); return Array.isArray(r) ? r : []; };
   let lijst = await km(zoek);
   // "Nigiri van LAB" vindt niets, "nigiri" wel: probeer de losse woorden en houd treffers die bij de rest passen.
-  if (!lijst.length && !ral) {
+  if (!lijst.length && !ral && !ncs) {
     const woorden = t.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length > 3 && !["kleur", "verf", "van", "voor", "zoals"].includes(x));
     for (const wd of woorden) {
       const r = await km(wd);
@@ -290,11 +293,18 @@ async function zoekKleur(term: string) {
     const r = lijst.find((x: any) => "RAL" === String(x.brand).toUpperCase());
     if (r) return { type: "ral", naam: `RAL ${ral[1]}`, km: { id: r.id, rollNaam: r.rollName, rollCode: r.rollCode, hex: r.hex, ral: true, naam: `RAL ${ral[1]}` } };
   }
+  // RAL en NCS zijn standaarden: die krijgen hun eigen naam, geen Roll-naam (type ral staat voor beide).
+  const alsNcs = (r: any) => { const naam = `NCS ${String(r.name).replace(/\s*\(NCS[^)]*\)\s*$/i, "").trim()}`; return { type: "ral", naam, km: { id: r.id, rollNaam: r.rollName, rollCode: r.rollCode, hex: r.hex, ral: true, naam } }; };
+  const isNcs = (r: any) => "NCS" === String(r.brand).toUpperCase();
+  if (ncs) {
+    const r = lijst.find((x: any) => isNcs(x) && new RegExp(`^${ncsCode}(\\s|$)`, "i").test(String(x.name)));
+    if (r) return alsNcs(r);
+  }
   const merk = lijst.filter((x: any) => "RAL" !== String(x.brand).toUpperCase());
   if (merk.length) {
     return {
       // Een kleurmatch-treffer mengt Roll exact na.
-      treffers: merk.map((r: any) => ({ type: "merk-exact", naam: `${r.rollName}${r.rollCode ? " - " + r.rollCode : ""}`, merk: r.brand, merkKleur: r.name, km: { id: r.id, rollNaam: r.rollName, rollCode: r.rollCode, hex: r.hex, ral: false } })),
+      treffers: merk.map((r: any) => isNcs(r) ? alsNcs(r) : ({ type: "merk-exact", naam: `${r.rollName}${r.rollCode ? " - " + r.rollCode : ""}`, merk: r.brand, merkKleur: r.name, km: { id: r.id, rollNaam: r.rollName, rollCode: r.rollCode, hex: r.hex, ral: false } })),
       let_op: "Bevestig het merk een keer, daarna alleen de Roll-naam.",
     };
   }
@@ -355,7 +365,7 @@ async function kleurenOpzoeken(wijzigingen: any[], gevonden: Map<string, any>) {
     if (eerder) { wz.kleur = eerder; continue; }
     const roll = ix.c.find((c) => c.n.toLowerCase() === String(k.naam).trim().toLowerCase());
     if (roll) { wz.kleur = { type: "roll", naam: roll.n }; continue; }
-    if (/^ral\s*[-.]?\s*\d{4}$/i.test(String(k.naam).trim())) {
+    if (/^ral\s*[-.]?\s*\d{4}$|^ncs\s*[-:]?\s*(s\s*)?\d{4}-/i.test(String(k.naam).trim())) {
       const r: any = await zoekKleur(String(k.naam));
       if ("ral" === r.type) wz.kleur = r;
     }

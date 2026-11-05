@@ -22,9 +22,11 @@
 	},
 	"verzending": {
 		"gratis": "Gratis verzending vanaf € 150.",
-		"verf": "Verf (ook behang) besteld voor 23:59 op maandag tot en met donderdag of op zondag, is meestal de volgende dag in huis, 's avonds. Op vrijdag besteld voor 9:00: meestal dezelfde avond in huis. Op vrijdag na 9:00 of in het weekend tot zondag 23:59 besteld: maandagavond.",
+		"verf": "Verf, tools en renovlies besteld voor 23:59 op maandag tot en met donderdag of op zondag, is meestal de volgende dag in huis, 's avonds. Op vrijdag besteld voor 9:00: meestal dezelfde avond in huis. Op vrijdag na 9:00 of in het weekend tot zondag 23:59 besteld: maandagavond.",
 		"samples": "Samples besteld voor 16:00 zijn meestal de volgende dag in huis. In het weekend versturen we niet: op vrijdag voor 16:00 besteld komt zaterdag, in het weekend besteld gaat maandag de deur uit. Samples komen via de brievenbus, je hoeft er niet voor thuis te zijn.",
-		"let_op": "Zitten verf en samples in dezelfde bestelling, of gaat het naar België, dan weet de klantenservice de precieze levertijd."
+		"let_op": "Zitten verf en samples in dezelfde bestelling, dan weet de klantenservice de precieze levertijd.",
+		"ander_behang": "Op dit moment verkopen we alleen renovlies. Ander behang komt later; dat wordt op maat gemaakt, reken dan op 5 werkdagen.",
+		"belgie": "Naar België: verf en samples besteld voor 16:00 zijn meestal de volgende dag in huis."
 	},
 	"regels_voor_de_bot": [
 		"Gebruik retour nooit als geruststelling bij de hoeveelheid: op kleur gemengde verf kan niet retour.",

@@ -30,7 +30,8 @@ export function geldigeKleur( k, kleurIndex ) {
 		return !! k.naam && ( ! kleurIndex || kleurIndex.has( k.naam ) );
 	}
 	if ( 'ral' === k.type ) {
-		return /^RAL \d{4}$/.test( k.naam || '' ) && !! ( k.km && k.km.id );
+		// Type ral staat voor de standaarden met eigen naam: RAL en NCS.
+		return /^(RAL \d{4}|NCS S \d{4}-[A-Z0-9]+)$/.test( k.naam || '' ) && !! ( k.km && k.km.id );
 	}
 	if ( 'merk-exact' === k.type ) {
 		return !! ( k.km && k.km.id && k.km.rollNaam );
