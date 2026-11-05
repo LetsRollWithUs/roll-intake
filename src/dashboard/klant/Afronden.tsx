@@ -124,7 +124,7 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
   const last = (routes: string[]) => sends.find((s) => routes.includes(s.route))?.sent_at ?? null;
   const verzonden = [
     ...(last(["roll", "zelf"]) ? [`Advies ${fmt(last(["roll", "zelf"])!)}`] : []),
-    ...(intake.offer_sent_at ? [`Offerte ${fmt(intake.offer_sent_at)}`] : []),
+    ...(intake.offer_sent_at ? [`Verfplan ${fmt(intake.offer_sent_at)}`] : []),
     ...(last(["samples"]) ? [`Sampleadvies ${fmt(last(["samples"])!)}`] : []),
   ];
   const suggested: Keuze | null = samplesRoute ? "samples" : hasOffer && !blocked ? "voorstel" : null;
@@ -161,12 +161,12 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
       const { data } = await supabase.functions.invoke("booking", { body: { action: "voorstel_versturen", intake_id: intake.id, booking_id: bookingId } });
       const d = data as { ok?: boolean; klant_url?: string | null; skipped?: string; kleuren_onbekend?: string[]; error?: string } | null;
       if (!d?.ok) {
-        setState({ k, s: "fout", t: `Het advies is verstuurd, de offerte nog niet${d?.skipped === "kleuren onbekend" ? `: kies eerst deze kleuren in de editor: ${(d.kleuren_onbekend ?? []).join(", ")}` : ""}. Probeer het opnieuw.` });
+        setState({ k, s: "fout", t: `Het advies is verstuurd, het verfplan nog niet${d?.skipped === "kleuren onbekend" ? `: kies eerst deze kleuren in de editor: ${(d.kleuren_onbekend ?? []).join(", ")}` : ""}. Probeer het opnieuw.` });
         onSent(); return;
       }
       onIntake({ offer_status: "verstuurd", offer_sent_at: new Date().toISOString(), advisor_offer_url: d.klant_url ?? intake.advisor_offer_url });
     }
-    setState({ k, s: "ok", t: k === "voorstel" ? "Advies en offerte zijn verzonden." : k === "samples" ? "Sampleadvies verzonden." : "Advies verzonden." });
+    setState({ k, s: "ok", t: k === "voorstel" ? "Advies en verfplan zijn verzonden." : k === "samples" ? "Sampleadvies verzonden." : "Advies verzonden." });
     setPreview(null); onSent();
   };
 
@@ -205,9 +205,9 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     { k: "samples", titel: "Eerst kleuren testen", sub: "Sampleadvies met stickers of testers. Verf volgt als de klant eruit is.", kan: true, waarom: "" },
     { k: "roll", titel: "Roll laten meekijken", sub: "Roll neemt contact op met de klant.", kan: true, waarom: "" },
   ] : [
-    { k: "voorstel", titel: "Advies + offerte", sub: "Het verslag en de offerte met winkelmandje, in één keer.", kan: hasOffer && !blocked && !nogKiezen, waarom: !offer ? "Leg eerst het advies vast bij stap 2." : nogKiezen ? "Kies eerst per oppervlak: eerst testen of bevestigd." : blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
+    { k: "voorstel", titel: "Advies + verfplan", sub: "Het verslag en het verfplan met winkelmandje, in één keer.", kan: hasOffer && !blocked && !nogKiezen, waarom: !offer ? "Leg eerst het advies vast bij stap 2." : nogKiezen ? "Kies eerst per oppervlak: eerst testen of bevestigd." : blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
     { k: "advies", titel: "Alleen advies", sub: "Met links naar de kleuren. Voor klanten die nog even verder willen kijken.", kan: hasOffer && !nogKiezen, waarom: nogKiezen ? "Kies eerst per oppervlak: eerst testen of bevestigd." : "Er zijn nog geen bevestigde kleuren." },
-    { k: "roll", titel: "Roll laten meekijken", sub: "Roll belt de klant en maakt de offerte af.", kan: true, waarom: "" },
+    { k: "roll", titel: "Roll laten meekijken", sub: "Roll belt de klant en maakt het verfplan af.", kan: true, waarom: "" },
   ];
 
   const Status = ({ k }: { k: Keuze }) => state?.k !== k ? null : (
@@ -252,7 +252,7 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
                 )}
               </div>
             ))}
-            {last(["samples"]) && <p style={{ margin: "6px 0 0", fontSize: 13.5, opacity: 0.8 }}>Check-in: heeft de klant gekozen? Klik per oppervlak op de winnende kleur. Is alles bevestigd, dan verschijnt hier de offerte.</p>}
+            {last(["samples"]) && <p style={{ margin: "6px 0 0", fontSize: 13.5, opacity: 0.8 }}>Check-in: heeft de klant gekozen? Klik per oppervlak op de winnende kleur. Is alles bevestigd, dan verschijnt hier het verfplan.</p>}
           </>
         ) : (
           <>
@@ -269,10 +269,10 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
               </div>
             ))}
             <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--rd-line)", paddingTop: 8, fontWeight: 800, fontSize: 15 }}>
-              <span>Offerte {offer.nummer}{offer.korting ? ` · ${offer.korting.label}` : ""}</span><span>{eur(offer.totaal)}</span>
+              <span>Verfplan {offer.nummer}{offer.korting ? ` · ${offer.korting.label}` : ""}</span><span>{eur(offer.totaal)}</span>
             </div>
             {blocked && <div style={{ marginTop: 8, fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}><strong>Kies deze kleuren in het advies:</strong> {offer.kleurenOnbekend.join(", ")}</div>}
-            <button className="rd-textlink" style={{ marginTop: 8 }} onClick={() => setShowEditor((v) => !v)}>{showEditor ? "Offerte-editor sluiten" : "Offerte bekijken en aanpassen (met prijzen)"}</button>
+            <button className="rd-textlink" style={{ marginTop: 8 }} onClick={() => setShowEditor((v) => !v)}>{showEditor ? "Verfplan-editor sluiten" : "Verfplan bekijken en aanpassen (met prijzen)"}</button>
             {showEditor && <div style={{ marginTop: 10 }}><OfferteEditor intake={intake} bookingId={bookingId} onIntake={onIntake} modus="offerte" /></div>}
           </>
         )}
@@ -308,9 +308,9 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
 
         {gekozen === "voorstel" && hasOffer && (
           <div className="kk-card">
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>De klant krijgt eerst het verslag met de kleuren, direct daarna de offerte met de knop "Alles in je winkelmandje" ({eur(offer?.totaal)}). Klopt er iets niet? <button className="rd-textlink" onClick={onEditOffer}>Pas de offerte aan</button>.</p>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>De klant krijgt eerst het verslag met de kleuren, direct daarna het verfplan met de knop "Alles in je winkelmandje" ({eur(offer?.totaal)}). Klopt er iets niet? <button className="rd-textlink" onClick={onEditOffer}>Pas het verfplan aan</button>.</p>
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <button className="rd-btn rd-btn-primary" onClick={() => { ensureMail("voorstel"); setPreview("voorstel"); }} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{last(["roll"]) ? "Verstuur de offerte" : "Verstuur advies en offerte"}</button>
+              <button className="rd-btn rd-btn-primary" onClick={() => { ensureMail("voorstel"); setPreview("voorstel"); }} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{last(["roll"]) ? "Verstuur het verfplan" : "Verstuur advies en verfplan"}</button>
               <Status k="voorstel" />
             </div>
           </div>
@@ -329,7 +329,7 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
 
         {gekozen === "advies" && hasOffer && (
           <div className="kk-card">
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>De klant krijgt het verslag met per kleur een link, zonder offerte. Na 14 dagen krijg je een taak om te checken of de verf besteld is.</p>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>De klant krijgt het verslag met per kleur een link, zonder verfplan. Na 14 dagen krijg je een taak om te checken of de verf besteld is.</p>
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <button className="rd-btn rd-btn-primary" onClick={() => { ensureMail("advies"); setPreview("advies"); }} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>Verstuur advies</button>
               <Status k="advies" />
@@ -362,8 +362,8 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
 
       <MailPreview open={!!preview} subject={subject} body={body} setSubject={setSubject} setBody={setBody}
         to={`${customerName}${customerEmail ? ` (${customerEmail})` : ""}`} from={stylistName || "Roll"}
-        note={preview === "samples" ? "De samples staan onder de tekst." : preview === "voorstel" ? "Direct daarna volgt de offerte als aparte mail." : "De kleurlinks staan onder de tekst."}
-        confirmLabel={preview === "voorstel" ? (last(["roll"]) ? "Verstuur de offerte" : "Verstuur advies en offerte") : preview === "samples" ? "Verstuur sampleadvies" : "Verstuur advies"}
+        note={preview === "samples" ? "De samples staan onder de tekst." : preview === "voorstel" ? "Direct daarna volgt het verfplan als aparte mail." : "De kleurlinks staan onder de tekst."}
+        confirmLabel={preview === "voorstel" ? (last(["roll"]) ? "Verstuur het verfplan" : "Verstuur advies en verfplan") : preview === "samples" ? "Verstuur sampleadvies" : "Verstuur advies"}
         busy={state?.s === "busy"} onConfirm={() => preview && void send(preview)} onClose={() => setPreview(null)} />
     </div>
   );

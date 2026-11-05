@@ -64,11 +64,11 @@ export function nextAction(b: NextActionInput): NextAction {
   }
   const rt = b.rollTask ?? null;
   if (rt && (rt.status === "aangevraagd" || rt.status === "opgepakt")) {
-    const what = ({ offerte: "Voorstel aangevraagd bij Roll", contact: "Contactverzoek bij Roll", maatwerk: "Maatwerkofferte bij Roll", nazorg: "Roll volgt de klant op" } as Record<string, string>)[rt.type] ?? "Taak bij Roll";
+    const what = ({ offerte: "Verfplan aangevraagd bij Roll", contact: "Contactverzoek bij Roll", maatwerk: "Maatwerk bij Roll", nazorg: "Roll volgt de klant op" } as Record<string, string>)[rt.type] ?? "Taak bij Roll";
     return { title: `${what}${rt.owner ? `. ${rt.owner} pakt dit op` : ", nog geen eigenaar"}`, sub: rt.status === "opgepakt" ? "Roll is ermee bezig." : "Roll wijst een eigenaar toe.", owner: "Roll", to: gesprek, phase: "versturen" };
   }
   if (rt && rt.status === "verstuurd") {
-    return { title: "Roll heeft het voorstel verstuurd", sub: "Volg of de klant bestelt; help bij twijfel.", owner: "Styliste", to: gesprek, phase: "opvolging" };
+    return { title: "Roll heeft het verfplan verstuurd", sub: "Volg of de klant bestelt; help bij twijfel.", owner: "Styliste", to: gesprek, phase: "opvolging" };
   }
   if (b.checkinNext === "verf") {
     return { title: "Stuur het verf-advies: de kleuren zijn gekozen", sub: "De winnende kleuren uit de check-in staan al klaar.", owner: "Styliste", to: gesprek, phase: "gesprek" };

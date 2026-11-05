@@ -22,7 +22,7 @@ import type { IntakeRow } from "./types";
 
 interface Sent { id: string; route: string; subject: string; body: string; sent_to: string | null; sent_by: string | null; sent_at: string }
 const HEX_BY_NAME = new Map(rollColors.map((c) => [c.name.trim().toLowerCase(), c.hex]));
-const ROUTE_LABEL: Record<string, string> = { samples: "Sample-advies", zelf: "Verf-advies (zelf bestellen)", roll: "Verf-advies (offerte door Roll)", offerte: "Offerte aangemaakt" };
+const ROUTE_LABEL: Record<string, string> = { samples: "Sample-advies", zelf: "Verf-advies (zelf bestellen)", roll: "Verf-advies (verfplan door Roll)", offerte: "Verfplan aangemaakt" };
 
 // Eén plek voor interne notities over deze klant (alleen styliste en Roll). Slaat op bij verlaten van het veld.
 function NotesField({ intake, onSaved }: { intake: IntakeRow; onSaved: (v: string) => void }) {
@@ -38,7 +38,7 @@ function NotesField({ intake, onSaved }: { intake: IntakeRow; onSaved: (v: strin
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span className="rd-kicker rd-kicker-pink">Interne notities {ok && <span style={{ opacity: 0.7, textTransform: "none", letterSpacing: 0 }}>· opgeslagen</span>}</span>
-      <textarea className="rd-input" value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder="Alleen voor jou en Roll: twijfels, afspraken, info voor de offerte." style={{ height: 72, paddingTop: 10, resize: "vertical", lineHeight: 1.45 }} />
+      <textarea className="rd-input" value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder="Alleen voor jou en Roll: twijfels, afspraken, info voor het verfplan." style={{ height: 72, paddingTop: 10, resize: "vertical", lineHeight: 1.45 }} />
     </label>
   );
 }
@@ -236,7 +236,7 @@ export function GesprekPage() {
     { n: 3, label: "Sample-advies", state: moreSamples && !newRound ? "active" : sentRoutes.has("samples") ? "done" : (sampleSkipped || verfAdviceDone || boughtVerf) ? "skip" : (intake && past) ? "active" : "todo", to: "sample" },
     { n: 4, label: "Check-in samples", state: moreSamples ? (newRound ? "active" : "todo") : (checkinDone || b.opgevolgd_at || verfAdviceDone || boughtVerf) ? (samplesOut ? "done" : "skip") : samplesOut ? "active" : "skip", to: showCheckin ? "checkin" : "opvolging" },
     { n: 5, label: "Verf-advies", state: (verfAdviceDone || boughtVerf) ? "done" : !moreSamples && (checkinDone || b.opgevolgd_at || (sampleSkipped && past)) ? "active" : "todo", to: "verf" },
-    { n: 6, label: "Offerte / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "opmeten" },
+    { n: 6, label: "Verfplan / kopen", state: boughtVerf ? "done" : verfAdviceDone ? "active" : "todo", to: "opmeten" },
   ];
   const goToStep = (to?: string) => {
     if (to === "top" || !to) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
@@ -444,7 +444,7 @@ export function GesprekPage() {
       )}
 
       {/* VERF-ADVIES (stap 5 + 6): definitieve kleuren, maten en offerte op één plek */}
-      <Panel id="verf" title="Verf-advies" hint="kleuren, maten en offerte" open={steps[4].state === "active" || steps[5].state === "active" || openPanel(["versturen"])}>
+      <Panel id="verf" title="Verf-advies" hint="kleuren, maten en verfplan" open={steps[4].state === "active" || steps[5].state === "active" || openPanel(["versturen"])}>
         {!intake ? (
           <p className="rd-sub" style={{ margin: 0 }}>Zonder intake kun je het advies nog niet vastleggen.</p>
         ) : (
@@ -463,7 +463,7 @@ export function GesprekPage() {
               onSent={() => { reloadSends(); loadTasks(b.id); }}
             />
             <div id="opmeten" style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--rd-line)" }}>
-              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & bestelvoorstel</div>
+              <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Maten & verfplan</div>
               <MeasurePanel
                 key={`measure:${intake.id}`}
                 intake={intake}

@@ -81,7 +81,7 @@ export function NakijkenPage() {
 
   return (
     <div>
-      <Link to="/beheer/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Schilderplan</Link>
+      <Link to="/beheer/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>Nakijken</h1>
       <p className="rd-sub" style={{ marginTop: 0, maxWidth: 720 }}>
         Beurten waarin de controle Charlie tegenhield, een vangnet ingreep of er iets misging. De klant zag de verbeterde versie.

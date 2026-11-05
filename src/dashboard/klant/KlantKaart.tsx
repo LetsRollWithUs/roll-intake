@@ -37,7 +37,7 @@ const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).f
 const time = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, hour: "2-digit", minute: "2-digit" }).format(new Date(iso)).replace(":", ".");
 const day = (iso: string) => new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "short", day: "numeric", month: "short" }).format(new Date(iso));
 const safeUrl = (v?: string | null) => (v && /^https?:\/\//i.test(v.trim()) ? v.trim() : null);
-const ROUTE_LABEL: Record<string, string> = { samples: "Sampleadvies", zelf: "Verfadvies (zelf bestellen)", roll: "Verfadvies met bestelvoorstel", offerte: "Bestelvoorstel" };
+const ROUTE_LABEL: Record<string, string> = { samples: "Sampleadvies", zelf: "Verfadvies (zelf bestellen)", roll: "Verfadvies met verfplan", offerte: "Verfplan" };
 const STAGES = [["ingepland", "Ingepland"], ["advies", "Advies gegeven"], ["opvolging", "In opvolging"], ["verf", "Verf gekocht"], ["afgehaakt", "Afgehaakt"]] as const;
 const FASES: { key: Fase; label: string }[] = [{ key: "voorbereiden", label: "Voorbereiden" }, { key: "advies", label: "Advies" }, { key: "afronden", label: "Afronden" }];
 
@@ -96,7 +96,7 @@ function NotesField({ intake, onSaved }: { intake: IntakeRow; onSaved: (v: strin
   };
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span style={{ fontSize: 14 }}>Alleen voor jou en Roll: twijfels, afspraken, informatie voor de offerte. Deze notities gaan nooit naar de klant.</span>
+      <span style={{ fontSize: 14 }}>Alleen voor jou en Roll: twijfels, afspraken, informatie voor het verfplan. Deze notities gaan nooit naar de klant.</span>
       <textarea className="rd-input" value={v} onChange={(e) => { setV(e.target.value); setState("idle"); }} onBlur={save} style={{ minHeight: 220, paddingTop: 10, resize: "vertical", lineHeight: 1.5 }} />
       <span role="status" style={{ fontSize: 13, opacity: 0.75 }}>{state === "saving" ? "Opslaan..." : state === "saved" ? "Opgeslagen" : state === "error" ? "Opslaan mislukt · klik buiten het veld om het opnieuw te proberen" : "Slaat op zodra je het veld verlaat"}</span>
     </label>
@@ -232,7 +232,7 @@ export function KlantKaart() {
     if (task && (task.status === "aangevraagd" || task.status === "opgepakt")) return { t: task.owner ? `Roll pakt dit op: ${task.owner}` : "Bij Roll, nog geen eigenaar", f: "afronden" as Fase };
     if (!b.gesprek_gevoerd_at && new Date(b.start_at).getTime() > Date.now() && b.status !== "manual") return { t: "Bereid het gesprek voor", f: "voorbereiden" as Fase };
     if (intake.offer_status === "besteld") return { t: "Besteld. Het traject is rond", f: "afronden" as Fase };
-    if (intake.offer_status === "verstuurd") return { t: "Advies en offerte verstuurd · wacht op de bestelling", f: "afronden" as Fase };
+    if (intake.offer_status === "verstuurd") return { t: "Advies en verfplan verstuurd · wacht op de bestelling", f: "afronden" as Fase };
     const vl = ((intake.offer_meta as { offer?: { vlakken?: { status?: string }[] } } | null)?.offer?.vlakken ?? []);
     const testen = vl.some((v) => v.status === "testen");
     const kiezen = vl.some((v) => v.status === "kiezen");
@@ -240,7 +240,7 @@ export function KlantKaart() {
     if (!testen && kiezen) return { t: "Kies per oppervlak: eerst testen of bevestigd", f: "advies" as Fase };
     if (testen && !sent.has("samples")) return { t: "Verstuur het sampleadvies", f: "afronden" as Fase };
     if (testen) return { t: "Check-in: kies per oppervlak de winnende kleur", f: "afronden" as Fase };
-    if (!sent.has("roll") && !sent.has("zelf")) return { t: "Verstuur advies en offerte", f: "afronden" as Fase };
+    if (!sent.has("roll") && !sent.has("zelf")) return { t: "Verstuur advies en verfplan", f: "afronden" as Fase };
     return { t: "Rond het advies af", f: "afronden" as Fase };
   }, [b, intake, sends, task]);
 

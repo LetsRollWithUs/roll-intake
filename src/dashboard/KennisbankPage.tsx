@@ -147,7 +147,7 @@ export function KennisbankPage() {
     <div>
       <h1 className="rd-h2" style={{ margin: "0 0 4px" }}>Kennisbank</h1>
       <p className="rd-sub" style={{ marginTop: 0, maxWidth: 720 }}>
-        Wat de chat van Jouw schilderplan over Roll mag zeggen. Wat hier niet staat, beweert hij niet; dan verwijst hij naar de klantenservice.
+        Wat de chat op roll.nl over Roll mag zeggen. Wat hier niet staat, beweert hij niet; dan verwijst hij naar de klantenservice.
         Een wijziging gebruikt de chat binnen 5 minuten. Productteksten (zoals droogtijden) komen rechtstreeks van de productpagina's.
       </p>
       {oud > 0 && <p className="rd-sub" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>{oud} {oud === 1 ? "feit is" : "feiten zijn"} langer dan een half jaar niet nagekeken.</p>}

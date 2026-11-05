@@ -39,7 +39,7 @@ export function OfferteEditor({ intake, bookingId, onIntake, modus = "advies" }:
     }
     if (d?.skipped === "offerte-tool endpoint niet gekoppeld") { setState("uit"); return; }
     setState("fout");
-    setErr(d?.skipped === "geen ruimtes met maten" ? "Er zijn nog geen ruimtes met maten. Vul ze in de editor aan, of vraag de klant om de maten." : d?.error ?? "De offerte kon niet worden gemaakt.");
+    setErr(d?.skipped === "geen ruimtes met maten" ? "Er zijn nog geen ruimtes met maten. Vul ze in de editor aan, of vraag de klant om de maten." : d?.error ?? "Het verfplan kon niet worden gemaakt.");
   };
 
   // Bestaande offerte: meteen openen. Na 7 uur een verse bewerklink (die van de server is 8 uur geldig).
@@ -78,7 +78,7 @@ export function OfferteEditor({ intake, bookingId, onIntake, modus = "advies" }:
     return () => window.removeEventListener("message", onMsg);
   }, [intake.id, intake.offer_meta, onIntake]);
 
-  if (state === "uit") return <p className="rd-sub">De koppeling met de offerte-tool staat uit. Kies bij Afronden "Roll laten meekijken", dan maakt Roll de offerte.</p>;
+  if (state === "uit") return <p className="rd-sub">De koppeling met de offerte-tool staat uit. Kies bij Afronden "Roll laten meekijken", dan maakt Roll het verfplan.</p>;
 
   if (!hasOffer) {
     return (
@@ -95,17 +95,17 @@ export function OfferteEditor({ intake, bookingId, onIntake, modus = "advies" }:
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", fontSize: 14 }}>
-        <strong>{modus === "advies" ? "Wat is het advies per oppervlak?" : `Offerte ${info.nummer ?? intake.offer_meta?.nummer ?? ""}${info.versie && info.versie > 1 ? ` · versie ${info.versie}` : ""}`}</strong>
+        <strong>{modus === "advies" ? "Wat is het advies per oppervlak?" : `Verfplan ${info.nummer ?? intake.offer_meta?.nummer ?? ""}${info.versie && info.versie > 1 ? ` · versie ${info.versie}` : ""}`}</strong>
         {modus === "offerte" && info.totaal != null && <span>Totaal {eur(info.totaal)}</span>}
         {info.bijgewerkt && <span style={{ opacity: 0.7 }}>Opgeslagen {new Date(info.bijgewerkt).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}</span>}
         <button className="kk-link" onClick={openEditor} style={{ marginLeft: "auto" }}>Editor opnieuw laden</button>
       </div>
-      {modus === "advies" && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.8 }}>Twijfelt de klant nog? Zet het oppervlak op <strong>Eerst testen</strong>, dan krijgt de klant samples. Is de klant zeker? Kies <strong>Bevestigd</strong>, dan maak je bij Afronden de offerte. Alles slaat automatisch op.</p>}
+      {modus === "advies" && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.8 }}>Twijfelt de klant nog? Zet het oppervlak op <strong>Eerst testen</strong>, dan krijgt de klant samples. Is de klant zeker? Kies <strong>Bevestigd</strong>, dan maak je bij Afronden het verfplan. Alles slaat automatisch op.</p>}
       {onbekend.length > 0 && <div style={{ fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}><strong>Kies deze kleuren in de editor:</strong> {onbekend.join(", ")}</div>}
       {(info.waarschuwingen?.length ?? 0) > 0 && <div style={{ fontSize: 14, padding: "10px 12px", borderRadius: 12, border: "1px solid var(--rd-line)" }}><strong>Let op:</strong> {info.waarschuwingen!.join(" · ")}</div>}
       {err && <span role="status" style={{ fontSize: 14, color: "var(--rd-pink-dark)", fontWeight: 600 }}>{err}</span>}
       {url ? (
-        <iframe title="Offerte-editor" src={url} style={{ width: "100%", height, border: "1px solid var(--rd-line)", borderRadius: 16, background: "#fff" }} />
+        <iframe title="Verfplan-editor" src={url} style={{ width: "100%", height, border: "1px solid var(--rd-line)", borderRadius: 16, background: "#fff" }} />
       ) : <p className="rd-sub">{state === "fout" ? "De editor kon niet worden geopend." : "Editor laden..."}</p>}
     </div>
   );

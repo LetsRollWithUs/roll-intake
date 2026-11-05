@@ -26,7 +26,7 @@ export const KIND_LABEL: Record<Notif["kind"], string> = {
   check: "Achteraan gaan",
   taak: "Opvolgtaken",
   roll: "Roll-taken",
-  schilderplan: "Schilderplan",
+  schilderplan: "Verfplan",
   melding: "Systeem",
 };
 
@@ -124,7 +124,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
       const late = t.due_date && t.due_date < todayStr;
       out.push({
         id: `roll-${t.id}`, kind: "roll",
-        title: `${({ offerte: "Voorstel", contact: "Contact", maatwerk: "Maatwerk", nazorg: "Nazorg" } as Record<string, string>)[t.type] ?? "Taak"} voor ${t.bookings?.customer_name || "klant"}${late ? " (te laat)" : ""}`,
+        title: `${({ offerte: "Verfplan", contact: "Contact", maatwerk: "Maatwerk", nazorg: "Nazorg" } as Record<string, string>)[t.type] ?? "Taak"} voor ${t.bookings?.customer_name || "klant"}${late ? " (te laat)" : ""}`,
         sub: t.owner ? `Eigenaar ${t.owner} · ${t.status}` : "Nog geen eigenaar", to: "/beheer/taken",
       });
     }
@@ -154,7 +154,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     for (const c of (sp as any[]) ?? []) {
       out.push({
         id: `schilderplan-${c.sessie}`, kind: "schilderplan",
-        title: `Schilderplan ${c.code}: klant vraagt om hulp${werkdagenSinds(c.overdracht_op) >= 1 ? " (al een werkdag)" : ""}`,
+        title: `Verfplan ${c.code}: klant vraagt om hulp${werkdagenSinds(c.overdracht_op) >= 1 ? " (al een werkdag)" : ""}`,
         sub: `Via ${c.overdracht_kanaal === "mail" ? "mail" : "WhatsApp"} op ${fmtD(c.overdracht_op)}${c.email ? ` · ${c.email}` : ""}`,
         to: `/beheer/schilderplan/${c.sessie}`,
       });
@@ -166,7 +166,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
       if (!c.overgenomen_op || !c.updated_at || new Date(c.updated_at) <= new Date(c.overgenomen_op)) continue;
       out.push({
         id: `schilderplan-nieuw-${c.sessie}-${c.updated_at}`, kind: "schilderplan",
-        title: `Schilderplan${c.code ? ` ${c.code}` : ""}: nieuw bericht van de klant`,
+        title: `Verfplan${c.code ? ` ${c.code}` : ""}: nieuw bericht van de klant`,
         sub: `In de chat op ${fmtD(c.updated_at)}, na de overname`,
         to: `/beheer/schilderplan/${c.sessie}`,
       });

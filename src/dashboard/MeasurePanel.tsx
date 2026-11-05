@@ -302,10 +302,10 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
 
       {/* Offerte */}
       <div style={{ borderTop: "1px solid var(--rd-line)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-        <div className="rd-kicker rd-kicker-pink">Bestelvoorstel</div>
+        <div className="rd-kicker rd-kicker-pink">Verfplan</div>
         {editUrl && (
           <div style={{ fontSize: 14 }}>
-            Offerte{intake.offer_meta?.nummer ? ` ${intake.offer_meta.nummer}` : ""} is aangemaakt. <a href={editUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Openen in de offerte-tool</a>
+            Verfplan{intake.offer_meta?.nummer ? ` ${intake.offer_meta.nummer}` : ""} is aangemaakt. <a href={editUrl} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Openen in de offerte-tool</a>
             <span style={{ fontSize: 12, opacity: 0.6 }}> (voor Roll-collega's)</span>
           </div>
         )}
@@ -338,7 +338,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
           </div>
         ) : (
           <button className="rd-textlink" style={{ alignSelf: "flex-start" }} onClick={() => { setLinkDraft(offerUrl ?? ""); setLinkOpen(true); }}>
-            {offerUrl ? "Andere klantlink plakken" : editUrl ? "Plak de klantlink (betaallink) voor de opvolgmail" : "Offerte al gemaakt via roll.nl/offerte? Plak de link"}
+            {offerUrl ? "Andere klantlink plakken" : editUrl ? "Plak de klantlink (betaallink) voor de opvolgmail" : "Verfplan al gemaakt via roll.nl/offerte? Plak de link"}
           </button>
         )}
       </div>

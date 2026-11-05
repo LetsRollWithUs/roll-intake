@@ -153,7 +153,7 @@ export function Dashboard() {
                       <>
                         <div className="rd-sep" />
                         <Link to="/beheer/taken">Roll-taken</Link>
-                        <Link to="/beheer/schilderplan">Schilderplan</Link>
+                        <Link to="/beheer/schilderplan">Verfplan</Link>
                         <Link to="/beheer/kennisbank">Kennisbank chat</Link>
                         <Link to="/beheer/nakijken">Nakijken chat</Link>
                         <Link to="/beheer/inzichten">Inzichten chat</Link>

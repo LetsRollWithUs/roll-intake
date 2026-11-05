@@ -358,7 +358,7 @@ export function IntakeDetail() {
         {/* Offerte-link (verf-route) */}
         <div style={{ marginTop: 12 }}>
           <div className="rd-kicker" style={{ opacity: 0.6, marginBottom: 6 }}>
-            Offerte-link (verf-route)
+            Verfplan-link (verf-route)
           </div>
           <input
             className="rd-input"
@@ -378,7 +378,7 @@ export function IntakeDetail() {
             className="rd-input"
             value={offerNotes}
             onChange={(e) => setOfferNotes(e.target.value)}
-            placeholder="Alles wat Roll nodig heeft om de offerte op te maken. Bijv. bijzondere wensen, aantal m² totaal, gewenste korting, primer nodig, leverwensen."
+            placeholder="Alles wat Roll nodig heeft om het verfplan op te maken. Bijv. bijzondere wensen, aantal m² totaal, gewenste korting, primer nodig, leverwensen."
             style={{ height: 90, paddingTop: 12, resize: "vertical", lineHeight: 1.45 }}
           />
         </div>
@@ -392,7 +392,7 @@ export function IntakeDetail() {
             className="rd-input"
             value={nextAction}
             onChange={(e) => setNextAction(e.target.value)}
-            placeholder="Bijv. samples nasturen, over 1 week terugbellen, offerte maken."
+            placeholder="Bijv. samples nasturen, over 1 week terugbellen, verfplan maken."
           />
         </div>
 
@@ -425,7 +425,7 @@ export function IntakeDetail() {
             rel="noreferrer"
             style={{ width: "auto", padding: "0 22px", textDecoration: "none" }}
           >
-            Offerte maken ↗
+            Verfplan maken ↗
           </a>
           {saved && <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }}>Opgeslagen ✓</span>}
           {row.advisor_updated_at && !saved && (
@@ -446,9 +446,9 @@ export function IntakeDetail() {
             {outcome === "samples_needed"
               ? "Stuurt de klant een mail om de geadviseerde kleuren als samples te bestellen (stickers of verftesters)."
               : outcome === "color_chosen"
-              ? "Stuurt de klant een mail om de verf te bestellen, via je offerte-link hierboven of anders /prijsopgave."
+              ? "Stuurt de klant een mail om de verf te bestellen, via je verfplan-link hierboven of anders /prijsopgave."
               : outcome === "followup_needed"
-              ? "Stuurt de klant een korte opvolgmail. Vul eventueel een offerte-link in voor de verf-route."
+              ? "Stuurt de klant een korte opvolgmail. Vul eventueel een verfplan-link in voor de verf-route."
               : "Kies eerst een uitkomst van het gesprek om de juiste opvolgmail te sturen."}
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

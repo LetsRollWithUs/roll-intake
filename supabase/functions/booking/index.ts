@@ -602,7 +602,7 @@ Deno.serve(async (req) => {
       await admin.from("intake").update(klantUrl ? { advisor_offer_url: klantUrl, offer_meta: meta } : { offer_meta: meta }).eq("id", body.intake_id);
       await admin.from("advice_sends").insert({
         intake_id: body.intake_id, booking_id: bid, route: "offerte",
-        subject: `Offerte ${data.nummer ?? ""} aangemaakt`.trim(), body: `${editUrl ?? ""}\nRuimtes: ${data.ruimtes ?? payload.project.surfaces.length} · tools ${toolsInCart ? "in het mandje" : "los in de mail"}${onbekend.length ? `\nKleuren niet herkend: ${onbekend.join(", ")}` : ""}`,
+        subject: `Verfplan ${data.nummer ?? ""} aangemaakt`.trim(), body: `${editUrl ?? ""}\nRuimtes: ${data.ruimtes ?? payload.project.surfaces.length} · tools ${toolsInCart ? "in het mandje" : "los in de mail"}${onbekend.length ? `\nKleuren niet herkend: ${onbekend.join(", ")}` : ""}`,
         sent_to: (it as any).contact_email, sent_by: u?.user?.email ?? null, sent_at: meta.at,
       });
       return j({ ok: true, offer_url: klantUrl, edit_url: editUrl, nummer: data.nummer ?? null, id: data.id ?? null, kleuren_onbekend: onbekend });
@@ -811,7 +811,7 @@ Deno.serve(async (req) => {
         advisor_offer_url: klantUrl ?? undefined, offer_meta: { ...(row.offer_meta ?? {}), offer, sent_at: now, sent_by: u?.user?.email ?? null },
       }).eq("id", row.id);
       await admin.from("advice_sends").insert({
-        intake_id: row.id, booking_id: bid, route: "offerte", subject: `Bestelvoorstel ${offer.nummer ?? ""}`.trim(),
+        intake_id: row.id, booking_id: bid, route: "offerte", subject: `Verfplan ${offer.nummer ?? ""}`.trim(),
         body: `${klantUrl ?? ""}\nTotaal: ${offer.totaal ?? "onbekend"}`, sent_to: row.contact_email, sent_by: u?.user?.email ?? null, sent_at: now,
       });
       if (body.task_id) await admin.from("roll_tasks").update({ status: "verstuurd", updated_at: now, result: { offer_url: klantUrl ?? undefined } }).eq("id", body.task_id);

@@ -65,12 +65,12 @@ export function TakenPage() {
     const { data: it } = await supabase.from("intake").select("offer_meta").eq("id", t.intake_id).maybeSingle();
     if (!(it as { offer_meta?: { id?: number } } | null)?.offer_meta?.id) {
       const { data: c } = await supabase.functions.invoke("booking", { body: { action: "voorstel_concept", intake_id: t.intake_id, booking_id: t.booking_id } });
-      if (!(c as { ok?: boolean } | null)?.ok) { setSending(null); setSendMsg({ ...sendMsg, [t.id]: "Het voorstel kon niet worden samengesteld. Staat de koppeling met de offerte-tool aan?" }); return; }
+      if (!(c as { ok?: boolean } | null)?.ok) { setSending(null); setSendMsg({ ...sendMsg, [t.id]: "Het verfplan kon niet worden samengesteld. Staat de koppeling met de offerte-tool aan?" }); return; }
     }
     const { data } = await supabase.functions.invoke("booking", { body: { action: "voorstel_versturen", intake_id: t.intake_id, booking_id: t.booking_id, task_id: t.id } });
     const d = data as { ok?: boolean; skipped?: string; kleuren_onbekend?: string[]; error?: string } | null;
     setSending(null);
-    setSendMsg({ ...sendMsg, [t.id]: d?.ok ? "Verstuurd: de klant krijgt het bestelvoorstel per mail." : d?.skipped === "kleuren onbekend" ? `Kies eerst deze kleuren in de offerte-editor: ${(d.kleuren_onbekend ?? []).join(", ")}.` : `Versturen lukte niet${d?.error ? ` (${d.error})` : ""}.` });
+    setSendMsg({ ...sendMsg, [t.id]: d?.ok ? "Verstuurd: de klant krijgt het verfplan per mail." : d?.skipped === "kleuren onbekend" ? `Kies eerst deze kleuren in de verfplan-editor: ${(d.kleuren_onbekend ?? []).join(", ")}.` : `Versturen lukte niet${d?.error ? ` (${d.error})` : ""}.` });
     if (d?.ok) await load();
   };
 
@@ -81,7 +81,7 @@ export function TakenPage() {
   return (
     <div style={{ maxWidth: 900 }}>
       <h1 className="rd-h2" style={{ margin: "2px 0 2px" }}>Roll-taken</h1>
-      <p className="rd-sub" style={{ marginTop: 0 }}>Voorstellen, contactverzoeken, maatwerk en nazorg. Pak een taak op met "ik", bel de klant en verstuur het voorstel met de knop; aanpassingen in roll.nl/offerte gaan mee.</p>
+      <p className="rd-sub" style={{ marginTop: 0 }}>Verfplannen, contactverzoeken, maatwerk en nazorg. Pak een taak op met "ik", bel de klant en verstuur het verfplan met de knop; aanpassingen in roll.nl/offerte gaan mee.</p>
       <div style={{ display: "flex", gap: 8, margin: "12px 0 14px" }}>
         <button className={`rd-plan-chip${filter === "open" ? " is-on" : ""}`} onClick={() => setFilter("open")}>Open ({rows.filter((t) => t.status !== "afgerond").length})</button>
         <button className={`rd-plan-chip${filter === "alles" ? " is-on" : ""}`} onClick={() => setFilter("alles")}>Alles</button>
@@ -119,7 +119,7 @@ export function TakenPage() {
                     {me && d.owner !== me && <button className="rd-plan-chip" onClick={() => setDrafts({ ...drafts, [t.id]: { ...d, owner: me } })} title="Aan mij toewijzen">ik</button>}
                   </div>
                   <input type="date" className="rd-input" value={d.due} onChange={(e) => setDrafts({ ...drafts, [t.id]: { ...d, due: e.target.value } })} style={{ height: 38 }} />
-                  <input className="rd-input" placeholder="Offerte-link" value={d.url} onChange={(e) => setDrafts({ ...drafts, [t.id]: { ...d, url: e.target.value } })} style={{ height: 38 }} />
+                  <input className="rd-input" placeholder="Verfplan-link" value={d.url} onChange={(e) => setDrafts({ ...drafts, [t.id]: { ...d, url: e.target.value } })} style={{ height: 38 }} />
                   <input className="rd-input" placeholder="Notitie voor de styliste" value={d.note} onChange={(e) => setDrafts({ ...drafts, [t.id]: { ...d, note: e.target.value } })} style={{ height: 38 }} />
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>

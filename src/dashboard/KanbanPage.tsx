@@ -252,7 +252,7 @@ export function KanbanPage() {
           {c.hasSamplesBefore && <Badge>samples vooraf</Badge>}
           {c.samples_besteld && <Badge tone="ok">samples na gesprek</Badge>}
           {c.opgevolgd_at && <Badge>opgevolgd</Badge>}
-          {c.offerte && <Badge>offerte</Badge>}
+          {c.offerte && <Badge>verfplan</Badge>}
           {c.upsell_offered && <Badge tone="pink">upsell{c.upsell_booked ? " ✓" : ""}</Badge>}
           {c.painter === "schilder" && <Badge tone="warn">schilder</Badge>}
           {c.painter === "deels" && <Badge>deels schilder</Badge>}

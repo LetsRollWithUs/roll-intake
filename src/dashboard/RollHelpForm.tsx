@@ -21,7 +21,7 @@ interface TaskRoom { room: string; surface: string; color: string; color_status:
 export interface TaskPayload { rooms: TaskRoom[]; planning: string; notes: string }
 
 export const TASK_STATUS: Record<RollTask["status"], string> = { aangevraagd: "Aangevraagd", opgepakt: "Opgepakt", verstuurd: "Verstuurd", afgerond: "Afgerond" };
-export const TASK_TYPE: Record<RollTask["type"], string> = { offerte: "Voorstel door Roll", contact: "Roll neemt contact op", maatwerk: "Maatwerk met extra korting", nazorg: "Nazorg: nog niet besteld" };
+export const TASK_TYPE: Record<RollTask["type"], string> = { offerte: "Verfplan door Roll", contact: "Roll neemt contact op", maatwerk: "Maatwerk met extra korting", nazorg: "Nazorg: nog niet besteld" };
 
 const isWood = (s: string) => /kozijn|deur|houtwerk|plint|lak|trap/i.test(s);
 const g1 = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
@@ -66,7 +66,7 @@ export function RollTaskStatus({ task }: { task: RollTask }) {
       <div style={{ fontSize: 13, marginTop: 8, opacity: 0.8 }}>
         {task.owner ? <>Eigenaar: <strong>{task.owner}</strong></> : "Nog geen eigenaar"}{task.due_date ? ` · opvolgdatum ${task.due_date}` : ""}
       </div>
-      {task.result?.offer_url && <div style={{ marginTop: 6, fontSize: 14 }}>Offerte: <a href={task.result.offer_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{task.result.offer_url}</a></div>}
+      {task.result?.offer_url && <div style={{ marginTop: 6, fontSize: 14 }}>Verfplan: <a href={task.result.offer_url} target="_blank" rel="noreferrer" style={{ color: "var(--rd-pink-dark)", fontWeight: 600, wordBreak: "break-all" }}>{task.result.offer_url}</a></div>}
       {task.result?.note && <div style={{ marginTop: 4, fontSize: 13, opacity: 0.8 }}>{task.result.note}</div>}
     </div>
   );

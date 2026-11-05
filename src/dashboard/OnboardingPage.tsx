@@ -107,7 +107,7 @@ export function OnboardingPage() {
           </ul>
           <p style={{ margin: 0 }}>
             Adviseer bewust welk product en hoeveel er nodig is. In de intake leg je de kleuren, m² en liters
-            vast bij de offerte-input, zodat de klant makkelijk kan bestellen en Roll er een offerte van maakt.
+            vast bij het verfplan, zodat de klant makkelijk kan bestellen en Roll er een verfplan van maakt.
           </p>
         </Block>
 
@@ -123,7 +123,7 @@ export function OnboardingPage() {
           <Step n={3} title="Leg na het gesprek de uitkomst vast">
             Zet in de intake de status, je notities en de uitkomst (samples nodig, kleur gekozen of opvolgen)
             met de geadviseerde kleuren. Zo krijgt de klant automatisch de juiste opvolgmail en kan Roll er
-            een offerte van maken.
+            een verfplan van maken.
           </Step>
           <Step n={4} title="Agenda: jouw beschikbaarheid">
             In Agenda beheer je je werktijden en je vaste videolink. Zo weet het systeem wanneer klanten bij
