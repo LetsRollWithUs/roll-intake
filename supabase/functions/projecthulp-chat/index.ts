@@ -34,7 +34,8 @@ const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MODEL = Deno.env.get("PROJECTHULP_MODEL") ?? "claude-sonnet-5-5";
 const ROLL = "https://roll.nl";
-const MAX_BERICHTEN = 40;
+// Rem op de kosten: telt alleen beurten waarin het model echt draait. Vaste antwoorden, tikken en formulieren zonder model tellen niet.
+const MAX_MODELBEURTEN = 150;
 const MAX_TEKENS = 1000;
 const MAX_STAPPEN = 6;
 // Alleen voor het vergelijken van modellen in de testset; geen geheim, wel lastig te raden. Haal weg na de keuze.
@@ -1008,9 +1009,6 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const eerder = (rij.gesprek as any[]).find((b) => b.aanvraagId === aanvraagId && "roll" === b.rol);
   if (eerder) return { ...eerder.uit, herhaald: true };
   if ("bij-roll" === rij.status) return await beurtBijRoll(rij, aanvraagId, bericht, formulier);
-  if ((rij.gesprek as any[]).filter((b) => "klant" === b.rol).length >= MAX_BERICHTEN) {
-    return { fout: "Dit gesprek is lang geworden. Ga verder met de stappen of stuur ons een bericht.", actie: "stappen" };
-  }
   let project = rij.project;
   const opties: any = {};
   const metKleuren = async () => { opties.kleurIndex ??= new Set((await ixP).c.map((k) => k.n)); };
@@ -1143,6 +1141,14 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   let richting: { familie: string; lichtheid?: string } | null = null;
   let voorstelNamen: string[] = [];
   let tokens: any = { in: 0, uit: 0, cache: 0, t: { laden: Date.now() - start, model: 0, rekenen: 0, opslaan: 0 } };
+  // Aan de grens van het gesprek: wat de klant koos staat al vast en het plan blijft; alleen het model draait niet meer.
+  const zonderModel = !!antwoord;
+  const opGrens = !antwoord && (rij.gesprek as any[]).filter((b) => "roll" === b.rol && b.model).length >= MAX_MODELBEURTEN;
+  if (opGrens) {
+    const klaar = projectStatus(project).teBestellen.length > 0;
+    antwoord = { tekst: `Wat een groot project! Je plan blijft gewoon staan${klaar ? " en wat klaarstaat kun je meteen bestellen" : ""}. Voor de rest kijken we graag persoonlijk met je mee.`, vraag: "geen", actie: "overdracht" };
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "gesprek-grens", stuk: `${MAX_MODELBEURTEN} beurten` }] });
+  }
   for (let stap = 0; stap < MAX_STAPPEN && !antwoord; stap++) {
     const haiku = model.includes("haiku");
     const t0 = Date.now();
@@ -1312,7 +1318,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     antwoord.tekst = zinnenVan(antwoord.tekst).filter((z) => !/\btweede laag\b[^.!?]*\bnodig\b/i.test(z)).join("").trim() || "Genoteerd.";
   }
   // Iemand van Roll alleen als de klant erom vraagt of als er een reden is. Anders lost Charlie het zelf op en biedt hij het niet steeds aan.
-  const mensNodig = VRAAGT_MENS.test(bericht) || OVER_MENS.test(String(vorige?.tekst ?? "")) || mens.length > 0 || !!antwoord.onbeantwoord || toolLog.some((x) => "voorwaarden" === x.tool) || !!formulier;
+  const mensNodig = opGrens || VRAAGT_MENS.test(bericht) || OVER_MENS.test(String(vorige?.tekst ?? "")) || mens.length > 0 || !!antwoord.onbeantwoord || toolLog.some((x) => "voorwaarden" === x.tool) || !!formulier;
   if (!mensNodig && ("overdracht" === antwoord.actie || OVER_MENS.test(String(antwoord.tekst)))) {
     controleLog.push({ poging: "vangnet", fouten: [{ id: "mens-te-snel", stuk: String(antwoord.tekst).slice(0, 120) }] });
     antwoord.tekst = zinnenVan(antwoord.tekst).filter((z) => !OVER_MENS.test(z)).join("").trim() || "Vertel gerust wat je wilt aanpassen.";
@@ -1366,7 +1372,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const nu = new Date().toISOString();
   const gesprek = [...(rij.gesprek as any[]),
     { rol: "klant", tekst: bericht || formTekst || tikTekst, aanvraagId, op: nu },
-    { rol: "roll", tekst: uit.antwoord.tekst, aanvraagId, op: nu, uit: { antwoord: uit.antwoord } }];
+    { rol: "roll", tekst: uit.antwoord.tekst, aanvraagId, op: nu, ...(zonderModel || opGrens ? {} : { model: true }), uit: { antwoord: uit.antwoord } }];
   const t2 = Date.now();
   await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu });
   tokens.t.opslaan = Date.now() - t2;
