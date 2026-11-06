@@ -3,11 +3,11 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "./ui";
 
-// Jouw schilderplan (de chat op roll.nl/kleurplan/?chat=1): overdrachten en gesprekken bekijken en overnemen.
+// Jouw verfplan (de chat op roll.nl/verfplan/): overdrachten en gesprekken bekijken en overnemen.
 // Alleen beheerders zien deze tabel (RLS is_admin). De klant krijgt een code mee in WhatsApp of mail.
 
 const CHAT = "https://lsboujprrvhntgbvlvyu.supabase.co/functions/v1/projecthulp-chat";
-const ROLL = "https://roll.nl/schilderproject/";
+const ROLL = "https://roll.nl/verfplan/";
 
 interface Gegeven { waarde: any; bron?: string; geaccepteerd?: boolean }
 interface Vlak { id: string; soort: string; ondergrond: Record<string, Gegeven | null>; kleur: { status: string; gekozen: Gegeven | null; richting?: string; kandidaten: { naam: string }[]; favorieten: { naam: string }[] }; aantal: Gegeven | null; glans: Gegeven | null }
@@ -219,7 +219,7 @@ function Detail({ sessie }: { sessie: string }) {
         <Pil r={r} />
       </div>
       <p className="rd-sub" style={{ marginTop: 0 }}>
-        {r.email ? <a href={`mailto:${r.email}?subject=${encodeURIComponent(`Je schilderplan${r.code ? ` (code ${r.code})` : ""}`)}`}>{r.email}</a> : "Geen e-mailadres; de klant neemt contact op via WhatsApp met de code."}
+        {r.email ? <a href={`mailto:${r.email}?subject=${encodeURIComponent(`Je verfplan${r.code ? ` (code ${r.code})` : ""}`)}`}>{r.email}</a> : "Geen e-mailadres; de klant neemt contact op via WhatsApp met de code."}
         {r.overdracht_op ? ` · vroeg om hulp ${formatDate(r.overdracht_op)} via ${r.overdracht_kanaal === "mail" ? "mail" : "WhatsApp"}` : ""}
         {r.overgenomen_door ? ` · overgenomen door ${r.overgenomen_door} (${formatDate(r.overgenomen_op)})` : ""}
       </p>
