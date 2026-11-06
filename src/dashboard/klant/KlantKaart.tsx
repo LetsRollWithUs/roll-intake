@@ -129,16 +129,17 @@ export function KlantKaart() {
   const koppelStyliste = async (sid: string) => {
     if (!b || !sid || sid === b.stylist_id) return;
     const naam = adminStylists?.find((x) => x.id === sid)?.name ?? "";
-    // Komende online afspraak: de klant moet de videolink van de nieuwe styliste krijgen.
-    const overdracht = b.format !== "thuis" && b.status === "confirmed" && new Date(b.start_at).getTime() > Date.now();
-    if (overdracht && !window.confirm(`Afspraak overdragen aan ${naam}? De klant krijgt een mail met de nieuwe videolink en ${naam} krijgt een melding.`)) return;
+    // Komende afspraak: de klant moet weten wie komt, en online ook de videolink van de nieuwe styliste krijgen.
+    const thuis = b.format === "thuis";
+    const overdracht = b.status === "confirmed" && new Date(b.start_at).getTime() > Date.now();
+    if (overdracht && !window.confirm(`Afspraak overdragen aan ${naam}? De klant krijgt een mail met ${thuis ? "de nieuwe styliste" : "de nieuwe videolink"} en ${naam} krijgt een melding.`)) return;
     const { error } = await supabase.rpc("booking_set_stylist", { p_booking_id: b.id, p_stylist_id: sid });
     if (error) { window.alert("Koppelen lukte niet: " + error.message); return; }
     const { data: st } = await supabase.from("stylists").select("meet_url").eq("id", sid).maybeSingle();
     setB({ ...b, stylist_id: sid, stylists: { name: naam, meet_url: (st as { meet_url: string | null } | null)?.meet_url ?? null } });
     if (overdracht) {
       const { data, error: mailError } = await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: b.id } });
-      if (mailError || !(data as { ok?: boolean } | null)?.ok) window.alert("De afspraak is overgedragen, maar de mail aan de klant is niet verstuurd. Geef de nieuwe videolink even zelf door.");
+      if (mailError || !(data as { ok?: boolean } | null)?.ok) window.alert(`De afspraak is overgedragen, maar de mail aan de klant is niet verstuurd. Geef ${thuis ? "de nieuwe styliste" : "de nieuwe videolink"} even zelf door.`);
     }
   };
   const [loading, setLoading] = useState(true);

@@ -15,6 +15,7 @@ interface BookingRow {
   customer_phone: string | null;
   intake_id: string | null;
   stylist_id: string | null;
+  format: string;
   stylists: { name: string; email: string } | null;
   services: { key: string } | null;
 }
@@ -63,7 +64,7 @@ export function BoekingenPage() {
     const { data } = await supabase
       .from("bookings")
       .select(
-        "id,start_at,status,customer_name,customer_email,customer_phone,intake_id,stylist_id, stylists(name,email), services(key)",
+        "id,start_at,status,format,customer_name,customer_email,customer_phone,intake_id,stylist_id, stylists(name,email), services(key)",
       )
       .in("status", ["confirmed", "paid_unplaced"])
       .order("start_at", { ascending: true });
@@ -146,7 +147,7 @@ export function BoekingenPage() {
     await notifyChanged(actId);
     setBusy(false);
     closeAct();
-    flash("Afspraak overgedragen. De klant krijgt een mail met de nieuwe videolink.");
+    flash(`Afspraak overgedragen. De klant krijgt een mail met ${rows.find((r) => r.id === actId)?.format === "thuis" ? "de nieuwe styliste" : "de nieuwe videolink"}.`);
     loadRows();
   };
 
@@ -255,7 +256,7 @@ export function BoekingenPage() {
               {actId === r.id && actMode === "over" && (
                 <div style={{ marginTop: 12, borderTop: "1px solid rgba(47,33,65,.08)", paddingTop: 12 }}>
                   <p className="rd-sub" style={{ marginTop: 0 }}>
-                    Draag deze afspraak over aan een andere styliste. De videolink wisselt automatisch mee.
+                    Draag deze afspraak over aan een andere styliste.{r.format === "thuis" ? " De klant krijgt daarover een mail." : " De videolink wisselt automatisch mee."}
                   </p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <select className="rd-input" value={target} onChange={(e) => setTarget(e.target.value)} style={{ maxWidth: 260, height: 44 }}>
