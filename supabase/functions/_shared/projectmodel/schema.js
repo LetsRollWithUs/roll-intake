@@ -155,3 +155,15 @@ export function isLak( soort ) {
 export function w( g, terugval = null ) {
 	return g && undefined !== g.waarde && null !== g.waarde ? g.waarde : terugval;
 }
+
+/**
+ * Wat we voor het plafond aannemen als de klant alleen vertelt hoe de muren eruitzien. Een plafond is bijna altijd
+ * wit geschilderd en glad, ook als de muren behang, structuur, scheuren of een donkere kleur hebben. Alleen bij kaal
+ * stucwerk (nieuwbouw) is het plafond vaak ook kaal: dan krijgt het voorstrijk, maar geen structuur.
+ */
+export function plafondBijMuren( afwerkingMuren, materiaalMuren ) {
+	if ( 'geen' === afwerkingMuren ) {
+		return { afwerking: 'geen', materiaal: materiaalMuren && 'onbekend' !== materiaalMuren ? materiaalMuren : 'stucwerk', structuur: 'glad', conditie: 'goed' };
+	}
+	return { afwerking: 'muurverf', kleurNu: 'licht', structuur: 'glad', conditie: 'goed' };
+}

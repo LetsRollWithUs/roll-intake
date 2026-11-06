@@ -7,6 +7,7 @@
 // POST { sessie, aanvraagId, bericht? , tik? }  -> { antwoord, project, status, pakket, mens, versie }
 //   met stroom: true -> text/event-stream: "tekst" (stukjes antwoord), "opnieuw" (tekst vervalt), "klaar" (zelfde JSON)
 // POST { sessie, aanvraagId, formulier: { soort, ruimte?, waarden } } -> zelfde als een beurt; meestal zonder model
+// POST { sessie, aanvraagId, wijzigForm: soort } -> hetzelfde formulier nog een keer, ingevuld met wat er nu staat
 // POST { sessie, overdracht: 'whatsapp'|'mail' } -> { code, tekst }
 // GET  ?sessie=...                              -> de laatste stand (terugkomen)
 // GET  ?sessie=...&kort=1                       -> { bestaat, ruimtes } (voor de mail op roll.nl)
@@ -17,7 +18,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { geminiStap, isGemini } from "./gemini.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { RUIMTE_NAMEN, VLOER, isLak, nieuwProject, naarRekenkern, projectStatus, telt, toepassen, w } from "../_shared/projectmodel/index.js";
+import { RUIMTE_NAMEN, VLOER, isLak, nieuwProject, naarRekenkern, plafondBijMuren, projectStatus, telt, toepassen, w } from "../_shared/projectmodel/index.js";
 import PRODUCTINFO from "../_shared/projectmodel/productinfo.json" with { type: "json" };
 import PACKS from "../_shared/projectmodel/packs.json" with { type: "json" };
 import VOORWAARDEN from "../_shared/projectmodel/voorwaarden.json" with { type: "json" };
@@ -118,7 +119,7 @@ const TOOLS: any[] = [
       type: "object",
       properties: {
         tekst: { type: "string", description: "Kort, je-vorm. Stelde de klant een vraag, beantwoord die dan eerst; daarna hooguit drie zinnen voor je eigen vraag. Geen liters of bedragen, behalve uit voorwaarden of pakket." },
-        vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "ruimte", "richting", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips of het formulier erbij (maat, ondergrond, onderdelen, lak). Bij ruimte: de klant kiest welke ruimtes erbij komen. Bij richting: de klant ziet alle kleurfamilies. Bij eigen: geef chips mee." },
+        vraag: { type: "string", enum: ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "ruimte", "richting", "meubel", "eigen", "geen"], description: "Soort vraag; de server zet de passende chips of het formulier erbij (maat, ondergrond, onderdelen, lak). Bij ruimte: de klant kiest welke ruimtes erbij komen. Bij richting: de klant ziet alle kleurfamilies. Bij eigen: geef chips mee." },
         chips: { type: "array", items: { type: "string" } },
         kaarten: { type: "array", items: { type: "string" }, description: "Namen van Roll-kleuren om als kaart te tonen." },
         voor: { type: "string", description: "Voor welk onderdeel de kaarten zijn, als pad: woonkamer.muren of slaapkamer2.plafond." },
@@ -145,7 +146,7 @@ DOEL: de klant eindigt met een passend plan, vertrouwen in het resultaat en een 
 
 SCOPE VAN DEZE VERSIE: binnenruimtes (muren, plafond, accentmuur) en lakwerk: deuren, kozijnen, plinten, lambrisering, radiatoren en een trap binnen, deuren en kozijnen buiten, en meubels (kast, commode, tafel, stoel); meerdere ruimtes mag. Noemt de klant buitenmuren of een gevel: zeg vriendelijk dat deze versie daar nog niet bij helpt en zet actie "stappen" (de gewone Projecthulp) of "overdracht".
 TRAP: lakwerk binnen, meestal in de hal: "hal vlak trap" en "hal.trap aantal 1" (het aantal trappen). Daarna vraag "lak" (staat, glans).
-MEUBEL: een meubel is een eigen ruimte met één lakvlak: ruimte anders "Commode" | vlak- anders muren | vlak anders meubel | anders.meubel m2 3 ? (gebruik het id dat de ruimte krijgt, bijvoorbeeld anders2 als anders al bestaat). Schat het te schilderen oppervlak als aanname: stoel of nachtkastje 1, tafel 2, commode of dressoir 3, kledingkast of boekenkast 6 m²; noemt de klant de maat, gebruik die. Vraag daarna "lak": hout of metaal, kaal of al gelakt, glans. Kaal hout krijgt primer; die zet de rekenkern in het pakket. Een meubel heeft geen muren of plafond.
+MEUBEL: een meubel is een eigen ruimte met één lakvlak: ruimte anders "Commode" | vlak- anders muren | vlak anders meubel | anders.meubel m2 3 ? (gebruik het id dat de ruimte krijgt, bijvoorbeeld anders2 als anders al bestaat). Schat het te schilderen oppervlak als aanname: stoel of nachtkastje 1, tafel 2, commode of dressoir 3, kledingkast of boekenkast 6 m²; noemt de klant de maat, gebruik die. Vraag daarna "lak": hout of metaal, kaal of al gelakt, glans. Kaal hout krijgt primer; die zet de rekenkern in het pakket. Een meubel heeft geen muren of plafond. Zegt de klant alleen dat hij een meubel wil schilderen en niet welk, gebruik dan vraag "meubel": de server toont tegels om uit te kiezen.
 
 FORMULIEREN: bij vraag "maat", "ondergrond", "onderdelen" of "lak" toont de server een kort formulier in de chat; vraag in je tekst dus kort en noem de keuzes niet zelf op. "onderdelen" = wat de klant per ruimte wil schilderen (muren, plafond, lakwerk); "lak" = aantallen, staat en glans van het lakwerk. Na een formulier krijg je de nieuwe stand; vraag wat er dan nog ontbreekt.
 
@@ -171,7 +172,7 @@ VRAAG VAN DE KLANT GAAT VOOR: stelt de klant een vraag (levertijd, droogtijd, be
 
 VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen.
 
-DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij). Gaat het plafond mee, vraag ze samen ("Hoe zien je muren en plafond er nu uit?") en leg een antwoord voor beide vast tenzij de klant ze apart noemt.
+DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij) en vraag alleen naar de muren. Wat de klant over de muren zegt (behang, structuur, scheuren, een duidelijke kleur) geldt NIET voor het plafond. Het plafond rekent de server als wit geschilderd en glad, bij kale muren als kaal en glad, en meldt die aanname zelf: schrijf daarvoor geen regels en vraag er niet naar. Alleen als de klant het plafond zelf noemt ("het plafond is ook donker"), leg je dat vast op <ruimte>.plafond.
 - "Geschilderd, wit of heel licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed.
 - "Geschilderd, met duidelijk kleur" = afwerking muurverf, kleurNu donker (structuur glad ? en conditie goed ? als aanname).
 - Noemt de klant terloops de kleur die de muren nu hebben ("nu is het wit", "nu zijn ze donkergroen"): leg meteen afwerking muurverf en kleurNu vast (wit, lichtgrijs of licht = licht; duidelijk kleur of donker = donker), en vraag daarna niet meer hoe de muren eruitzien, hooguit naar structuur of scheuren als dat nog open is. Dat is de huidige kleur, geen keuze voor de nieuwe.
@@ -535,7 +536,24 @@ const TELBAAR = ["deuren", "kozijnen", "radiatoren", "kasten", "trap"];
 const LAK_BINNEN = ["deuren", "kozijnen", "plinten", "lambrisering", "radiatoren"];
 const LAK_BUITEN = ["deuren", "kozijnen"];
 const VOLGT_UIT_MAAT = ["plinten", "lambrisering"];
-const FORM_VRAGEN: Record<string, string> = { maat: "maat", ondergrond: "muren", onderdelen: "onderdelen", lak: "lak", kleur: "kleur" };
+const FORM_VRAGEN: Record<string, string> = { maat: "maat", ondergrond: "muren", onderdelen: "onderdelen", lak: "lak", kleur: "kleur", meubel: "meubel" };
+/** Soort meubel met het oppervlak waar we mee rekenen (m²); de klant kan altijd een andere maat noemen. */
+const MEUBELS = [
+  { k: "stoel", n: "Stoel of kruk", naam: "Stoel", m2: 1 },
+  { k: "nachtkastje", n: "Nachtkastje", naam: "Nachtkastje", m2: 1 },
+  { k: "tafel", n: "Tafel", naam: "Tafel", m2: 2 },
+  { k: "commode", n: "Commode of dressoir", naam: "Commode", m2: 3 },
+  { k: "kast", n: "Kledingkast of boekenkast", naam: "Kast", m2: 6 },
+];
+/** Formulieren die de klant achteraf nog kan aanpassen (knop Wijzig onder zijn antwoord). */
+const WIJZIGBAAR = ["onderdelen", "maat", "muren", "lak"];
+const WIJZIG_TEKST: Record<string, string> = { onderdelen: "Ik wil aanpassen wat ik schilder", maat: "Ik wil de maten aanpassen", muren: "Ik wil aanpassen hoe de muren nu zijn", lak: "Ik wil het lakwerk aanpassen" };
+const TERUG_STAP = /\b(stap terug|vorige (stap|vraag)|terug naar de vorige|ga terug)\b/i;
+// "Een ander meubel" hoort hier niet bij: dan vraagt Charlie welk meubel het is.
+const ALLEEN_MEUBEL = /^(ik wil (ook |graag )*(een )?meubels?( schilderen| verven| lakken)?|een meubel|meubel)\.?$/i;
+const SCAN_CHIP = /^doe de kleurenscan\.?$/i;
+/** Keuzes waarbij de klant de chat even verlaat of de kleur laat liggen: een goed moment om het plan te mailen. */
+const MAIL_CHIPS = /^(doe de kleurenscan|boek online kleuradvies|later kiezen)\.?$/i;
 const START_TYPES = ["woonkamer", "slaapkamer", "keuken", "eetkamer", "badkamer", "toilet", "hal", "werkkamer", "kinderkamer", "anders"];
 
 const maatNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) || VOLGT_UIT_MAAT.includes(v.soort)) && !(telt(r.maat.lengte) && telt(r.maat.breedte)) && !telt(r.maat.grootte);
@@ -543,6 +561,11 @@ const murenNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) && (nu
 const lakNodig = (r: any) => r.vlakken.some((v: any) => isLak(v.soort) && (null == w(v.ondergrond.afwerking) || !telt(v.glans) || (TELBAAR.includes(v.soort) && null == w(v.aantal))));
 /** Een ruimte die alleen lakwerk heeft (de tegel "Alleen deuren, kozijnen of plinten"). */
 const alleenLak = (r: any) => /^lakwerk/.test(r.id);
+const metMaat = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) || VOLGT_UIT_MAAT.includes(v.soort));
+/** Wat er nu staat, terugvertaald naar de keuzes van de formulieren (voor Wijzig). */
+const nuVan = (o: any) => { const a = w(o.afwerking); return "muurverf" === a ? ("licht" === w(o.kleurNu) ? "licht" : "donker") : "geen" === a ? "kaal" : "renovlies" === a ? "vlies" : "behang" === a ? "behang" : "onbekend" === a ? "onbekend" : ""; };
+const staatVan = (o: any) => { const c = w(o.conditie); return "vocht" === c ? "vocht" : "scheuren" === c ? "scheuren" : "scheurtjes" === c ? "scheurtjes" : "structuur" === w(o.structuur) ? "structuur" : "onbekend" === c ? "onbekend" : "glad"; };
+const lakStaatVan = (o: any) => { const a = w(o.afwerking), c = w(o.conditie); return "bladdert" === c ? "bladdert" : "lak" === a ? "gelakt" : "geen" === a ? ("metaal" === w(o.materiaal) ? "metaal" : "kaal") : "onbekend" === a ? "onbekend" : ""; };
 // Een trap kies je in de hal of bij alleen lakwerk binnen; een meubel heeft alleen zichzelf.
 const keuzesVan = (r: any) => (r.vlakken.some((v: any) => "meubel" === v.soort) ? ["meubel"] : r.buiten ? LAK_BUITEN : alleenLak(r) ? [...LAK_BINNEN, "trap"] : ["muren", "plafond", ...LAK_BINNEN, ...("hal" === r.type ? ["trap"] : [])]);
 
@@ -550,33 +573,42 @@ const keuzesVan = (r: any) => (r.vlakken.some((v: any) => "meubel" === v.soort) 
  * Het formulier dat de browser als kaart in de chat toont. Bij meer ruimtes één formulier voor alle ruimtes die
  * het nog nodig hebben, zodat de klant niet ruimte voor ruimte dezelfde vraag krijgt.
  */
-function maakFormulier(soort: string, project: any, alleenRuimtes?: string[]): any {
+function maakFormulier(soort: string, project: any, alleenRuimtes?: string[], opnieuw = false): any {
+  if ("meubel" === soort) return { soort, opties: MEUBELS };
+  const bijOpnieuw = opnieuw ? { opnieuw: true } : {};
   if ("onderdelen" === soort) {
     // Komen er ruimtes bij een bestaand plan, dan vragen we alleen naar die nieuwe ruimtes.
     const lijst = alleenRuimtes?.length ? project.ruimtes.filter((r: any) => alleenRuimtes.includes(r.id)) : project.ruimtes;
     if (!lijst.length) return null;
-    return { soort, ruimtes: lijst.map((r: any) => ({ id: r.id, naam: r.naam, vlakken: r.vlakken.map((v: any) => v.soort), keuzes: keuzesVan(r) })) };
+    return { soort, ...bijOpnieuw, ruimtes: lijst.map((r: any) => ({ id: r.id, naam: r.naam, vlakken: r.vlakken.map((v: any) => v.soort), keuzes: keuzesVan(r) })) };
   }
   if ("maat" === soort) {
-    const rr = project.ruimtes.filter(maatNodig);
+    const rr = project.ruimtes.filter(opnieuw ? metMaat : maatNodig);
     if (!rr.length) return null;
     return {
       soort,
-      ruimtes: rr.map((r: any) => ({ id: r.id, naam: alleenLak(r) ? "De ruimte met de plinten" : r.naam, lengte: w(r.maat.lengte), breedte: w(r.maat.breedte), schattingen: maatSchatting(alleenLak(r) ? "standaard" : r.type) })),
+      ...bijOpnieuw,
+      ruimtes: rr.map((r: any) => ({ id: r.id, naam: alleenLak(r) ? "De ruimte met de plinten" : r.naam, lengte: w(r.maat.lengte), breedte: w(r.maat.breedte), grootte: !w(r.maat.lengte) && telt(r.maat.grootte) ? w(r.maat.grootte) : "", schattingen: maatSchatting(alleenLak(r) ? "standaard" : r.type) })),
       hoogte: w(rr[0].hoogte) ?? 2.6,
       muren: rr.some((r: any) => r.vlakken.some((v: any) => "muren" === v.soort || "accent" === v.soort)),
     };
   }
   if ("muren" === soort) {
-    const rr = project.ruimtes.filter(murenNodig);
+    const rr = project.ruimtes.filter(opnieuw ? (r: any) => r.vlakken.some((v: any) => !isLak(v.soort)) : murenNodig);
     if (!rr.length) return null;
-    return { soort, ruimtes: rr.map((r: any) => ({ id: r.id, naam: r.naam, plafond: r.vlakken.some((v: any) => "plafond" === v.soort), alleenPlafond: !r.vlakken.some((v: any) => "muren" === v.soort) })) };
+    return { soort, ...bijOpnieuw, ruimtes: rr.map((r: any) => {
+      const vl = r.vlakken.find((v: any) => "muren" === v.soort) ?? r.vlakken.find((v: any) => !isLak(v.soort));
+      return { id: r.id, naam: r.naam, plafond: r.vlakken.some((v: any) => "plafond" === v.soort), alleenPlafond: !r.vlakken.some((v: any) => "muren" === v.soort), ...(opnieuw ? { nu: nuVan(vl.ondergrond), staat: staatVan(vl.ondergrond) } : {}) };
+    }) };
   }
   if ("lak" === soort) {
-    const rr = project.ruimtes.filter(lakNodig);
+    const rr = project.ruimtes.filter(opnieuw ? (r: any) => r.vlakken.some((v: any) => isLak(v.soort)) : lakNodig);
     if (!rr.length) return null;
+    const eersteLak = rr[0].vlakken.find((v: any) => isLak(v.soort));
     return {
       soort,
+      ...bijOpnieuw,
+      ...(opnieuw ? { staat: lakStaatVan(eersteLak.ondergrond), glans: w(eersteLak.glans) } : {}),
       ruimtes: rr.map((r: any) => ({ id: r.id, naam: r.naam, buiten: !!r.buiten, vlakken: r.vlakken.filter((v: any) => isLak(v.soort)).map((v: any) => ({ id: v.id, soort: v.soort, telbaar: TELBAAR.includes(v.soort), aantal: w(v.aantal) })) })),
       glansOpties: rr.every((r: any) => r.buiten) ? ["zijdeglans", "hoogglans"] : ["mat", "zijdeglans", "hoogglans"],
       buiten: rr.some((r: any) => r.buiten),
@@ -592,10 +624,14 @@ function formVraag(f: any) {
   const een = 1 === f.ruimtes?.length ? f.ruimtes[0].naam : "";
   if ("maat" === f.soort) return een ? `Hoe groot is de ${klein(een)}?` : "Hoe groot zijn de ruimtes?";
   if ("muren" === f.soort) return een ? `Hoe zien de muren van de ${klein(een)} er nu uit?` : "Hoe zien de muren er nu uit?";
-  if ("lak" === f.soort) return "En het lakwerk?";
+  if ("lak" === f.soort) {
+    if (!f.ruimtes.every((r: any) => r.vlakken.every((v: any) => "meubel" === v.soort))) return "En het lakwerk?";
+    return een ? `Hoe is je ${klein(een)} nu?` : "Hoe zijn je meubels nu?";
+  }
   return "Tik aan wat je wilt schilderen.";
 }
-const LAK_NAAM: Record<string, string> = { deuren: "deuren", kozijnen: "kozijnen", plinten: "plinten", lambrisering: "lambrisering", radiatoren: "radiatoren", kasten: "kasten" };
+const LAK_NAAM: Record<string, string> = { deuren: "deuren", kozijnen: "kozijnen", plinten: "plinten", lambrisering: "lambrisering", radiatoren: "radiatoren", kasten: "kasten", trap: "trappen", meubel: "meubel" };
+const LAK_EEN: Record<string, string> = { deuren: "deur", kozijnen: "kozijn", radiatoren: "radiator", kasten: "kast", trap: "trap" };
 const getal = (x: unknown) => { const n = parseFloat(String(x ?? "").replace(",", ".")); return Number.isFinite(n) && n > 0 ? n : null; };
 
 const MUUR_NU: Record<string, [Record<string, string>, string]> = {
@@ -636,6 +672,20 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
   };
 
   if ("start" === f?.soort) {
+    const meubel = MEUBELS.find((x) => x.k === v.meubel);
+    if (meubel) {
+      let id = "anders";
+      for (let j = 2; project.ruimtes.some((x: any) => x.id === id); j++) id = `anders${j}`;
+      wz.push(
+        { actie: "ruimte-erbij", ruimte: id, type: "anders", naam: meubel.naam, ...z },
+        { actie: "vlak-weg", ruimte: id, vlak: "muren" },
+        { actie: "vlak-erbij", ruimte: id, vlak: "meubel", soort: "meubel", ...z },
+        // De klant ziet dit oppervlak meteen in het antwoord en kan het aanpassen.
+        { actie: "zet", ruimte: id, vlak: "meubel", veld: "m2", waarde: meubel.m2, zekerheid: "waarschijnlijk" },
+        { actie: "accepteer", ruimte: id, vlak: "meubel", veld: "m2" },
+      );
+      return { wijzigingen: wz, tekst: meubel.naam };
+    }
     if ("binnen" === v.lak || "buiten" === v.lak) {
       const id = "buiten" === v.lak ? "lakwerkbuiten" : "lakwerk";
       wz.push({ actie: "ruimte-erbij", ruimte: id, type: "anders", naam: "buiten" === v.lak ? "Lakwerk buiten" : "Lakwerk binnen", ...z }, { actie: "vlak-weg", ruimte: id, vlak: "muren" });
@@ -682,7 +732,7 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
       const m = v.ruimtes[r.id];
       const l = getal(m.lengte), b = getal(m.breedte);
       if (l && b) { zet(r, null, "maat.lengte", l); zet(r, null, "maat.breedte", b); delen.push(`${r.naam}: ${nl(l)} × ${nl(b)} m`); }
-      else if (["klein", "middel", "groot"].includes(m.grootte)) { zet(r, null, "maat.grootte", m.grootte); delen.push(`${r.naam}: ${maatSchatting(alleenLak(r) ? "standaard" : r.type).find((x) => x.grootte === m.grootte)?.label.toLowerCase()}`); }
+      else if (["klein", "middel", "groot"].includes(m.grootte)) { if (w(r.maat.lengte) || w(r.maat.breedte)) zet(r, null, "maat.wis", true); zet(r, null, "maat.grootte", m.grootte); delen.push(`${r.naam}: ${maatSchatting(alleenLak(r) ? "standaard" : r.type).find((x) => x.grootte === m.grootte)?.label.toLowerCase()}`); }
       if (hg && r.vlakken.some((x: any) => !isLak(x.soort))) zet(r, null, "hoogte", hg);
       // Een grote raampartij of schuifpui die de klant eraf wil laten halen (optie in het formulier).
       const glas = (Array.isArray(m.glas) ? m.glas : []).map((x: any) => ({ breedte: getal(x?.breedte), hoogte: getal(x?.hoogte) })).filter((x: any) => x.breedte && x.hoogte);
@@ -695,12 +745,16 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
     for (const r of ruimtes) {
       const nu = MUUR_NU[v.ruimtes[r.id].nu], st = MUUR_STAAT[v.ruimtes[r.id].staat] ?? MUUR_STAAT.glad;
       if (!nu) continue;
-      for (const vl of r.vlakken.filter((x: any) => !isLak(x.soort))) {
+      // Dit gaat over de muren. Het plafond volgt uit plafondWijzigingen; alleen zonder muren gaat het antwoord over het plafond zelf.
+      const metMuren = r.vlakken.some((x: any) => "muren" === x.soort);
+      for (const vl of r.vlakken.filter((x: any) => !isLak(x.soort) && !(metMuren && "plafond" === x.soort))) {
         for (const [veld, waarde] of Object.entries({ ...nu[0], ...st[0] })) zet(r, vl, `ondergrond.${veld}`, waarde);
       }
       delen.push(`${ruimtes.length > 1 ? r.naam + ": " : ""}${nu[1]}, ${st[1]}`);
     }
-    return { wijzigingen: wz, tekst: `Muren nu: ${delen.join("; ")}` };
+    // Alleen het plafond: anders denkt het model dat er muren bij horen en zet het die er weer bij.
+    const alleenPlafond = ruimtes.length && ruimtes.every((r: any) => !r.vlakken.some((x: any) => "muren" === x.soort));
+    return { wijzigingen: wz, tekst: `${alleenPlafond ? "Plafond" : "Muren"} nu: ${delen.join("; ")}` };
   }
   if ("lak" === f?.soort) {
     const st = LAK_STAAT[v.staat];
@@ -713,15 +767,45 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
         if (st) for (const [veld, waarde] of Object.entries(st[0])) zet(r, vl, `ondergrond.${veld}`, waarde);
         if (glans) zet(r, vl, "glans", glans);
         const n = parseInt(String(v.ruimtes[r.id]?.aantallen?.[vl.id] ?? ""), 10);
-        if (TELBAAR.includes(vl.soort) && Number.isInteger(n)) { zet(r, vl, "aantal", n); stuk.push(`${n} ${1 === n ? ({ deuren: "deur", kozijnen: "kozijn", radiatoren: "radiator", kasten: "kast" } as Record<string, string>)[vl.soort] : LAK_NAAM[vl.soort]}`); }
+        if (TELBAAR.includes(vl.soort) && Number.isInteger(n)) { zet(r, vl, "aantal", n); stuk.push(`${n} ${(1 === n ? LAK_EEN[vl.soort] : LAK_NAAM[vl.soort]) ?? vl.soort}`); }
         else if (!TELBAAR.includes(vl.soort)) stuk.push(LAK_NAAM[vl.soort] ?? vl.soort);
       }
       delen.push(`${ruimtes.length > 1 ? r.naam + ": " : ""}${stuk.join(", ")}`);
     }
-    return { wijzigingen: wz, tekst: `Lakwerk: ${delen.join("; ")}${st ? "; " + st[1] : ""}${v.glans ? "; " + v.glans : ""}` };
+    const staatEnGlans = `${st ? "; " + st[1] : ""}${v.glans ? "; " + v.glans : ""}`;
+    if (ruimtes.length && ruimtes.every((r: any) => r.vlakken.every((x: any) => "meubel" === x.soort))) return { wijzigingen: wz, tekst: `${1 === ruimtes.length ? ruimtes[0].naam : "Meubels"}${staatEnGlans.replace("; ", ": ")}` };
+    return { wijzigingen: wz, tekst: `Lakwerk: ${delen.join("; ")}${staatEnGlans}` };
   }
   return { wijzigingen: [], tekst: "" };
 }
+
+/**
+ * Het plafond vragen we niet apart: zodra de muren bekend zijn, rekenen we het als wit geschilderd en glad (bij kale
+ * muren kaal en glad). Wat de klant zelf over het plafond zei, blijft staan. `nieuw` is de afwerking als de aanname
+ * net is gemaakt, zodat de klant het te zien krijgt.
+ */
+function plafondWijzigingen(project: any) {
+  const wz: any[] = [];
+  let nieuw = "";
+  for (const r of project.ruimtes) {
+    const m = r.vlakken.find((x: any) => "muren" === x.soort), p = r.vlakken.find((x: any) => "plafond" === x.soort);
+    if (!m || !p || null == w(m.ondergrond.afwerking)) continue;
+    const afwerkingGezegd = "gezegd" === p.ondergrond.afwerking?.bron;
+    for (const [veld, waarde] of Object.entries(plafondBijMuren(w(m.ondergrond.afwerking), w(m.ondergrond.materiaal)))) {
+      const g = p.ondergrond[veld];
+      if ("gezegd" === g?.bron || (afwerkingGezegd && !["structuur", "conditie"].includes(veld)) || g?.waarde === waarde) continue;
+      if ("afwerking" === veld && null == w(g)) nieuw = String(waarde);
+      wz.push({ actie: "zet", ruimte: r.id, vlak: p.id, veld: `ondergrond.${veld}`, waarde, zekerheid: "waarschijnlijk" }, { actie: "accepteer", ruimte: r.id, vlak: p.id, veld: `ondergrond.${veld}` });
+    }
+  }
+  return { wz, nieuw };
+}
+/** Het model kopieert wat de klant over de muren zegt vaak naar het plafond; dat tellen we niet, tenzij de klant het plafond noemt. */
+function zonderPlafondKopie(lijst: any[], bericht: string) {
+  if (/plafond/i.test(bericht)) return lijst;
+  return lijst.filter((x) => !("zet" === x.actie && "plafond" === x.vlak && String(x.veld).startsWith("ondergrond.") && lijst.some((y) => "zet" === y.actie && y.ruimte === x.ruimte && "muren" === y.vlak && y.veld === x.veld)));
+}
+const PLAFOND_ZIN: Record<string, string> = { geen: "Het plafond rekenen we ook als kaal en glad; is dat anders, zeg het gerust.", muurverf: "Het plafond rekenen we als wit geschilderd en glad; is dat anders, zeg het gerust." };
 
 /* ---------- snelle kleurkeuze voor plafond en lakwerk ---------- */
 
@@ -874,7 +958,7 @@ function tekstUit(json: string) {
   return uit;
 }
 
-const VRAGEN = ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "ruimte", "richting", "eigen", "geen"];
+const VRAGEN = ["ondergrond", "plafond", "spullen", "maat", "kleurroute", "geen-idee", "wanneer", "volgorde", "onderdelen", "lak", "kleur", "ruimte", "richting", "meubel", "eigen", "geen"];
 const ACTIES = ["geen", "samples", "bestellen", "bewaren", "stappen", "overdracht", "kleuradvies"];
 const tekstLijst = (x: unknown) => (Array.isArray(x) ? x.filter((y) => "string" === typeof y) : []);
 /** De invoer van antwoord komt ongecontroleerd binnen (eager streaming): zelf nalopen. */
@@ -994,7 +1078,7 @@ async function beurtBijRoll(rij: any, aanvraagId: string, bericht: string, formu
   return uit;
 }
 
-async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null, metTest = false) {
+async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null, metTest = false, extra: { wijzigForm?: string; klantVersie?: number } = {}) {
   const start = Date.now();
   // Alleen in de testset: "model:denken" om de denkstand te vergelijken (uit, tussen, adaptief).
   const [model, denkTest] = modelKeuze.split(":");
@@ -1007,13 +1091,29 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   }
   // Opnieuw geprobeerd: hetzelfde antwoord, niets dubbel.
   const eerder = (rij.gesprek as any[]).find((b) => b.aanvraagId === aanvraagId && "roll" === b.rol);
-  if (eerder) return { ...eerder.uit, herhaald: true };
+  if (eerder) {
+    // Het antwoord was al verwerkt maar kwam niet aan (slechte verbinding). Geef ook het plan terug, anders is de plankaart leeg.
+    const st = projectStatus(rij.project);
+    const { plan, mens } = naarRekenkern(rij.project);
+    return { ...eerder.uit, project: rij.project, status: st, pakket: null, pakketVolgt: true, mens, versie: rij.project.versie, mandPlan: mandPlan(plan, st, rij.project), route: route(rij.project), herhaald: true };
+  }
   if ("bij-roll" === rij.status) return await beurtBijRoll(rij, aanvraagId, bericht, formulier);
   let project = rij.project;
   const opties: any = {};
   const metKleuren = async () => { opties.kleurIndex ??= new Set((await ixP).c.map((k) => k.n)); };
   const toolLog: any[] = [];
   let laatsteWijzigingen: any[] = [];
+  // Oudere pagina's uit de cache kennen de meubeltegels nog niet.
+  const kanMeubel = (extra.klantVersie ?? 1) >= 2;
+  let plafondNieuw = "";
+  const metPlafond = (sleutel: string) => {
+    const { wz, nieuw } = plafondWijzigingen(project);
+    if (!wz.length) return;
+    const u = toepassen(project, { aanvraagId: aanvraagId + sleutel, versie: project.versie, door: "roll", wijzigingen: wz }, opties);
+    project = u.project;
+    laatsteWijzigingen = laatsteWijzigingen.concat(u.toegepast);
+    if (nieuw) plafondNieuw = nieuw;
+  };
 
   // Aannames die de bot vorige beurt noemde: de klant ging verder, dus geaccepteerd.
   const vorige = [...(rij.gesprek as any[])].reverse().find((b) => "roll" === b.rol);
@@ -1074,6 +1174,26 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     tikTekst = "De spullen staan zojuist in het pakket gezet (spullen niets). Vraag de stand op met de tool pakket, noem kort welke set erin staat en waarom, en vraag niet meer naar spullen.";
   }
 
+  // Een eerder antwoord aanpassen: hetzelfde formulier nog een keer, ingevuld met wat er nu staat. Zonder model.
+  const laatsteKlant = [...(rij.gesprek as any[])].reverse().find((b) => "klant" === b.rol);
+  const opnieuwSoort = WIJZIGBAAR.includes(extra.wijzigForm ?? "") ? String(extra.wijzigForm) : !antwoord && bericht.length <= 60 && TERUG_STAP.test(bericht) ? laatsteKlant?.form : "";
+  if (opnieuwSoort) {
+    const f = maakFormulier(opnieuwSoort, project, undefined, true);
+    if (f) {
+      antwoord = { tekst: "Natuurlijk. Pas hieronder aan wat anders is.", vraag: "geen", actie: "geen", formulier: f };
+      if (!bericht) tikTekst = WIJZIG_TEKST[opnieuwSoort];
+    }
+  }
+  // Een meubel zonder te zeggen welk: tegels in plaats van een open vraag.
+  if (!antwoord && kanMeubel && ALLEEN_MEUBEL.test(bericht.trim())) {
+    antwoord = { tekst: "Leuk. Wat voor meubel ga je schilderen?", vraag: "geen", actie: "geen", formulier: maakFormulier("meubel", project) };
+  }
+  // De scan opent in een nieuw tabblad. Tegelijk bieden we de kortste weg om hier verder te gaan: een richting met sample pack.
+  if (!antwoord && SCAN_CHIP.test(bericht.trim())) {
+    antwoord = { tekst: "De kleurenscan opent in een nieuw tabblad en je plan blijft hier staan. Kom daarna gerust terug en noem de kleuren die je wilt proberen. Wil je liever meteen vergelijken? Kies een kleurfamilie, dan zie je de kleuren en het sample pack.", vraag: "geen", actie: "geen" };
+    familiesTonen = true;
+  }
+
   let mens: any[] = [];
 
   // Een ingevuld formulier: direct vastleggen. Is er daarna nog een formulier nodig, dan komt dat meteen,
@@ -1096,6 +1216,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     const u = toepassen(project, { aanvraagId: aanvraagId + "#f", versie: project.versie, door: "klant-kaart", wijzigingen: fw.wijzigingen }, opties);
     project = u.project;
     laatsteWijzigingen = u.toegepast;
+    metPlafond("#fp");
     tikTekst = `De klant vulde het formulier in: ${formTekst}`;
     if (anders.length) tikTekst += `. Toon kleurkaarten voor ${anders[0]} (antwoord.voor = ${anders[0]}) en vraag welke richting.`;
     const nuMens = naarRekenkern(project).mens;
@@ -1110,6 +1231,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       const wNaam = project.ruimtes.find((x: any) => x.id === wr)?.vlakken.find((v: any) => v.id === wv)?.soort ?? "dit onderdeel";
       const witten = (await ixP).c.filter((k: Kleur) => (k.c ?? []).includes("wit")).sort((a: Kleur, b: Kleur) => lichtheid(b.h) - lichtheid(a.h)).map((k: Kleur) => k.n);
       antwoord = { tekst: `Welk wit wil je voor ${"plafond" === wNaam ? "het plafond" : `de ${wNaam}`}? Dit zijn onze witte tinten. Liever een RAL-wit? Kies er hieronder een of noem de code.`, vraag: "eigen", chips: RAL_WIT, kaarten: witten, voor: witKiezen[0], actie: "geen" };
+    } else if ("start" === formulier.soort && MEUBELS.some((x) => x.k === formulier.waarden?.meubel)) {
+      // Een meubel heeft alleen zichzelf: meteen door naar hoe het er nu uitziet, met het oppervlak waar we mee rekenen.
+      const m = MEUBELS.find((x) => x.k === formulier.waarden.meubel)!;
+      const f = volgendeFormulier(project);
+      antwoord = { tekst: `Fijn. Voor je ${klein(m.naam)} rekenen we met ongeveer ${m.m2} m² om te schilderen; noem gerust een andere maat. ${f ? formVraag(f) : ""}`.trim(), vraag: "geen", actie: "geen", formulier: f };
     } else if ("start" === formulier.soort) {
       // Na het startscherm: welke onderdelen er per ruimte mee gaan.
       const f = maakFormulier("onderdelen", project, u.toegepast.filter((x: any) => "ruimte-erbij" === x.actie).map((x: any) => x.ruimte));
@@ -1227,7 +1353,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       try {
         switch (c.name) {
           case "werk_bij": {
-            const geparst = parseRegels(Array.isArray(inp.regels) ? inp.regels : []);
+            const geparst = zonderPlafondKopie(parseRegels(Array.isArray(inp.regels) ? inp.regels : []), bericht);
             // Noemde de klant de kleur zelf, dan is dat een keuze en vervangt hij de vorige kleur (RAL 9016 bleef anders Blank Page).
             for (const x of geparst) if ("kleur" === x.actie && "kies" === x.wat && "zeker" !== x.zekerheid && klantKiest(bericht, x.kleur?.naam)) x.zekerheid = "zeker";
             const voorstel = await kleurenOpzoeken(geparst, gevonden);
@@ -1235,6 +1361,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
             const u = toepassen(project, { aanvraagId: `${aanvraagId}#${stap}`, versie: project.versie, door: "klant-chat", wijzigingen: voorstel }, opties);
             project = u.project;
             laatsteWijzigingen = laatsteWijzigingen.concat(u.toegepast);
+            metPlafond(`#p${stap}`);
             mens = naarRekenkern(project).mens;
             schoon = schoon && !u.geweigerd.length && !u.openVragen.length;
             out = u.geweigerd.length || u.openVragen.length || mens.length
@@ -1333,6 +1460,12 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     antwoord.chips = [];
     antwoord.formulier = null;
   }
+  // De aanname over het plafond is zichtbaar. Bij het muren-formulier stond hij al op de kaart.
+  if (plafondNieuw && "muren" !== formulier?.soort && "overdracht" !== antwoord.actie && !/plafond[^.?!]*\b(wit geschilderd|kaal|glad)\b/i.test(String(antwoord.tekst))) {
+    const zinnen = zinnenVan(antwoord.tekst);
+    const vraagLaatst = /\?\s*$/.test(zinnen[zinnen.length - 1] ?? "");
+    antwoord.tekst = (vraagLaatst ? [...zinnen.slice(0, -1), `${PLAFOND_ZIN[plafondNieuw] ?? PLAFOND_ZIN.muurverf} `, zinnen[zinnen.length - 1]] : [String(antwoord.tekst).trim(), ` ${PLAFOND_ZIN[plafondNieuw] ?? PLAFOND_ZIN.muurverf}`]).join("").trim();
+  }
   // Na stel_kleuren_voor toont de klant de hele richting, ook als het model er een paar uitpikte.
   if (voorstelNamen.length && (antwoord.kaarten?.length ?? 0) > 0 && antwoord.kaarten.every((n: string) => voorstelNamen.includes(n))) {
     const afgewezen = new Set(project.ruimtes.flatMap((r: any) => r.vlakken.flatMap((v: any) => v.kleur.afgewezen.map((k: any) => k.naam))));
@@ -1358,20 +1491,23 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   }
   // Een vaste vraag van het model (maat, muren, onderdelen, lakwerk) wordt een formulier, als er nog iets te vragen is.
   const vraagForm = FORM_VRAGEN[antwoord.vraag];
-  const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm ? maakFormulier(vraagForm, project) : null);
+  const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm && ("meubel" !== vraagForm || kanMeubel) ? maakFormulier(vraagForm, project) : null);
   if ("ruimte" === antwoord.vraag) { antwoord.ruimteKeuze = true; antwoord.vraag = "geen"; }
   if ("richting" === antwoord.vraag) { familiesTonen = true; antwoord.vraag = "geen"; }
   const families = familiesTonen ? familiesVoorKeuze(await ixP) : null;
   if (families) antwoord.chips = [];
   const packs = antwoord.packsVan ? packsVanFamilie(antwoord.packsVan, project) : [];
+  // Een keer per gesprek: op het moment dat er iets te bewaren is, of als de klant de chat even verlaat. Niet bovenop een formulier of kleurkaarten.
+  const heeftIets = project.ruimtes.some((r: any) => r.vlakken.some((v: any) => "gekozen" === v.kleur.status)) || (project.samples ?? []).length > 0 || (project.packs ?? []).length > 0;
+  const mailVraag = !rij.bewaard_op && (MAIL_CHIPS.test(bericht.trim()) || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.mailVraag);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };
   const nu = new Date().toISOString();
   const gesprek = [...(rij.gesprek as any[]),
-    { rol: "klant", tekst: bericht || formTekst || tikTekst, aanvraagId, op: nu },
+    { rol: "klant", tekst: bericht || formTekst || tikTekst, aanvraagId, op: nu, ...(formulier && WIJZIGBAAR.includes(formulier.soort) ? { form: formulier.soort } : {}) },
     { rol: "roll", tekst: uit.antwoord.tekst, aanvraagId, op: nu, ...(zonderModel || opGrens ? {} : { model: true }), uit: { antwoord: uit.antwoord } }];
   const t2 = Date.now();
   await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu });
@@ -1410,7 +1546,7 @@ Deno.serve(async (req) => {
       const { plan } = naarRekenkern(rij.project);
       let pakket = null;
       try { pakket = await bereken(rekenPlan(plan, rij.project)); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
-      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), bijRoll: "bij-roll" === rij.status, bewaard: bewaardInfo(rij) });
+      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, form: b.form, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), bijRoll: "bij-roll" === rij.status, bewaard: bewaardInfo(rij) });
     }
     const body = await req.json();
     const sessie = String(body.sessie ?? "");
@@ -1468,16 +1604,17 @@ Deno.serve(async (req) => {
     }
     const bericht = String(body.bericht ?? "").slice(0, MAX_TEKENS);
     const formulier = body.formulier && "object" === typeof body.formulier && ["start", "onderdelen", "maat", "muren", "lak", "kleur"].includes(body.formulier.soort) ? body.formulier : null;
-    if (!bericht.trim() && !body.tik && !formulier) return j({ fout: "Leeg bericht." }, 400);
+    const extra = { wijzigForm: WIJZIGBAAR.includes(body.wijzigForm) ? String(body.wijzigForm) : "", klantVersie: Number(body.klantVersie) || 1 };
+    if (!bericht.trim() && !body.tik && !formulier && !extra.wijzigForm) return j({ fout: "Leeg bericht." }, 400);
     const aanvraagId = String(body.aanvraagId ?? crypto.randomUUID()).slice(0, 64);
     const model = TEST_TOKEN === body.test && /^(claude-(haiku|sonnet|opus)-[\d-]+(:(uit|tussen|adaptive))?|gemini-[\w.-]+)$/.test(String(body.model ?? "")) ? String(body.model) : MODEL;
-    if (!body.stroom) return j(await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, undefined, formulier, TEST_TOKEN === body.test));
+    if (!body.stroom) return j(await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, undefined, formulier, TEST_TOKEN === body.test, extra));
     const enc = new TextEncoder();
     const sse = new ReadableStream({
       async start(ctrl) {
         const stuur = (soort: string, data: unknown) => { try { ctrl.enqueue(enc.encode(`event: ${soort}\ndata: ${JSON.stringify(data)}\n\n`)); } catch { /* browser weg */ } };
         try {
-          stuur("klaar", await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, (soort, data) => stuur(soort, data ?? null), formulier));
+          stuur("klaar", await beurt(sessie, aanvraagId, bericht, body.tik ?? null, model, (soort, data) => stuur(soort, data ?? null), formulier, false, extra));
         } catch (e) {
           console.error(e);
           stuur("klaar", { fout: "Er ging iets mis. Probeer het nog een keer, of ga verder met de stappen.", actie: "stappen", ...(TEST_TOKEN === body.test ? { detail: String((e as Error).message ?? e).slice(0, 400) } : {}) });

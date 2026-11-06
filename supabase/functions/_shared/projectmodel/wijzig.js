@@ -305,7 +305,11 @@ function zet( p, r, v, wz, ctx ) {
 
 	// Ruimteniveau.
 	if ( ! wz.vlak ) {
-		if ( 'maat' === a && ( 'lengte' === b || 'breedte' === b ) ) {
+		if ( 'maat' === a && 'wis' === b ) {
+			// De klant past zijn maat aan naar een schatting: de oude lengte en breedte gaan weg, anders tellen die nog.
+			r.maat.lengte = null;
+			r.maat.breedte = null;
+		} else if ( 'maat' === a && ( 'lengte' === b || 'breedte' === b ) ) {
 			if ( ! binnen( waarde, GRENZEN[ b ] ) ) {
 				return vraag( wz, 'Klopt die maat? We rekenen met lengtes tussen 1 en 20 meter.' );
 			}

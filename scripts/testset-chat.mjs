@@ -53,7 +53,7 @@ const HANDMATIG = new Set( [ 'g04', 'g25', 'g26', 'g27' ] );
 const rid = () => Math.random().toString( 36 ).slice( 2 ).padEnd( 10, '0' ).slice( 0, 10 );
 async function post( body, poging = 0 ) {
 	try {
-		const r = await fetch( CHAT_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify( { test: TOKEN, ...( MODEL && ! body.beoordeel ? { model: MODEL } : {} ), ...body } ) } );
+		const r = await fetch( CHAT_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify( { test: TOKEN, klantVersie: 2, ...( MODEL && ! body.beoordeel ? { model: MODEL } : {} ), ...body } ) } );
 		const d = await r.json();
 		if ( d.fout && poging < 1 && r.status >= 500 ) return post( body, poging + 1 );
 		return d;
@@ -204,6 +204,9 @@ function nooitGebeurd( zin, r ) {
  */
 function tikVan( beurt, project ) {
 	if ( typeof beurt === 'string' ) return { bericht: beurt, tik: null };
+	// Wat de browser stuurt bij een ingevuld formulier of de knop Wijzig: klanten gebruiken dit het meest.
+	if ( beurt.formulier ) return { bericht: '', tik: null, formulier: beurt.formulier };
+	if ( beurt.wijzigForm ) return { bericht: '', tik: null, wijzigForm: beurt.wijzigForm };
 	const t = String( beurt.tik ?? '' ), ruimte = project?.ruimtes?.[ 0 ]?.id ?? '';
 	let m;
 	if ( ( m = /^sample (.+)$/.exec( t ) ) ) return { bericht: '', tik: { actie: 'sample', wat: 'erbij', kleur: { type: 'roll', naam: m[ 1 ] } } };
@@ -251,11 +254,11 @@ async function draaiGesprek( g ) {
 	const fouten = [], antwoorden = [];
 	let r = null, klant = '';
 	for ( const beurt of [ ...( VOORAF_GESPREK[ g.id ] ?? [] ), ...g.beurten ] ) {
-		const { bericht: t, tik } = tikVan( beurt, r?.project );
+		const { bericht: t, tik, formulier, wijzigForm } = tikVan( beurt, r?.project );
 		klant += ' ' + t;
-		r = await post( { sessie, aanvraagId: rid(), bericht: t, tik } );
-		if ( r.fout ) { fouten.push( `chat gaf een fout bij "${ t }": ${ r.fout }` ); break; }
-		antwoorden.push( { klant: t, tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord } );
+		r = await post( { sessie, aanvraagId: rid(), bericht: t, tik, formulier, wijzigForm } );
+		if ( r.fout ) { fouten.push( `chat gaf een fout bij "${ t || formulier?.soort || wijzigForm }": ${ r.fout }` ); break; }
+		antwoorden.push( { klant: t || ( formulier ? `(formulier ${ formulier.soort })` : wijzigForm ? `(wijzig ${ wijzigForm })` : '' ), tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord } );
 	}
 	let checks = fouten.length;
 	if ( r && ! r.fout ) {
@@ -278,6 +281,32 @@ async function draaiGesprek( g ) {
 			checks++;
 			const n = antwoorden[ Number( beurt ) ]?.antwoord?.kaarten?.length ?? 0;
 			if ( n < min ) fouten.push( `antwoord ${ beurt } toont ${ n } kaarten, minstens ${ min } verwacht` );
+		}
+		// Welk formulier er bij een beurt verschijnt ("geen" = geen formulier).
+		for ( const [ beurt, soort ] of Object.entries( g.formulierBij ?? {} ) ) {
+			checks++;
+			const echt = antwoorden[ Number( beurt ) ]?.antwoord?.formulier?.soort ?? 'geen';
+			if ( echt !== soort ) fouten.push( `antwoord ${ beurt } toont formulier ${ echt }, verwacht ${ soort }` );
+		}
+		// Velden die bij een beurt in het antwoord moeten staan, en hoe vaak iets hooguit mag voorkomen.
+		for ( const [ beurt, velden ] of Object.entries( g.vlag ?? {} ) ) {
+			for ( const veld of velden ) {
+				checks++;
+				const x = antwoorden[ Number( beurt ) ]?.antwoord?.[ veld ];
+				if ( ! x || ( Array.isArray( x ) && ! x.length ) ) fouten.push( `antwoord ${ beurt } heeft geen ${ veld }` );
+			}
+		}
+		for ( const [ veld, max ] of Object.entries( g.vlagHooguit ?? {} ) ) {
+			checks++;
+			const n = antwoorden.filter( ( x ) => x.antwoord?.[ veld ] ).length;
+			if ( n > max ) fouten.push( `${ veld } staat ${ n } keer in het gesprek, hooguit ${ max }` );
+		}
+		// Wat de klant na herladen ziet: het bewaarde gesprek, inclusief de teksten die de server zelf maakt.
+		if ( g.gesprekBevat || g.gesprekNiet ) {
+			const bewaard = await fetch( `${ CHAT_URL }?sessie=${ sessie }` ).then( ( x ) => x.json() ).catch( () => ( {} ) );
+			const alles = ( bewaard.gesprek ?? [] ).map( ( b ) => b.tekst ).join( '\n' );
+			for ( const patroon of g.gesprekBevat ?? [] ) { checks++; if ( ! new RegExp( patroon, 'i' ).test( alles ) ) fouten.push( `bewaard gesprek bevat niet /${ patroon }/` ); }
+			for ( const patroon of g.gesprekNiet ?? [] ) { checks++; if ( new RegExp( patroon, 'i' ).test( alles ) ) fouten.push( `bewaard gesprek bevat ten onrechte /${ patroon }/` ); }
 		}
 		for ( const zin of g.nooit ?? [] ) {
 			const k = nooitGebeurd( zin, r );
