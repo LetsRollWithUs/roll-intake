@@ -119,9 +119,9 @@ export function BoekingenPage() {
   };
 
   // Vuurt de "Afspraak gewijzigd"-mail; best-effort, mag de actie niet blokkeren.
-  const notifyChanged = async (bookingId: string) => {
+  const notifyChanged = async (bookingId: string, stylisteGewijzigd = false) => {
     try {
-      await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: bookingId } });
+      await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: bookingId, styliste_gewijzigd: stylisteGewijzigd } });
     } catch {
       /* stil */
     }
@@ -144,7 +144,8 @@ export function BoekingenPage() {
     setBusy(true); setErr(null);
     const { error } = await supabase.rpc("reassign_booking", { p_booking_id: actId, p_new_stylist_id: target });
     if (error) { setBusy(false); return setErr(error.message); }
-    await notifyChanged(actId);
+    // Betaald maar nog niet geplaatst: dat is geen wissel van een bestaande afspraak.
+    await notifyChanged(actId, rows.find((r) => r.id === actId)?.status === "confirmed");
     setBusy(false);
     closeAct();
     flash(`Afspraak overgedragen. De klant krijgt een mail met ${rows.find((r) => r.id === actId)?.format === "thuis" ? "de nieuwe styliste" : "de nieuwe videolink"}.`);

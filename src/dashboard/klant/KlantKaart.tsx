@@ -138,7 +138,7 @@ export function KlantKaart() {
     const { data: st } = await supabase.from("stylists").select("meet_url").eq("id", sid).maybeSingle();
     setB({ ...b, stylist_id: sid, stylists: { name: naam, meet_url: (st as { meet_url: string | null } | null)?.meet_url ?? null } });
     if (overdracht) {
-      const { data, error: mailError } = await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: b.id } });
+      const { data, error: mailError } = await supabase.functions.invoke("booking", { body: { action: "booking_changed", booking_id: b.id, styliste_gewijzigd: true } });
       if (mailError || !(data as { ok?: boolean } | null)?.ok) window.alert(`De afspraak is overgedragen, maar de mail aan de klant is niet verstuurd. Geef ${thuis ? "de nieuwe styliste" : "de nieuwe videolink"} even zelf door.`);
     }
   };

@@ -405,7 +405,7 @@ Deno.serve(async (req) => {
       const r = await klaviyoTrack(
         "Advies flow",
         ctx.profile,
-        { ...ctx.properties, stap: "gewijzigd" },
+        { ...ctx.properties, stap: "gewijzigd", styliste_gewijzigd: body.styliste_gewijzigd === true },
         appointmentProfileProps(ctx),
         `${body.booking_id}:gewijzigd:${Date.now()}`,
         admin,
