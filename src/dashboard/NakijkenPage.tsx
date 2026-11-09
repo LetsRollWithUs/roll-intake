@@ -36,6 +36,8 @@ const UITLEG: Record<string, string> = {
   erin: "zei dat een kleur erin stond die nog niet gekozen was",
   "mens-te-snel": "bood te snel iemand van Roll aan (vangnet haalde het weg)",
   vocht: "zette vocht of schimmel niet door naar Roll (vangnet deed het)",
+  vulmiddel: "zei dat vulmiddel in het pakket zit (dat verkopen we niet)",
+  kleurvraag: "bood meteen alle kleuropties aan in plaats van eerst te vragen of de klant zijn kleur weet (vangnet zette het recht)",
   "gesprek-grens": "gesprek haalde de grens van 150 beurten; klant kreeg de contactopties",
 };
 const POGING = (p: number | string) => ("vangnet" === p ? "Vangnet" : 2 === p ? "Tweede poging" : "Eerste poging");

@@ -302,6 +302,12 @@ async function draaiGesprek( g ) {
 			const n = antwoorden[ Number( beurt ) ]?.antwoord?.kaarten?.length ?? 0;
 			if ( n < min ) fouten.push( `antwoord ${ beurt } toont ${ n } kaarten, minstens ${ min } verwacht` );
 		}
+		// Welke knoppen er bij een beurt staan, precies in deze volgorde.
+		for ( const [ beurt, chips ] of Object.entries( g.chipsBij ?? {} ) ) {
+			checks++;
+			const echt = antwoorden[ Number( beurt ) ]?.antwoord?.chips ?? [];
+			if ( JSON.stringify( echt ) !== JSON.stringify( chips ) ) fouten.push( `antwoord ${ beurt } toont knoppen ${ JSON.stringify( echt ) }, verwacht ${ JSON.stringify( chips ) }` );
+		}
 		// Welk formulier er bij een beurt verschijnt ("geen" = geen formulier).
 		for ( const [ beurt, soort ] of Object.entries( g.formulierBij ?? {} ) ) {
 			checks++;
