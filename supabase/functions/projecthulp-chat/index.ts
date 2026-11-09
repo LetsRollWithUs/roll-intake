@@ -215,7 +215,7 @@ KLEUR VAN PLAFOND EN LAKWERK: is de muurkleur gekozen (of kiest de klant die lat
 
 PLAFOND: vraag een keer "Wil je het plafond ook schilderen?" (vraag "plafond"). "Ja, wit" = vlak <ruimte> plafond, daarna de witte tinten tonen (zie WIT). "Ja, in de muurkleur" = dezelfde kleur als de muren.
 
-SPULLEN: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder. Vraagt de klant om een schilderpakket, set of gereedschap, dan is dat een opdracht: spullen niets, vraag pakket op en noem kort welke set erin staat. Staat spullen al vast, vraag er dan niet meer naar.
+SPULLEN: is het plan klaar om te bestellen (alle kleuren gekozen en onderdelen [klaar], of alleen samples), vraag dan NIET naar spullen: de server toont onder je antwoord een bestelkaart met het pakket, de keuze voor gereedschap en de bestelknop. Zeg dan kort dat het pakket klaarstaat. Anders: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder. Vraagt de klant om een schilderpakket, set of gereedschap, dan is dat een opdracht: spullen niets, vraag pakket op en noem kort welke set erin staat. Staat spullen al vast, vraag er dan niet meer naar.
 JE PAKKET: vraagt de klant wat er in zijn pakket staat, waarom iets erin staat, of wil hij iets eruit, gebruik dan ALTIJD eerst de tool pakket. Daar staan de verf, de voorbereiding en het gereedschap met per product waarom het erbij hoort; leg dat uit in een zin. Zeg nooit dat iets er niet in staat zonder pakket te hebben opgevraagd. Wil de klant gereedschap niet ("haal het schuurblok eruit", "ik ga niet vullen, dus niet nodig"): "zonder <productnaam uit pakket>" en bevestig het. Verf haal je er niet uit: dat gaat via de maat of de kleur. Zeg bij een nieuw product dat niet vanzelf spreekt erbij waarom het erin staat (een extra roller voor de tweede kleur, een schuurblok voor gevulde scheurtjes). Praat tegen de klant over "je plan" en "je pakket", nooit over "je stand".
 LAGEN: wij rekenen het aantal lagen uit, maar de klant beslist. Wil hij 1 laag (of 2): leg het vast met "<ruimte>.muren lagen 1" en "<ruimte>.plafond lagen 1" voor de onderdelen die hij bedoelt; noemt hij er geen, dan alle muren en plafonds die op 2 lagen staan. Doe dat meteen, zonder iemand van Roll erbij. Zeg daarbij kort en vriendelijk: "We rekenen nu met 1 laag. Op een donkere ondergrond of bij een uitgesproken kleur kan een tweede laag nodig zijn, dan heb je wat meer verf nodig." Beloof niet dat 1 laag genoeg is. Noem die opmerking alleen als de klant zelf om minder lagen vraagt; gaat het gesprek niet over lagen, zeg er dan niets over. Vraagt hij alleen of het kan, zeg dat het kan met dezelfde opmerking, en vraag of je het zo zal doen. Terug naar onze berekening: "<ruimte>.muren lagen standaard".
 RUIMTE ERBIJ: wil de klant een ruimte toevoegen en noemt hij niet welke, zet dan vraag "ruimte" (de server toont de keuze). Vraag dan niet naar de ruimte die er al staat. Noemt hij de ruimte wel, leg hem vast en vraag "onderdelen".
@@ -1147,6 +1147,8 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       ? [`Haal ${n} uit mijn plan`, `${n} staat niet meer in je plan.`]
       : "zet" === tik.actie && "naam" === tik.veld
       ? [`Noem deze ruimte ${tik.waarde}`, `Genoteerd, deze ruimte heet nu ${tik.waarde}.`]
+      : "zet" === tik.actie && "spullen" === tik.veld
+      ? ("niets" === tik.waarde ? ["Zet het gereedschap erbij", "Het gereedschap staat in je pakket."] : ["Ik heb al gereedschap", "Dan laten we het gereedschap weg."])
       : null;
     if (vast) {
       tikTekst = vast[0];
@@ -1497,11 +1499,20 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const families = familiesTonen ? familiesVoorKeuze(await ixP) : null;
   if (families) antwoord.chips = [];
   const packs = antwoord.packsVan ? packsVanFamilie(antwoord.packsVan, project) : [];
+  // Klaar om te bestellen: de browser toont een bestelkaart met pakket, gereedschapskeuze en knop. Dan geen vraag naar rollers en kwasten meer.
+  const rt = route(project);
+  const heeftSamples = (project.samples ?? []).length + (project.packs ?? []).length > 0;
+  const bestellen = !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !opGrens && !families
+    && ((status.teBestellen.length > 0 && ["compleet", "verf-erbij"].includes(rt.route)) || (heeftSamples && !status.teBestellen.length && ["kiezen", "samples-eerst"].includes(rt.route)));
+  if (bestellen) {
+    if ("spullen" === antwoord.vraag) { antwoord.vraag = "geen"; antwoord.chips = []; }
+    antwoord.tekst = zinnenVan(String(antwoord.tekst)).filter((z) => !(/\?\s*$/.test(z) && /\b(rollers?|kwasten?|spullen|gereedschap)\b/i.test(z))).join("").trim() || "Je pakket staat klaar.";
+  }
   // Een keer per gesprek: op het moment dat er iets te bewaren is, of als de klant de chat even verlaat. Niet bovenop een formulier of kleurkaarten.
   const heeftIets = project.ruimtes.some((r: any) => r.vlakken.some((v: any) => "gekozen" === v.kleur.status)) || (project.samples ?? []).length > 0 || (project.packs ?? []).length > 0;
-  const mailVraag = !rij.bewaard_op && (MAIL_CHIPS.test(bericht.trim()) || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.mailVraag);
+  const mailVraag = !rij.bewaard_op && (MAIL_CHIPS.test(bericht.trim()) || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.mailVraag);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
   };

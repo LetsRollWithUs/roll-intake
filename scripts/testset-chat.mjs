@@ -207,6 +207,8 @@ function tikVan( beurt, project ) {
 	// Wat de browser stuurt bij een ingevuld formulier of de knop Wijzig: klanten gebruiken dit het meest.
 	if ( beurt.formulier ) return { bericht: '', tik: null, formulier: beurt.formulier };
 	if ( beurt.wijzigForm ) return { bericht: '', tik: null, wijzigForm: beurt.wijzigForm };
+	// Een tik zoals de browser hem stuurt, bijvoorbeeld de gereedschapskeuze in de bestelkaart.
+	if ( beurt.tikRuw ) return { bericht: '', tik: beurt.tikRuw };
 	const t = String( beurt.tik ?? '' ), ruimte = project?.ruimtes?.[ 0 ]?.id ?? '';
 	let m;
 	if ( ( m = /^sample (.+)$/.exec( t ) ) ) return { bericht: '', tik: { actie: 'sample', wat: 'erbij', kleur: { type: 'roll', naam: m[ 1 ] } } };
@@ -245,7 +247,7 @@ async function draaiBericht( g ) {
 		checks++;
 		if ( k ) fouten.push( `verboden gebeurd: ${ zin }` );
 	}
-	if ( g.vraag ) { checks++; if ( ! /\?/.test( tekst ) && ! r.antwoord?.formulier && ! ( r.antwoord?.chips ?? [] ).length ) fouten.push( 'verwacht een vraag aan de klant' ); }
+	if ( g.vraag ) { checks++; if ( ! /\?/.test( tekst ) && ! r.antwoord?.formulier && ! ( r.antwoord?.chips ?? [] ).length && ! r.antwoord?.bestellen ) fouten.push( 'verwacht een vraag aan de klant' ); }
 	return { id: g.id, kritiek: !! g.kritiek, soort: 'bericht', checks, fouten, antwoorden, klant };
 }
 
