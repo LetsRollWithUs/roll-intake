@@ -554,7 +554,7 @@ const GEEN_IDEE = ["Ik heb wel een richting", "Doe de kleurenscan", "Boek online
 const WEET_KLEUR = "Ik weet mijn kleur", WEET_NIET = "Ik weet het nog niet";
 const RICHTING_CHIP = /^ik (?:weet de|heb (?:wel )?een) richting\.?$/i;
 // Wat telt als "ik weet het nog niet": pas dan mogen alle kleuropties in beeld.
-const WEET_NIET_RE = /\b(?:weet (?:ik )?(?:het )?nog niet|geen idee|geen flauw|weet (?:ik )?niet|twijfel|nog geen kleur|help (?:me|mij) (?:kiezen|met)|kan niet kiezen)\b/i;
+const WEET_NIET_RE = /\bweet\b[^.?!]{0,30}\b(?:nog )?niet\b|\bgeen idee\b|\bgeen flauw|\btwijfel|\bnog geen kleur|\bhelp (?:me|mij) (?:kiezen|met)|\bkan (?:niet|geen) kiezen|\bnog niet (?:zeker|uit)\b|\bweet ik niet\b/i;
 function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
   switch (vraag) {
     case "ondergrond": return ["Geschilderd, wit of heel licht, glad", "Geschilderd, met duidelijk kleur (zoals groen, grijs of donker)", "Kaal stucwerk of gipsplaat", "Renovlies of glasvezel", "Ander behang", "Structuur of scheuren", "Weet ik niet"];
