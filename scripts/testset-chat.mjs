@@ -261,7 +261,7 @@ async function draaiBericht( g ) {
 async function draaiGesprek( g ) {
 	const sessie = 'testset' + rid() + rid();
 	const fouten = [], antwoorden = [];
-	let r = null, klant = '';
+	let r = null, klant = '', linkBron = null;
 	for ( const beurt of [ ...( VOORAF_GESPREK[ g.id ] ?? [] ), ...g.beurten ] ) {
 		const { bericht: t, tik, formulier, wijzigForm, samplelink } = tikVan( beurt, r?.project );
 		klant += ' ' + t;
@@ -270,6 +270,7 @@ async function draaiGesprek( g ) {
 			if ( s.fout ) { fouten.push( `samplelink gaf een fout: ${ s.fout }` ); break; }
 			const g = await fetch( `${ CHAT_URL }?sessie=${ sessie }` ).then( ( x ) => x.json() ).catch( () => ( {} ) );
 			r = { ...g, bron: s.bron };
+			linkBron = s.bron;
 			antwoorden.push( { klant: '(samplelink)', tekst: '', antwoord: null } );
 			continue;
 		}
@@ -278,6 +279,8 @@ async function draaiGesprek( g ) {
 		antwoorden.push( { klant: t || ( formulier ? `(formulier ${ formulier.soort })` : wijzigForm ? `(wijzig ${ wijzigForm })` : '' ), tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord, voortgang: r.voortgang } );
 	}
 	let checks = fouten.length;
+	// De bron komt uit de linkstap; latere beurten geven hem niet terug (hij blijft wel bij het gesprek staan).
+	if ( r && ! r.bron && linkBron ) r = { ...r, bron: linkBron };
 	if ( r && ! r.fout ) {
 		for ( const [ k, v ] of Object.entries( g.eind ?? {} ) ) {
 			const ok = eindKlopt( k, v, r, antwoorden );
