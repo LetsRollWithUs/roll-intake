@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface Slot {
   start_at: string;
@@ -116,10 +116,20 @@ export function TimePicker({
   }, [slots, day]);
 
   const first = slots.find((s) => dateKey(s.start_at) === day);
+
+  // Na het kiezen van een dag de tijden in beeld schuiven: in een kleiner venster (zoals de pop-up op roll.nl)
+  // vallen ze anders onder de kalender buiten beeld, en lijkt het alsof er geen tijden zijn.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!day) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+  }, [day]);
+
   if (!day || !first) return null;
 
   return (
-    <div style={{ marginTop: 20 }}>
+    <div ref={ref} style={{ marginTop: 20, scrollMarginBottom: 120 }}>
       <div style={{ fontWeight: 600, fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(47,33,65,.5)", marginBottom: 10 }}>
         Tijd · {dayFull(first.start_at)}
       </div>
