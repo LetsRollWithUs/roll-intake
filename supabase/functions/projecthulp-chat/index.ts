@@ -201,7 +201,9 @@ Zet " ?" achter een regel die je afleidt maar die de klant niet zei: dat wordt e
 
 VRAAG VAN DE KLANT GAAT VOOR: stelt de klant een vraag (levertijd, droogtijd, betalen, hoe iets werkt), beantwoord die eerst, met de informatie uit voorwaarden of productinfo (vraag die tool op). Weet je het niet zeker, zeg dat eerlijk en noem de klantenservice. Pas daarna stel je de volgende vraag voor het plan.
 
-VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen.
+VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen. Na de muren toont de server eerst wat het plan ongeveer kost; daarna komt de kleur.
+
+WAAROM DEZE PRIJS: vraagt de klant waarom het zoveel kost, of vindt hij het duur, zeg dan kort en zonder druk dat Roll premium muurverf is met dekkingsklasse 1 en schrobklasse 1, de hoogste klassen, en dat hij vaak in een keer dekt. Zeg nooit dat een laag altijd genoeg is. Is de kleur nog open, noem dan de indicatie uit de tool pakket (ongeveer van-tot) en zeg niet dat er nog geen bedrag is. Hooguit drie zinnen; geen rekenuitleg tenzij de klant ernaar vraagt. Vraag daarna of je hem verder kunt helpen.
 
 DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij) en vraag alleen naar de muren. Wat de klant over de muren zegt (behang, structuur, scheuren, een duidelijke kleur) geldt NIET voor het plafond. Het plafond rekent de server als wit geschilderd en glad, bij kale muren als kaal en glad, en meldt die aanname zelf: schrijf daarvoor geen regels en vraag er niet naar. Alleen als de klant het plafond zelf noemt ("het plafond is ook donker"), leg je dat vast op <ruimte>.plafond.
 - "Geschilderd, wit of heel licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed.
@@ -399,8 +401,10 @@ function productinfo(onderwerp: string) {
 
 /** De berekening zoals de pakketkaart, voor de tool "pakket": de bot mag deze getallen uitleggen, niet zelf rekenen. */
 async function pakketUitleg(project: any) {
-  const d = await bereken(naarRekenkern(project).plan);
+  const [d, ind] = await Promise.all([bereken(naarRekenkern(project).plan), indicatie(project).catch(() => null)]);
   return {
+    // Zolang er kleuren open zijn: dezelfde prijsindicatie als in de kaart, zodat Charlie niet zegt dat er nog geen bedrag is.
+    ...(ind ? { indicatie_zolang_kleur_open: { van: Math.round(ind.van), tot: Math.round(ind.tot), uitleg: "Verf en voorbereiding voor het hele plan, afhankelijk van de kleur (licht of donker). Noem dit als ongeveer van-tot; het precieze bedrag volgt als de kleur gekozen is." } } : {}),
     per_ruimte: (d.ruimtes ?? []).map((r: any) => ({ naam: r.naam, vlakken: (r.m2?.vlakken ?? []).filter((v: any) => v.m2).map((v: any) => ({ soort: v.soort, m2: Math.round(v.m2 * 10) / 10, aantal: v.aantal ?? undefined })) })),
     regels: (d.regels ?? []).map((r: any) => ({ aantal: r.aantal, product: r.titel, toelichting: r.detail || r.voordeel || undefined, bedrag: r.totaal })),
     gereedschap: (d.tools ?? []).filter((t: any) => t.aan).map((t: any) => ({ aantal: t.aantal, product: t.naam, waarom: t.tip || undefined, bedrag: t.prijs * t.aantal })),
@@ -1095,6 +1099,21 @@ function sampleKleurstap(project: any) {
   return { tekst: `Dan de kleur. Dit zijn je samplekleuren: tik op een kaart en kies er een voor ${waar}. Liever een andere kleur? Typ hem, of kies hieronder hoe je verder wilt.`, vraag: "kleurroute", actie: "geen", kaarten: namen, voor: `${doel.ruimte}.${doel.vlak}`, kaartenTitel: "Je samples", alleKaarten: true, zonderPack: true };
 }
 
+/** Muren (en accentmuren) die nog geen gekozen kleur hebben. */
+const openMuren = (project: any) => project.ruimtes.flatMap((r: any) => r.vlakken.filter((v: any) => ["muren", "accent"].includes(v.soort) && "gekozen" !== v.kleur.status).map((v: any) => ({ r, v })));
+
+/**
+ * Eerst ruimtes en prijs, dan de kleur (besluit 9 nov 2026): na de laatste vraag over de muren zegt Charlie dat het
+ * plan staat; de browser toont eronder wat het ongeveer kost, waarom, en of we het plan mogen mailen. Dan pas de
+ * kleurvraag. Heeft de klant al een richting of twijfelt hij tussen kleuren, dan helpt het model daar verder mee.
+ */
+function prijsStap(project: any) {
+  const open = openMuren(project);
+  if (!open.length || open.some((x: any) => "open" !== x.v.kleur.status)) return null;
+  const vraag = project.ruimtes.length > 1 ? "weet je al welke kleuren de muren krijgen?" : `weet je al welke kleur de muren van je ${klein(open[0].r.naam)} krijgen?`;
+  return { tekst: `Je plan staat. Hieronder zie je wat het ongeveer kost. Dan de kleur: ${vraag}`, vraag: "kleurroute", actie: "geen", prijs: true };
+}
+
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
 function kaartDoel(project: any, pad?: string) {
   const [ruimte, vlak] = String(pad ?? "").split(".");
@@ -1299,6 +1318,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Een ingevuld formulier: direct vastleggen. Is er daarna nog een formulier nodig, dan komt dat meteen,
   // zonder model; anders gaat het model verder met de nieuwe stand.
   let formTekst = "";
+  let prijsMoment = false;
   if (formulier && "object" === typeof formulier) {
     let anders: string[] = [];
     let witKiezen: string[] = [];
@@ -1343,7 +1363,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     } else {
       const volgende = volgendeFormulier(project);
       if (volgende) antwoord = { tekst: `Genoteerd. ${formVraag(volgende)}`, vraag: "geen", actie: "geen", formulier: volgende };
-      else antwoord = sampleKleurstap(project);
+      else {
+        antwoord = sampleKleurstap(project) ?? prijsStap(project);
+        // Ook als het model verder helpt (richting, twijfel): dit is het moment van de prijs.
+        prijsMoment = !antwoord?.kaarten && openMuren(project).length > 0;
+      }
     }
   }
 
@@ -1617,9 +1641,14 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   }
   // Een keer per gesprek: op het moment dat er iets te bewaren is, of als de klant de chat even verlaat. Niet bovenop een formulier of kleurkaarten.
   const heeftIets = project.ruimtes.some((r: any) => r.vlakken.some((v: any) => "gekozen" === v.kleur.status)) || (project.samples ?? []).length > 0 || (project.packs ?? []).length > 0;
-  const mailVraag = !rij.bewaard_op && (MAIL_CHIPS.test(bericht.trim()) || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.mailVraag);
+  // Bij de prijs en bij "nog niet weten" of "later kiezen" ook: dan kunnen we opvolgen. Hooguit twee keer, nooit twee beurten op rij.
+  const mailEerder = (rij.gesprek as any[]).filter((b) => b.uit?.antwoord?.mailVraag).length;
+  const vorigeRoll = [...(rij.gesprek as any[])].reverse().find((b) => "roll" === b.rol);
+  const mailMoment = prijsMoment || MAIL_CHIPS.test(bericht.trim()) || "geen-idee" === antwoord.vraag;
+  const mailVraag = !rij.bewaard_op && (mailMoment || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen
+    && (0 === mailEerder || (1 === mailEerder && mailMoment && !vorigeRoll?.uit?.antwoord?.mailVraag));
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(prijsMoment || antwoord.prijs ? { prijs: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), voortgang: voortgang(project, formulierUit),
   };
