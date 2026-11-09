@@ -250,7 +250,7 @@ LAKWERK: zegt de klant hoe het lakwerk nu is, leg dat vast ("de deuren zijn wit 
 
 KLEUR VAN PLAFOND EN LAKWERK: is de muurkleur gekozen (of kiest de klant die later) en staan plafond of lakwerk nog zonder kleur, vraag het dan een keer kort met vraag "kleur": de server toont snelle keuzes (wit, zelfde als de muren, bijpassende wittint, lichtere tint, andere kleur, later). Kiest de klant "andere kleur", toon dan kaarten met antwoord.voor op dat onderdeel.
 
-PLAFOND: vraag een keer "Wil je het plafond ook schilderen?" (vraag "plafond"). "Ja, wit" = vlak <ruimte> plafond, daarna de witte tinten tonen (zie WIT). "Ja, in de muurkleur" = dezelfde kleur als de muren.
+PLAFOND: staat het plafond al in het plan (vlak plafond in de stand), vraag dan NIET of de klant het plafond ook wil schilderen; vraag hooguit een keer naar de kleur ervan (vraag "kleur"). Staat het er nog niet in, vraag dan een keer "Wil je het plafond ook schilderen?" (vraag "plafond"). "Ja, wit" = vlak <ruimte> plafond, daarna de witte tinten tonen (zie WIT). "Ja, in de muurkleur" = dezelfde kleur als de muren.
 
 SPULLEN: is het plan klaar om te bestellen (alle kleuren gekozen en onderdelen [klaar], of alleen samples), vraag dan NIET naar spullen: de server toont onder je antwoord een bestelkaart met het pakket, de bestelknop en het startpakket (roller, verfbak, kwast en tape) als keuze. Zeg dan kort dat het pakket klaarstaat. Noem gereedschap tegen de klant het startpakket. Anders: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder. Vraagt de klant om een schilderpakket, set of gereedschap, dan is dat een opdracht: spullen niets, vraag pakket op en noem kort welke set erin staat. Staat spullen al vast, vraag er dan niet meer naar.
 JE PAKKET: vraagt de klant wat er in zijn pakket staat, waarom iets erin staat, of wil hij iets eruit, gebruik dan ALTIJD eerst de tool pakket. Daar staan de verf, de voorbereiding en het gereedschap met per product waarom het erbij hoort; leg dat uit in een zin. Zeg nooit dat iets er niet in staat zonder pakket te hebben opgevraagd. Wil de klant gereedschap niet ("haal het schuurblok eruit", "ik ga niet vullen, dus niet nodig"): "zonder <productnaam uit pakket>" en bevestig het. Verf haal je er niet uit: dat gaat via de maat of de kleur. Zeg bij een nieuw product dat niet vanzelf spreekt erbij waarom het erin staat (een extra roller voor de tweede kleur, een schuurblok voor gevulde scheurtjes). Praat tegen de klant over "je plan" en "je pakket", nooit over "je stand".
@@ -1111,7 +1111,8 @@ function prijsStap(project: any) {
   const open = openMuren(project);
   if (!open.length || open.some((x: any) => "open" !== x.v.kleur.status)) return null;
   const vraag = project.ruimtes.length > 1 ? "weet je al welke kleuren de muren krijgen?" : `weet je al welke kleur de muren van je ${klein(open[0].r.naam)} krijgen?`;
-  return { tekst: `Je plan staat. Hieronder zie je wat het ongeveer kost. Dan de kleur: ${vraag}`, vraag: "kleurroute", actie: "geen", prijs: true };
+  // Geen "hieronder": op de telefoon staat de prijs bovenin, op de computer onder het antwoord.
+  return { tekst: `Je plan staat, en je ziet nu ook wat het ongeveer kost. Dan de kleur: ${vraag}`, vraag: "kleurroute", actie: "geen", prijs: true };
 }
 
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
