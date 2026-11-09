@@ -16,8 +16,11 @@ type Gesprek = {
   mand_soort: string | null;
   created_at: string;
   updated_at: string | null;
-  project: { ruimtes?: { vlakken?: { kleur?: { status?: string } }[] }[] } | null;
+  project: { ruimtes?: { vlakken?: { kleur?: { status?: string } }[] }[]; samplekleuren?: string[] } | null;
   gesprek: Bericht[] | null;
+  // Waar het gesprek vandaan komt: de knop in een mail (samplemail, quizmail) met de utm-velden van die link.
+  bron: string | null;
+  utm: Record<string, string> | null;
 };
 type Order = { order_id: number; sessie: string; status: string | null; totaal: number | null; soort: string | null };
 type Beurt = { id: number; sessie: string; bericht: string | null; onderwerp: string | null; onbeantwoord: boolean | null; created_at: string; nagekeken_op: string | null };
@@ -84,11 +87,12 @@ export function InzichtenPage() {
   const [dagen, setDagen] = useState<7 | 30 | 0>(30);
   const [openStop, setOpenStop] = useState("");
   const [openOnderwerp, setOpenOnderwerp] = useState("");
+  const [openMail, setOpenMail] = useState("");
   const [email, setEmail] = useState("");
 
   const laad = async () => {
     const [g, o, b] = await Promise.all([
-      supabase.from("projecthulp_chat").select("sessie,status,code,overdracht_op,mand_op,mand_soort,created_at,updated_at,project,gesprek")
+      supabase.from("projecthulp_chat").select("sessie,status,code,overdracht_op,mand_op,mand_soort,created_at,updated_at,project,gesprek,bron,utm")
         .not("sessie", "like", "test%").order("created_at", { ascending: false }).limit(1000),
       supabase.from("projecthulp_chat_order").select("order_id,sessie,status,totaal,soort").limit(2000),
       supabase.from("projecthulp_chat_log").select("id,sessie,bericht,onderwerp,onbeantwoord,created_at,nagekeken_op")
@@ -138,7 +142,24 @@ export function InzichtenPage() {
       onderwerpen.set(b.onderwerp, [...(onderwerpen.get(b.onderwerp) ?? []), b]);
     }
 
+    // Uit de mails: elke klik op de verfplan-knop maakt een gesprek, ook als de klant daarna niets doet.
+    const betaaldOp = new Set(orders.filter((o) => BETAALD.includes(o.status ?? "")).map((o) => o.sessie));
+    const uitMail = gesprekken.filter((g) => g.bron && new Date(g.created_at).getTime() >= vanaf);
+    const mails = new Map<string, Gesprek[]>();
+    for (const g of uitMail) {
+      const k = `${g.utm?.utm_content ?? "zonder utm_content"} · ${g.bron}`;
+      mails.set(k, [...(mails.get(k) ?? []), g]);
+    }
+
     return {
+      mails: [...mails.entries()].sort((a, b) => b[1].length - a[1].length).map(([k, lijst]) => ({
+        k, lijst,
+        gestart: lijst.filter((g) => klantBerichten(g).length > 0).length,
+        kleur: lijst.filter(heeftKleur).length,
+        mand: lijst.filter((g) => g.mand_op).length,
+        besteld: lijst.filter((g) => betaaldOp.has(g.sessie)).length,
+      })),
+      betaaldOp,
       trechter: [
         { label: "Gesprek gestart", n: echt.length },
         { label: "Plan gestart (ruimte gekozen)", n: echt.filter(heeftRuimte).length },
@@ -199,7 +220,7 @@ export function InzichtenPage() {
                   const kb = klantBerichten(g);
                   return (
                     <div key={g.sessie} style={{ fontSize: 13, padding: "4px 0 8px" }}>
-                      <span style={{ opacity: 0.6 }}>{formatDate(g.updated_at ?? g.created_at)}: </span>
+                      <span style={{ opacity: 0.6 }}>{formatDate(g.updated_at ?? g.created_at)}{g.bron ? ` · ${g.bron}` : ""}: </span>
                       "{kb[kb.length - 1]?.tekst}" <Link to={`/beheer/schilderplan/${g.sessie}`} className="rd-textlink">Bekijk</Link>
                     </div>
                   );
@@ -227,6 +248,31 @@ export function InzichtenPage() {
                 </div>
               );
             })}
+          </section>
+
+          <section className="rd-card-white">
+            <div className="rd-card-title" style={{ marginBottom: 8 }}>Uit de mails</div>
+            <p className="rd-sub" style={{ marginTop: 0 }}>Klikken op de verfplan-knop in een mail, per mail (utm_content) en bron. Een klik telt ook als de klant daarna niets deed.</p>
+            {0 === cijfers.mails.length && <p className="rd-sub">Nog geen klikken uit een mail.</p>}
+            {cijfers.mails.map((m) => (
+              <div key={m.k}>
+                <button style={knopRij} aria-expanded={openMail === m.k} onClick={() => setOpenMail(openMail === m.k ? "" : m.k)}>
+                  <span>{m.k}</span>
+                  <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{m.lijst.length} <span style={{ fontWeight: 400, opacity: 0.6 }}>klik{1 === m.lijst.length ? "" : "ken"}</span></span>
+                </button>
+                <div style={{ fontSize: 13, opacity: 0.75, padding: "0 0 6px" }}>
+                  {m.gestart} gestart · {m.kleur} kleur gekozen · {m.mand} klikte op bestellen · {m.besteld} besteld ({procent(m.besteld, m.lijst.length)})
+                </div>
+                {openMail === m.k && m.lijst.slice(0, 30).map((g) => (
+                  <div key={g.sessie} style={{ fontSize: 13, padding: "4px 0 8px" }}>
+                    <span style={{ opacity: 0.6 }}>{formatDate(g.created_at)} · {g.bron}{g.utm?.utm_content ? ` · ${g.utm.utm_content}` : ""}: </span>
+                    {cijfers.betaaldOp.has(g.sessie) ? "besteld" : g.mand_op ? "klikte op bestellen" : heeftKleur(g) ? "kleur gekozen" : klantBerichten(g).length ? "gestart" : "alleen geopend"}
+                    {(g.project?.samplekleuren ?? []).length > 0 && <span style={{ opacity: 0.6 }}> · samples: {(g.project?.samplekleuren ?? []).slice(0, 5).join(", ")}</span>}
+                    {" "}<Link to={`/beheer/schilderplan/${g.sessie}`} className="rd-textlink">Bekijk</Link>
+                  </div>
+                ))}
+              </div>
+            ))}
           </section>
 
           <section className="rd-card-white">

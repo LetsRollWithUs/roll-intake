@@ -151,6 +151,10 @@ function eindKlopt( sleutel, verwacht, r, alle ) {
 	if ( sleutel === 'doorverwijzing' ) return alle.some( ( x ) => [ 'stappen', 'overdracht' ].includes( x.antwoord?.actie ) );
 	if ( sleutel === 'zonder' ) return ( p?.zonder ?? [] ).some( ( x ) => String( x ).toLowerCase().includes( String( verwacht ).toLowerCase() ) );
 	if ( sleutel === 'samples' ) return verwacht.every( ( n ) => ( p?.samples ?? [] ).some( ( s ) => zelfde( s.naam, n ) ) );
+	// Samplekleuren uit de link van een mail: precies deze (in elke volgorde), of zoveel, en de bron van het gesprek.
+	if ( sleutel === 'samplekleuren' ) return verwacht.length === ( p?.samplekleuren ?? [] ).length && verwacht.every( ( n ) => ( p?.samplekleuren ?? [] ).includes( n ) );
+	if ( sleutel === 'samplekleurenAantal' ) return ( p?.samplekleuren ?? [] ).length === verwacht;
+	if ( sleutel === 'bron' ) return alle.some( () => true ) && zelfde( r.bron ?? alle.map( ( x ) => x.bron ).find( Boolean ), verwacht );
 	if ( [ 'spullen', 'wanneer' ].includes( sleutel ) ) return alt( w( p?.[ sleutel ] ) );
 	if ( sleutel === 'doel' ) return String( w( p?.doel ) ?? '' ).toLowerCase().includes( String( verwacht ).toLowerCase() );
 	const delen = sleutel.split( '.' );
@@ -194,6 +198,7 @@ function nooitGebeurd( zin, r ) {
 	if ( /badkamermuren als klaar/.test( zin ) ) return ( r.status?.onderdelen ?? [] ).some( ( o ) => o.ruimte.startsWith( 'badkamer' ) && o.vlak === 'muren' && o.status === 'klaar' );
 	if ( /benaderde kleur automatisch/.test( zin ) ) return ( p?.ruimtes ?? [] ).some( ( x ) => x.vlakken.some( ( v ) => w( v.kleur.gekozen )?.type === 'merk-benaderd' && v.kleur.gekozen.door !== 'klant-kaart' ) );
 	if ( /gereedschap geselecteerd/.test( zin ) ) return w( p?.spullen ) === 'niets';
+	if ( /samplekleuren als sample in het pakket/.test( zin ) ) return ( p?.samples ?? [] ).some( ( s ) => ( p?.samplekleuren ?? [] ).includes( s.naam ) );
 	if ( /een kleur voor de muren gekozen/.test( zin ) ) return [ ...gekozenSet( p ) ].some( ( x ) => x.includes( '.muren:' ) );
 	return null; // tekstregels (behang, dekking, retour) vangt de vaste controle
 }
@@ -209,6 +214,8 @@ function tikVan( beurt, project ) {
 	if ( beurt.wijzigForm ) return { bericht: '', tik: null, wijzigForm: beurt.wijzigForm };
 	// Een tik zoals de browser hem stuurt, bijvoorbeeld de gereedschapskeuze in de bestelkaart.
 	if ( beurt.tikRuw ) return { bericht: '', tik: beurt.tikRuw };
+	// De link uit een mail: { samplelink: { kleuren, packs, bron, utm } }, zoals de pagina hem bij het openen doorstuurt.
+	if ( beurt.samplelink ) return { bericht: '', tik: null, samplelink: beurt.samplelink };
 	const t = String( beurt.tik ?? '' ), ruimte = project?.ruimtes?.[ 0 ]?.id ?? '';
 	let m;
 	if ( ( m = /^sample (.+)$/.exec( t ) ) ) return { bericht: '', tik: { actie: 'sample', wat: 'erbij', kleur: { type: 'roll', naam: m[ 1 ] } } };
@@ -256,8 +263,16 @@ async function draaiGesprek( g ) {
 	const fouten = [], antwoorden = [];
 	let r = null, klant = '';
 	for ( const beurt of [ ...( VOORAF_GESPREK[ g.id ] ?? [] ), ...g.beurten ] ) {
-		const { bericht: t, tik, formulier, wijzigForm } = tikVan( beurt, r?.project );
+		const { bericht: t, tik, formulier, wijzigForm, samplelink } = tikVan( beurt, r?.project );
 		klant += ' ' + t;
+		if ( samplelink ) {
+			const s = await post( { sessie, samplekleuren: samplelink } );
+			if ( s.fout ) { fouten.push( `samplelink gaf een fout: ${ s.fout }` ); break; }
+			const g = await fetch( `${ CHAT_URL }?sessie=${ sessie }` ).then( ( x ) => x.json() ).catch( () => ( {} ) );
+			r = { ...g, bron: s.bron };
+			antwoorden.push( { klant: '(samplelink)', tekst: '', antwoord: null } );
+			continue;
+		}
 		r = await post( { sessie, aanvraagId: rid(), bericht: t, tik, formulier, wijzigForm } );
 		if ( r.fout ) { fouten.push( `chat gaf een fout bij "${ t || formulier?.soort || wijzigForm }": ${ r.fout }` ); break; }
 		antwoorden.push( { klant: t || ( formulier ? `(formulier ${ formulier.soort })` : wijzigForm ? `(wijzig ${ wijzigForm })` : '' ), tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord, voortgang: r.voortgang } );

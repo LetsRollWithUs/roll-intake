@@ -8,6 +8,7 @@
 //   met stroom: true -> text/event-stream: "tekst" (stukjes antwoord), "opnieuw" (tekst vervalt), "klaar" (zelfde JSON)
 // POST { sessie, aanvraagId, formulier: { soort, ruimte?, waarden } } -> zelfde als een beurt; meestal zonder model
 // POST { sessie, aanvraagId, wijzigForm: soort } -> hetzelfde formulier nog een keer, ingevuld met wat er nu staat
+// POST { sessie, samplekleuren: { kleuren, packs, bron, utm } } -> samplekleuren uit de link van een mail bij het plan (zonder beurt)
 // POST { sessie, overdracht: 'whatsapp'|'mail' } -> { code, tekst }
 // GET  ?sessie=...                              -> de laatste stand (terugkomen)
 // GET  ?sessie=...&kort=1                       -> { bestaat, ruimtes } (voor de mail op roll.nl)
@@ -62,6 +63,34 @@ const lichtheid = (hex: string) => {
   return m ? (0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16)) / 255 : 0.5;
 };
 const kaart = (k: Kleur) => ({ naam: k.n, omschrijving: k.d ?? "", hex: k.h, afb: k.i ?? "", url: k.u ?? "" });
+
+/* ---------- samplekleuren uit de link van een mail ---------- */
+
+/** Zelfde regel als de mail (Django slugify) en de swatch-plaatjes: kleine letters, koppeltekens, accenten weg. */
+const slugVan = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+/** Een kleur uit de link: zonder voorvoegsel van de productnaam (de mail knipt alleen het 50ml-formaat weg). */
+const kleurSlug = (x: string) => slugVan(x).replace(/^sample-stickers?-/, "").replace(/^verftesters?-(\d+-?ml-)?/, "");
+/** Een packnaam uit de link: "&" wordt soms "&amp;" en dan "amp" in de slug. */
+const packSlug = (x: string) => slugVan(x).split("-").filter((w) => w && "amp" !== w).join("-");
+const lijstUit = (x: unknown) => (Array.isArray(x) ? x : String(x ?? "").split(",")).map((y) => String(y).trim()).filter(Boolean);
+const BRONNEN = ["samplemail", "quizmail"];
+/**
+ * De Roll-kleuren achter `kleuren` (hooguit 8) en `packs` (hun kleuren komen erbij), elk een keer.
+ * Onbekende en lege waarden vallen stil weg.
+ */
+async function samplekleurenUit(kleuren: unknown, packs: unknown) {
+  const ix = await index();
+  const opSlug = new Map(ix.c.map((k: Kleur) => [slugVan(k.n), k.n]));
+  const namen: string[] = [];
+  for (const k of lijstUit(kleuren).slice(0, 8)) { const n = opSlug.get(kleurSlug(k)); if (n) namen.push(n); }
+  for (const p of lijstUit(packs).slice(0, 6)) {
+    const s = packSlug(p);
+    const pack = (PACKS as any).packs.find((x: any) => [packSlug(x.naam), x.id, String(x.id).replace(/-sample-pack$/, "")].includes(s));
+    for (const n of pack?.kleuren ?? []) if (opSlug.has(slugVan(n))) namen.push(opSlug.get(slugVan(n)) as string);
+  }
+  return [...new Set(namen)];
+}
+const utmUit = (x: any) => Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((k) => [k, x?.[k]]).filter(([, v]) => "string" === typeof v && v.trim()).map(([k, v]) => [k, String(v).trim().slice(0, 80)]));
 
 /* ---------- tools ---------- */
 
@@ -208,6 +237,8 @@ KLEUR (per vlak):
 - Terug met de uitkomst van de kleurenscan ("uit de scan kwamen X, Y en Z"): leg die kleuren vast als kandidaat (nooit kies, tenzij de klant er duidelijk een kiest), toon ze als kaarten voor dat onderdeel en vraag welke hij als sample wil. Je zegt niets over welke het beste is.
 - Een sample is een advies, nooit een voorwaarde. Accentmuur alleen als de klant een muur noemt of twijfelt of een kleur niet te veel wordt.
 - Wanneer de klant wil beginnen (vraag "wanneer") alleen als het past, bij twijfel over kleur.
+
+SAMPLEKLEUREN: staan er in de stand samplekleuren van de klant (kleuren die hij al als sample heeft, via de link in een mail), toon die bij een vraag naar de muurkleur eerst als kaarten (antwoord.kaarten, antwoord.voor op dat onderdeel) en vraag welke het wordt. Zet ze niet opnieuw als sample in het pakket: die heeft de klant al.
 
 LAKWERK: zegt de klant hoe het lakwerk nu is, leg dat vast ("de deuren zijn wit gelakt" = <ruimte>.deuren afwerking lak en <ruimte>.deuren kleurNu licht; "kaal hout" = afwerking geen en materiaal hout). De kleur die het nu heeft is geen keuze voor de nieuwe kleur. Vraag wat de klant wil schilderen (vraag "onderdelen") en daarna aantallen, staat en glans (vraag "lak"). De kleur van lakwerk kiest de klant zelf: wit, zelfde als de muren, een bijpassende wittint of een andere kleur; nooit automatisch wit. "Wit zoals nu" = toon de witte tinten (zie WIT). Houtrot, eerder gelakte muren of vermoeden van loodhoudende verf: actie "overdracht".
 
@@ -422,6 +453,7 @@ function stand(p: any) {
       regels.push(`  ${r.id}.${v.id}: ${kl}; ${o || "ondergrond ?"}${v.breedte ? `; breedte ${g(v.breedte)}` : ""}${w(v.renovlies) ? "; renovlies erbij" : ""}${w(v.lagen) ? `; lagen ${w(v.lagen)} (klant koos zelf)` : ""}${v.m2 ? `; m2 ${g(v.m2)}` : ""}${lakInfo} [${s2?.status}${mist ? ": " + mist : ""}]`);
     }
   }
+  if ((p.samplekleuren ?? []).length) regels.push(`samplekleuren van de klant (heeft hij al thuis): ${p.samplekleuren.join(", ")}`);
   regels.push(`${(p.zonder ?? []).length ? `uit het pakket gehaald: ${p.zonder.join(", ")}; ` : ""}spullen ${g(p.spullen)}; wanneer ${g(p.wanneer)}; volgorde ${g(p.volgorde)}; samples ${(p.samples ?? []).map((x: any) => x.naam).join(", ") || "geen"}${p.doel ? `; doel ${w(p.doel)}` : ""}`);
   return `(* = aanname, nog niet bevestigd; ? = onbekend)\n${regels.join("\n")}`;
 }
@@ -1039,6 +1071,21 @@ function packsVanFamilie(familie: string, project: any) {
   return namen.map((n) => PACKS.packs.find((p: any) => p.naam === n)).filter(Boolean).map((p: any) => packKaart(p, project));
 }
 
+/**
+ * De kleurstap voor wie met samplekleuren binnenkwam: die kleuren eerst, als kaarten voor de muren (of een
+ * accentmuur) die nog een kleur nodig hebben. Plafond en lakwerk gaan via de gewone kleurvraag.
+ */
+function sampleKleurstap(project: any) {
+  const namen = project.samplekleuren ?? [];
+  const doel = kaartDoel(project);
+  if (!namen.length || !doel) return null;
+  const r = project.ruimtes.find((x: any) => x.id === doel.ruimte);
+  const v = r?.vlakken.find((x: any) => x.id === doel.vlak);
+  if (!v || "gekozen" === v.kleur.status || !["muren", "accent"].includes(v.soort)) return null;
+  const waar = `${"accent" === v.soort ? "de accentmuur" : "de muren"}${project.ruimtes.length > 1 ? ` van de ${klein(r.naam)}` : ""}`;
+  return { tekst: `Dan de kleur. Dit zijn je samplekleuren: tik op een kaart en kies er een voor ${waar}. Liever een andere kleur? Typ hem, of kies hieronder hoe je verder wilt.`, vraag: "kleurroute", actie: "geen", kaarten: namen, voor: `${doel.ruimte}.${doel.vlak}`, kaartenTitel: "Je samples", alleKaarten: true, zonderPack: true };
+}
+
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
 function kaartDoel(project: any, pad?: string) {
   const [ruimte, vlak] = String(pad ?? "").split(".");
@@ -1280,6 +1327,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     } else {
       const volgende = volgendeFormulier(project);
       if (volgende) antwoord = { tekst: `Genoteerd. ${formVraag(volgende)}`, vraag: "geen", actie: "geen", formulier: volgende };
+      else antwoord = sampleKleurstap(project);
     }
   }
 
@@ -1547,7 +1595,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const heeftIets = project.ruimtes.some((r: any) => r.vlakken.some((v: any) => "gekozen" === v.kleur.status)) || (project.samples ?? []).length > 0 || (project.packs ?? []).length > 0;
   const mailVraag = !rij.bewaard_op && (MAIL_CHIPS.test(bericht.trim()) || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.mailVraag);
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), voortgang: voortgang(project, formulierUit),
   };
@@ -1610,6 +1658,23 @@ Deno.serve(async (req) => {
       const nu = new Date().toISOString();
       await db.from("projecthulp_chat").update({ bewaard_op: nu, ...(email ? { email } : {}), updated_at: nu }).eq("sessie", sessie);
       return j({ bewaard: bewaardInfo({ ...rij, bewaard_op: nu, email: email ?? rij.email }) });
+    }
+    // Samplekleuren uit de link van een mail: bij het plan, zonder beurt. Maakt het gesprek aan als het er nog niet is,
+    // zodat ook een klik zonder gesprek meetelt. Nog een keer dezelfde link voegt niets dubbel toe.
+    if (body.samplekleuren && "object" === typeof body.samplekleuren) {
+      const sk = body.samplekleuren;
+      const namen = await samplekleurenUit(sk.kleuren, sk.packs);
+      const bron = BRONNEN.includes(sk.bron) ? sk.bron : sk.bron ? "onbekend" : null;
+      const utm = utmUit(sk.utm);
+      const rij = await laad(sessie);
+      const project = rij?.project ?? nieuwProject(sessie.slice(0, 12));
+      const al: string[] = project.samplekleuren ?? [];
+      project.samplekleuren = [...al, ...namen.filter((n) => !al.includes(n))].slice(0, 30);
+      const nu = new Date().toISOString();
+      const extra = { ...(bron ? { bron } : {}), ...(Object.keys(utm).length ? { utm } : {}) };
+      if (rij) await db.from("projecthulp_chat").update({ project, ...extra }).eq("sessie", sessie);
+      else await db.from("projecthulp_chat").insert({ sessie, project, gesprek: [], status: "actief", ...extra, updated_at: nu });
+      return j({ samplekleuren: project.samplekleuren, nieuw: namen.filter((n) => !al.includes(n)), bron: bron ?? rij?.bron ?? null, versie: project.versie });
     }
     // De klik op bestellen, voor de inzichten. updated_at blijft staan: dit is geen gespreksactiviteit.
     if (body.mand) {
