@@ -260,7 +260,7 @@ async function draaiGesprek( g ) {
 		klant += ' ' + t;
 		r = await post( { sessie, aanvraagId: rid(), bericht: t, tik, formulier, wijzigForm } );
 		if ( r.fout ) { fouten.push( `chat gaf een fout bij "${ t || formulier?.soort || wijzigForm }": ${ r.fout }` ); break; }
-		antwoorden.push( { klant: t || ( formulier ? `(formulier ${ formulier.soort })` : wijzigForm ? `(wijzig ${ wijzigForm })` : '' ), tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord } );
+		antwoorden.push( { klant: t || ( formulier ? `(formulier ${ formulier.soort })` : wijzigForm ? `(wijzig ${ wijzigForm })` : '' ), tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord, voortgang: r.voortgang } );
 	}
 	let checks = fouten.length;
 	if ( r && ! r.fout ) {
@@ -302,6 +302,19 @@ async function draaiGesprek( g ) {
 			checks++;
 			const n = antwoorden.filter( ( x ) => x.antwoord?.[ veld ] ).length;
 			if ( n > max ) fouten.push( `${ veld } staat ${ n } keer in het gesprek, hooguit ${ max }` );
+		}
+		// De stappenteller: welke stap de klant na een beurt ziet (1 tot 4, 5 = klaar om te bestellen).
+		for ( const [ beurt, stap ] of Object.entries( g.stapBij ?? {} ) ) {
+			checks++;
+			const echt = antwoorden[ Number( beurt ) ]?.voortgang?.stap;
+			if ( echt !== stap ) fouten.push( `na beurt ${ beurt } stap ${ echt }, verwacht ${ stap }` );
+		}
+		// Prijsindicatie zolang de kleur open is (uit de pakketkaart, zoals de browser hem ophaalt).
+		if ( g.indicatie !== undefined ) {
+			checks++;
+			const pk = await fetch( `${ CHAT_URL }?sessie=${ sessie }&pakket=1` ).then( ( x ) => x.json() ).catch( () => ( {} ) );
+			const ok = g.indicatie ? pk.indicatie?.van > 0 && pk.indicatie.tot >= pk.indicatie.van : ! pk.indicatie;
+			if ( ! ok ) fouten.push( `indicatie ${ JSON.stringify( pk.indicatie ) }, verwacht ${ g.indicatie ? 'een bedrag' : 'geen' }` );
 		}
 		// Wat de klant na herladen ziet: het bewaarde gesprek, inclusief de teksten die de server zelf maakt.
 		if ( g.gesprekBevat || g.gesprekNiet ) {

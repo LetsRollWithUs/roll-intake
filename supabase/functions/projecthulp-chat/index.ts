@@ -215,7 +215,7 @@ KLEUR VAN PLAFOND EN LAKWERK: is de muurkleur gekozen (of kiest de klant die lat
 
 PLAFOND: vraag een keer "Wil je het plafond ook schilderen?" (vraag "plafond"). "Ja, wit" = vlak <ruimte> plafond, daarna de witte tinten tonen (zie WIT). "Ja, in de muurkleur" = dezelfde kleur als de muren.
 
-SPULLEN: is het plan klaar om te bestellen (alle kleuren gekozen en onderdelen [klaar], of alleen samples), vraag dan NIET naar spullen: de server toont onder je antwoord een bestelkaart met het pakket, de keuze voor gereedschap en de bestelknop. Zeg dan kort dat het pakket klaarstaat. Anders: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder. Vraagt de klant om een schilderpakket, set of gereedschap, dan is dat een opdracht: spullen niets, vraag pakket op en noem kort welke set erin staat. Staat spullen al vast, vraag er dan niet meer naar.
+SPULLEN: is het plan klaar om te bestellen (alle kleuren gekozen en onderdelen [klaar], of alleen samples), vraag dan NIET naar spullen: de server toont onder je antwoord een bestelkaart met het pakket, de bestelknop en het startpakket (roller, verfbak, kwast en tape) als keuze. Zeg dan kort dat het pakket klaarstaat. Noem gereedschap tegen de klant het startpakket. Anders: "Heb je al rollers en kwasten?" (vraag "spullen"): "Nog niets, zet alles klaar" = spullen niets, "Ik heb al spullen" = spullen alles, "Er komt een schilder" = spullen schilder. Vraagt de klant om een schilderpakket, set of gereedschap, dan is dat een opdracht: spullen niets, vraag pakket op en noem kort welke set erin staat. Staat spullen al vast, vraag er dan niet meer naar.
 JE PAKKET: vraagt de klant wat er in zijn pakket staat, waarom iets erin staat, of wil hij iets eruit, gebruik dan ALTIJD eerst de tool pakket. Daar staan de verf, de voorbereiding en het gereedschap met per product waarom het erbij hoort; leg dat uit in een zin. Zeg nooit dat iets er niet in staat zonder pakket te hebben opgevraagd. Wil de klant gereedschap niet ("haal het schuurblok eruit", "ik ga niet vullen, dus niet nodig"): "zonder <productnaam uit pakket>" en bevestig het. Verf haal je er niet uit: dat gaat via de maat of de kleur. Zeg bij een nieuw product dat niet vanzelf spreekt erbij waarom het erin staat (een extra roller voor de tweede kleur, een schuurblok voor gevulde scheurtjes). Praat tegen de klant over "je plan" en "je pakket", nooit over "je stand".
 LAGEN: wij rekenen het aantal lagen uit, maar de klant beslist. Wil hij 1 laag (of 2): leg het vast met "<ruimte>.muren lagen 1" en "<ruimte>.plafond lagen 1" voor de onderdelen die hij bedoelt; noemt hij er geen, dan alle muren en plafonds die op 2 lagen staan. Doe dat meteen, zonder iemand van Roll erbij. Zeg daarbij kort en vriendelijk: "We rekenen nu met 1 laag. Op een donkere ondergrond of bij een uitgesproken kleur kan een tweede laag nodig zijn, dan heb je wat meer verf nodig." Beloof niet dat 1 laag genoeg is. Noem die opmerking alleen als de klant zelf om minder lagen vraagt; gaat het gesprek niet over lagen, zeg er dan niets over. Vraagt hij alleen of het kan, zeg dat het kan met dezelfde opmerking, en vraag of je het zo zal doen. Terug naar onze berekening: "<ruimte>.muren lagen standaard".
 RUIMTE ERBIJ: wil de klant een ruimte toevoegen en noemt hij niet welke, zet dan vraag "ruimte" (de server toont de keuze). Vraag dan niet naar de ruimte die er al staat. Noemt hij de ruimte wel, leg hem vast en vraag "onderdelen".
@@ -923,6 +923,10 @@ function planMet(plan: any, status: any, statussen: string[]) {
 const mandPlan = (plan: any, status: any, project: any) => zonderVerf(planMet(plan, status, ["klaar"]), project);
 /** In de pakketkaart: alleen onderdelen waarvan de klant de maat gaf (of een maat-chip koos) en de muren nu bekend zijn. */
 function rekenPlan(plan: any, project: any) {
+  return zonderVerf(meePlan(plan, project), project);
+}
+/** Alleen de onderdelen waarvan de maat en de ondergrond bekend zijn. */
+function meePlan(plan: any, project: any) {
   const mee = new Set<string>();
   for (const r of project.ruimtes) {
     const maat = (telt(r.maat.lengte) && telt(r.maat.breedte)) || telt(r.maat.grootte);
@@ -934,7 +938,37 @@ function rekenPlan(plan: any, project: any) {
     }
   }
   const ruimtes = plan.ruimtes.map((r: any) => ({ ...r, vlakken: r.vlakken.filter((v: any) => mee.has(`${r.id}.${v.id}`)) })).filter((r: any) => r.vlakken.length);
-  return zonderVerf({ ...plan, ruimtes }, project);
+  return { ...plan, ruimtes };
+}
+
+/**
+ * Wat de verf ongeveer kost zolang er kleuren open zijn. Hoeveel lagen het worden hangt van de kleur af, dus we
+ * rekenen met een lichte en een donkere Roll-kleur (plafond: Blank Page). Zonder startpakket en samples.
+ */
+const INDICATIE_KLEUREN = ["Off Duty", "Hidden Depths"];
+async function indicatie(project: any) {
+  if ("compleet" === route(project).route) return null;
+  const basis = meePlan(naarRekenkern(project).plan, project);
+  const open = basis.ruimtes.some((r: any) => r.vlakken.some((v: any) => ("muren" === v.soort ? !r.kleur : !v.kleur)));
+  if (!open) return null;
+  const met = (ref: string) => ({
+    ...basis, spullen: "alles", tools: null, samples: [], packs: [],
+    ruimtes: basis.ruimtes.map((r: any) => ({ ...r, kleur: r.kleur ?? { naam: ref }, vlakken: r.vlakken.map((v: any) => ("muren" === v.soort || v.kleur ? v : { ...v, kleur: { naam: "plafond" === v.soort ? "Blank Page" : ref } })) })),
+  });
+  const som = (d: any) => (d?.regels ?? []).reduce((t: number, r: any) => t + (Number(r.totaal) || 0), 0);
+  const [a, b] = await Promise.all(INDICATIE_KLEUREN.map((k) => bereken(met(k)).catch(() => null)));
+  const bedragen = [som(a), som(b)].filter((x) => x > 0);
+  return bedragen.length ? { van: Math.min(...bedragen), tot: Math.max(...bedragen) } : null;
+}
+
+/** Waar de klant is: de vaste stappen van het gesprek, voor de stappenteller in de browser. */
+const STAPPEN = ["Wat je schildert", "De maten", "Hoe het er nu uitziet", "De kleur"];
+function voortgang(project: any, formulier?: any) {
+  const stap = !project.ruimtes.length || ["onderdelen", "start", "meubel"].includes(formulier?.soort) ? 1
+    : project.ruimtes.some(maatNodig) ? 2
+    : project.ruimtes.some((r: any) => murenNodig(r) || lakNodig(r)) ? 3
+    : "compleet" !== route(project).route ? 4 : 5;
+  return { stap, van: STAPPEN.length, label: STAPPEN[stap - 1] ?? "Je pakket staat klaar" };
 }
 
 /* ---------- woord voor woord ---------- */
@@ -1096,7 +1130,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     // Het antwoord was al verwerkt maar kwam niet aan (slechte verbinding). Geef ook het plan terug, anders is de plankaart leeg.
     const st = projectStatus(rij.project);
     const { plan, mens } = naarRekenkern(rij.project);
-    return { ...eerder.uit, project: rij.project, status: st, pakket: null, pakketVolgt: true, mens, versie: rij.project.versie, mandPlan: mandPlan(plan, st, rij.project), route: route(rij.project), herhaald: true };
+    return { ...eerder.uit, project: rij.project, status: st, pakket: null, pakketVolgt: true, mens, versie: rij.project.versie, mandPlan: mandPlan(plan, st, rij.project), route: route(rij.project), voortgang: voortgang(rij.project, eerder.uit?.antwoord?.formulier), herhaald: true };
   }
   if ("bij-roll" === rij.status) return await beurtBijRoll(rij, aanvraagId, bericht, formulier);
   let project = rij.project;
@@ -1149,7 +1183,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       : "zet" === tik.actie && "naam" === tik.veld
       ? [`Noem deze ruimte ${tik.waarde}`, `Genoteerd, deze ruimte heet nu ${tik.waarde}.`]
       : "zet" === tik.actie && "spullen" === tik.veld
-      ? ("niets" === tik.waarde ? ["Zet het gereedschap erbij", "Het gereedschap staat in je pakket."] : ["Ik heb al gereedschap", "Dan laten we het gereedschap weg."])
+      ? ("niets" === tik.waarde ? ["Zet het startpakket erbij", "Het startpakket staat in je pakket."] : ["Zonder startpakket", "Dan laten we het startpakket weg."])
       : null;
     if (vast) {
       tikTekst = vast[0];
@@ -1515,7 +1549,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const uit = {
     antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
-    project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project),
+    project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), voortgang: voortgang(project, formulierUit),
   };
   const nu = new Date().toISOString();
   const gesprek = [...(rij.gesprek as any[]),
@@ -1551,14 +1585,13 @@ Deno.serve(async (req) => {
       const status = projectStatus(rij.project);
       if (new URL(req.url).searchParams.get("pakket")) {
         const { plan: pl } = naarRekenkern(rij.project);
-        let pk = null;
-        try { pk = await bereken(rekenPlan(pl, rij.project)); } catch { pk = { fout: "Pakket kon niet worden berekend." }; }
-        return j({ pakket: pk, versie: rij.project.versie, route: route(rij.project) });
+        const [pk, ind] = await Promise.all([bereken(rekenPlan(pl, rij.project)).catch(() => ({ fout: "Pakket kon niet worden berekend." })), indicatie(rij.project).catch(() => null)]);
+        return j({ pakket: pk, indicatie: ind, versie: rij.project.versie, route: route(rij.project) });
       }
       const { plan } = naarRekenkern(rij.project);
-      let pakket = null;
-      try { pakket = await bereken(rekenPlan(plan, rij.project)); } catch { pakket = { fout: "Pakket kon niet worden berekend." }; }
-      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, form: b.form, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), bijRoll: "bij-roll" === rij.status, bewaard: bewaardInfo(rij) });
+      const [pakket, ind] = await Promise.all([bereken(rekenPlan(plan, rij.project)).catch(() => ({ fout: "Pakket kon niet worden berekend." })), indicatie(rij.project).catch(() => null)]);
+      const laatsteForm = [...rij.gesprek].reverse().find((b: any) => "roll" === b.rol)?.uit?.antwoord?.formulier;
+      return j({ project: rij.project, gesprek: rij.gesprek.map((b: any) => ({ rol: b.rol, tekst: b.tekst, form: b.form, antwoord: b.uit?.antwoord })), status, pakket, versie: rij.project.versie, mandPlan: mandPlan(plan, status, rij.project), route: route(rij.project), indicatie: ind, voortgang: voortgang(rij.project, laatsteForm), bijRoll: "bij-roll" === rij.status, bewaard: bewaardInfo(rij) });
     }
     const body = await req.json();
     const sessie = String(body.sessie ?? "");
