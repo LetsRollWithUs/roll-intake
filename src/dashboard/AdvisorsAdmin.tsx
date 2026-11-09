@@ -41,6 +41,8 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("nl-NL", { day
 
 export function AdvisorsAdmin() {
   const [team, setTeam] = useState<Member[]>([]);
+  // E-mail -> laatste keer ingelogd (null = nog nooit). Ontbreekt een lid hier, dan heeft het geen account.
+  const [accounts, setAccounts] = useState<Record<string, string | null> | null>(null);
   const [me, setMe] = useState("");
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -57,6 +59,8 @@ export function AdvisorsAdmin() {
     const { data, error } = await supabase.rpc("admin_team");
     if (error) setErr(error.message);
     setTeam((data as Member[]) ?? []);
+    const { data: acc } = await supabase.rpc("admin_team_accounts");
+    setAccounts(acc ? Object.fromEntries((acc as { email: string; last_sign_in_at: string | null }[]).map((a) => [a.email, a.last_sign_in_at])) : null);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -77,7 +81,16 @@ export function AdvisorsAdmin() {
   const resetPw = async (m: Member) => {
     const pw = window.prompt(`Nieuw wachtwoord voor ${m.email} (min. 8 tekens):`);
     if (!pw) return;
-    try { await call("set_password", { email: m.email, password: pw }); flash("Wachtwoord gewijzigd."); } catch (e) { setErr((e as Error).message); }
+    // Melding als pop-up: de foutregel staat bovenaan de pagina en valt bij een opengeklapt profiel weg.
+    try { await call("set_password", { email: m.email, password: pw }); flash("Wachtwoord gewijzigd."); window.alert(`Wachtwoord van ${m.email} gewijzigd.`); } catch (e) { setErr((e as Error).message); window.alert(`Wachtwoord wijzigen lukte niet: ${(e as Error).message}`); }
+  };
+  const createAccount = async (m: Member) => {
+    const pw = window.prompt(`${m.email} heeft nog geen inlogaccount. Kies een tijdelijk wachtwoord (min. 8 tekens):`);
+    if (!pw) return;
+    try {
+      await call("create", { email: m.email, name: m.name ?? m.stylist_name ?? undefined, password: pw });
+      flash("Account aangemaakt."); window.alert(`Account voor ${m.email} aangemaakt. Diegene kan nu inloggen met het tijdelijke wachtwoord.`); load();
+    } catch (e) { setErr((e as Error).message); window.alert(`Account aanmaken lukte niet: ${(e as Error).message}`); }
   };
   const remove = async (m: Member) => {
     if (!window.confirm(`${m.email} verwijderen? De toegang vervalt direct.`)) return;
@@ -96,7 +109,7 @@ export function AdvisorsAdmin() {
 
       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
         {loading ? <p className="rd-sub">Laden...</p> : team.map((m) => (
-          <MemberCard key={m.email} m={m} me={me} onChanged={load} onFlash={flash} onError={setErr} onResetPw={() => resetPw(m)} onRemove={() => remove(m)} />
+          <MemberCard key={m.email} m={m} me={me} account={accounts ? (m.email.toLowerCase() in accounts ? { lastSignIn: accounts[m.email.toLowerCase()] } : null) : undefined} onChanged={load} onFlash={flash} onError={setErr} onResetPw={() => resetPw(m)} onCreateAccount={() => createAccount(m)} onRemove={() => remove(m)} />
         ))}
       </div>
 
@@ -114,8 +127,9 @@ export function AdvisorsAdmin() {
   );
 }
 
-function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }: {
-  m: Member; me: string; onChanged: () => void; onFlash: (t: string) => void; onError: (t: string) => void; onResetPw: () => void; onRemove: () => void;
+function MemberCard({ m, me, account, onChanged, onFlash, onError, onResetPw, onCreateAccount, onRemove }: {
+  /** undefined = onbekend (nog laden of geen recht), null = geen account */
+  m: Member; me: string; account?: { lastSignIn: string | null } | null; onChanged: () => void; onFlash: (t: string) => void; onError: (t: string) => void; onResetPw: () => void; onCreateAccount: () => void; onRemove: () => void;
 }) {
   const [sName, setSName] = useState(m.stylist_name ?? m.name ?? "");
   const [meet, setMeet] = useState(m.meet_url ?? "");
@@ -174,8 +188,12 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
             <span className="rd-chip" style={{ fontSize: 11, background: m.role === "beheerder" ? "var(--rd-aubergine)" : "var(--rd-grey-light)", color: m.role === "beheerder" ? "#fff" : "var(--rd-aubergine)", fontWeight: 700 }}>{m.role}</span>
             {!m.stylist_id && <span className="rd-chip" style={{ fontSize: 11, background: "var(--rd-pink-dark)", color: "#fff", fontWeight: 700 }}>geen stylistenprofiel</span>}
             {m.stylist_id && m.active === false && <span className="rd-chip" style={{ fontSize: 11 }}>inactief</span>}
+            {account === null && <span className="rd-chip" style={{ fontSize: 11, background: "#b3261e", color: "#fff", fontWeight: 700 }}>geen account, kan niet inloggen</span>}
           </div>
-          <div style={{ fontSize: 13, opacity: 0.7 }}>{m.email}{m.stylist_id ? ` · commissie ${pctShown}` : ""}</div>
+          <div style={{ fontSize: 13, opacity: 0.7 }}>
+            {m.email}{m.stylist_id ? ` · commissie ${pctShown}` : ""}
+            {account ? ` · ${account.lastSignIn ? `laatst ingelogd ${fmtDate(account.lastSignIn)}` : "nog nooit ingelogd"}` : ""}
+          </div>
         </div>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--rd-pink-dark)" }}>Profiel &amp; afspraken</span>
       </summary>
@@ -227,7 +245,9 @@ function MemberCard({ m, me, onChanged, onFlash, onError, onResetPw, onRemove }:
         )}
 
         <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--rd-line)", paddingTop: 12 }}>
-          <button className="rd-plan-chip" onClick={onResetPw}>Wachtwoord wijzigen</button>
+          {account === null
+            ? <button className="rd-btn rd-btn-primary" onClick={onCreateAccount} style={{ width: "auto", padding: "0 16px", height: 36 }}>Account aanmaken</button>
+            : <button className="rd-plan-chip" onClick={onResetPw}>Wachtwoord wijzigen</button>}
           {!isMe && <button className="rd-plan-chip" onClick={onRemove} style={{ borderColor: "#b3261e", color: "#b3261e" }}>Toegang verwijderen</button>}
         </div>
       </div>
