@@ -7,7 +7,7 @@
  * - Een aanvraag op een oudere projectversie wordt geweigerd (conflict); de browser haalt eerst de nieuwste op.
  * - Wat niet klopt of onduidelijk is, wordt een open vraag in plaats van een wijziging.
  */
-import { GLANS, GRENZEN, KLEUR_TYPE, LAK_SOORTEN, ONDERGROND, RUIMTE_TYPES, SPULLEN, VLAK_SOORTEN, VOLGORDE, gegeven, isLak, nieuweRuimte, nieuwVlak, w } from './schema.js';
+import { GLANS, GRENZEN, KLEUR_TYPE, LAK_SOORTEN, ONDERGROND, RUIMTE_TYPES, SPULLEN, VLAK_SOORTEN, VOLGORDE, gegeven, inMeters, isLak, nieuweRuimte, nieuwVlak, w } from './schema.js';
 
 const BEWAAR_STAPPEN = 20;
 const MAX_RUIMTES_PER_TYPE = 6;
@@ -252,6 +252,14 @@ export function normaliseer( p, ruw ) {
 	}
 	if ( 'aantal' === wz.veld && 'number' === typeof wz.waarde ) {
 		wz.waarde = Math.round( wz.waarde );
+	}
+	// Maten in centimeters ("270 bij 280", "hoogte 260") worden meters.
+	const MAX = { 'maat.lengte': GRENZEN.lengte[ 1 ], 'maat.breedte': GRENZEN.breedte[ 1 ], hoogte: wz.vlak ? GRENZEN.accentHoogte[ 1 ] : GRENZEN.hoogte[ 1 ], breedte: GRENZEN.accentBreedte[ 1 ] };
+	if ( MAX[ wz.veld ] ) {
+		wz.waarde = inMeters( wz.waarde, MAX[ wz.veld ] );
+	}
+	if ( 'glas' === wz.veld && Array.isArray( wz.waarde ) ) {
+		wz.waarde = wz.waarde.map( ( x ) => ( { ...x, breedte: inMeters( x.breedte, GRENZEN.glasBreedte[ 1 ] ), hoogte: inMeters( x.hoogte, GRENZEN.glasHoogte[ 1 ] ) } ) );
 	}
 	return wz;
 }

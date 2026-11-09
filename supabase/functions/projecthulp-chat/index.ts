@@ -18,7 +18,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { geminiStap, isGemini } from "./gemini.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { RUIMTE_NAMEN, VLOER, isLak, nieuwProject, naarRekenkern, plafondBijMuren, projectStatus, telt, toepassen, w } from "../_shared/projectmodel/index.js";
+import { RUIMTE_NAMEN, VLOER, inMeters, isLak, nieuwProject, naarRekenkern, plafondBijMuren, projectStatus, telt, toepassen, w } from "../_shared/projectmodel/index.js";
 import PRODUCTINFO from "../_shared/projectmodel/productinfo.json" with { type: "json" };
 import PACKS from "../_shared/projectmodel/packs.json" with { type: "json" };
 import VOORWAARDEN from "../_shared/projectmodel/voorwaarden.json" with { type: "json" };
@@ -726,16 +726,17 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
 
   const ruimtes = project.ruimtes.filter((r: any) => v.ruimtes && v.ruimtes[r.id]);
   if ("maat" === f?.soort) {
-    const hg = getal(v.hoogte ?? Object.values(v.ruimtes ?? {}).map((x: any) => x?.hoogte).find(Boolean));
+    // Centimeters (270, 260) worden meters, zodat ook de tekst in het gesprek klopt.
+    const hg = inMeters(getal(v.hoogte ?? Object.values(v.ruimtes ?? {}).map((x: any) => x?.hoogte).find(Boolean)), 5);
     const delen: string[] = [];
     for (const r of ruimtes) {
       const m = v.ruimtes[r.id];
-      const l = getal(m.lengte), b = getal(m.breedte);
+      const l = inMeters(getal(m.lengte), 20), b = inMeters(getal(m.breedte), 20);
       if (l && b) { zet(r, null, "maat.lengte", l); zet(r, null, "maat.breedte", b); delen.push(`${r.naam}: ${nl(l)} × ${nl(b)} m`); }
       else if (["klein", "middel", "groot"].includes(m.grootte)) { if (w(r.maat.lengte) || w(r.maat.breedte)) zet(r, null, "maat.wis", true); zet(r, null, "maat.grootte", m.grootte); delen.push(`${r.naam}: ${maatSchatting(alleenLak(r) ? "standaard" : r.type).find((x) => x.grootte === m.grootte)?.label.toLowerCase()}`); }
       if (hg && r.vlakken.some((x: any) => !isLak(x.soort))) zet(r, null, "hoogte", hg);
       // Een grote raampartij of schuifpui die de klant eraf wil laten halen (optie in het formulier).
-      const glas = (Array.isArray(m.glas) ? m.glas : []).map((x: any) => ({ breedte: getal(x?.breedte), hoogte: getal(x?.hoogte) })).filter((x: any) => x.breedte && x.hoogte);
+      const glas = (Array.isArray(m.glas) ? m.glas : []).map((x: any) => ({ breedte: inMeters(getal(x?.breedte), 12), hoogte: inMeters(getal(x?.hoogte), 4) })).filter((x: any) => x.breedte && x.hoogte);
       if (glas.length) { zet(r, null, "glas", glas); delen.push(`${r.naam}: raampartij ${glas.map((x: any) => `${nl(x.breedte)} × ${nl(x.hoogte)} m`).join(" en ")} eraf`); }
     }
     return { wijzigingen: wz, tekst: delen.join("; ") + (hg ? `, muren ${hg.toFixed(2).replace(".", ",")} m hoog` : "") };

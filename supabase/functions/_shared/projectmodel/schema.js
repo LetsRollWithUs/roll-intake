@@ -167,3 +167,11 @@ export function plafondBijMuren( afwerkingMuren, materiaalMuren ) {
 	}
 	return { afwerking: 'muurverf', kleurNu: 'licht', structuur: 'glad', conditie: 'goed' };
 }
+
+/**
+ * Een maat in meters. Wie 270 typt bij een kamer van hooguit 20 meter bedoelt centimeters: boven de grens (en tot
+ * honderd keer de grens) delen we door 100. Wat daarna nog buiten de grenzen valt, vragen we gewoon na.
+ */
+export function inMeters( n, max ) {
+	return 'number' === typeof n && Number.isFinite( n ) && n > max && n <= max * 100 ? Math.round( n ) / 100 : n;
+}
