@@ -101,7 +101,8 @@ function Lijst() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("projecthulp_chat").select(VELDEN).order("updated_at", { ascending: false, nullsFirst: false }).limit(200);
+      // Een klik uit een mail zonder bericht is nog geen gesprek: die staat alleen in de inzichten.
+      const { data, error } = await supabase.from("projecthulp_chat").select(VELDEN).neq("gesprek", "[]").order("updated_at", { ascending: false, nullsFirst: false }).limit(200);
       if (error) setFout("Laden lukte niet. Ben je ingelogd als beheerder?");
       setRows((data as unknown as Rij[]) ?? []);
       setLoading(false);

@@ -1662,6 +1662,8 @@ Deno.serve(async (req) => {
     // Samplekleuren uit de link van een mail: bij het plan, zonder beurt. Maakt het gesprek aan als het er nog niet is,
     // zodat ook een klik zonder gesprek meetelt. Nog een keer dezelfde link voegt niets dubbel toe.
     if (body.samplekleuren && "object" === typeof body.samplekleuren) {
+      // Alleen echte sessies (de browser maakt er een van 48 tekens): geen rijen voor zelfverzonnen korte namen.
+      if (sessie.length < 24) return j({ fout: "Onbekende sessie." }, 400);
       const sk = body.samplekleuren;
       const namen = await samplekleurenUit(sk.kleuren, sk.packs);
       const bron = BRONNEN.includes(sk.bron) ? sk.bron : sk.bron ? "onbekend" : null;
