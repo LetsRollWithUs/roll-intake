@@ -704,6 +704,12 @@ Deno.serve(async (req) => {
         const d = await rr.json().catch(() => null);
         if (!rr.ok || !d) return j({ ok: false, error: rr.status === 409 ? "De offerte is al verstuurd; maak eerst een nieuwe versie." : `offerte-tool gaf ${rr.status}` });
         const o = normalizeOffer(d);
+        // Was de offerte al verstuurd (bijv. het verfplan voor wat al vaststond), dan maakt de offerte-tool zelf een
+        // nieuwe versie (concept); die koppelen we hier aan de intake (verfcalculator >= 1.73.0).
+        if (o.id && Number(o.id) !== Number(meta.id)) {
+          await admin.from("intake").update({ offer_meta: { ...meta, id: o.id, nummer: o.nummer, edit_url: o.editUrl, klant_url: o.klantUrl, mand_url: o.mandUrl, offer: o, at: new Date().toISOString() }, offer_status: "concept", offer_total: o.totaal }).eq("id", body.intake_id);
+          return j({ ok: true, offer: o, nieuweVersie: true });
+        }
         await admin.from("intake").update({ offer_meta: { ...meta, offer: o }, offer_total: o.totaal }).eq("id", body.intake_id);
         return j({ ok: true, offer: o });
       }

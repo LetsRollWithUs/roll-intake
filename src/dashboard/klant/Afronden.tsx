@@ -111,6 +111,9 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
   const kiezenVlakken: OfferVlak[] = (offer?.vlakken ?? []).filter((v) => v.status === "kiezen");
   const nogKiezen = !samplesRoute && kiezenVlakken.length > 0;
   const hasOffer = !!offer && verfRooms.length > 0 && !samplesRoute && offer.klaarVoorOfferte !== false;
+  // Deels bevestigd, deels nog testen: het verfplan voor wat al vaststaat kan los mee (de offerte rekent alleen
+  // met bevestigde vlakken); het sampleadvies voor de rest gaat apart (besluit 10 nov 2026).
+  const deelOffer = samplesRoute && !!offer && verfRooms.length > 0;
   const blocked = !!offer && offer.kleurenOnbekend.length > 0;
   // Samplekleuren uit de testvlakken (alleen Roll-kleuren; de editor controleert dat).
   const sampleRooms: AdviceRoom[] = testVlakken.flatMap((v) => v.testKleuren.map((t) => ({ room: v.ruimte ?? "", surface: v.type ?? v.soort ?? "", color: t.naam, status: "voorgesteld" as const, product: "Muurverf", m2: "", liters: "", motivation: "" })));
@@ -203,6 +206,7 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
 
   const opties: { k: Keuze; titel: string; sub: string; kan: boolean; waarom: string }[] = samplesRoute ? [
     { k: "samples", titel: "Eerst kleuren testen", sub: "Sampleadvies met stickers of testers. Verf volgt als de klant eruit is.", kan: true, waarom: "" },
+    { k: "voorstel", titel: "Verfplan voor wat al vaststaat", sub: "De kleuren die al vaststaan, met winkelmandje. Het sampleadvies voor de rest stuur je los.", kan: deelOffer && !blocked, waarom: blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
     { k: "roll", titel: "Roll laten meekijken", sub: "Roll neemt contact op met de klant.", kan: true, waarom: "" },
   ] : [
     { k: "voorstel", titel: "Advies + verfplan", sub: "Het verslag en het verfplan met winkelmandje, in één keer.", kan: hasOffer && !blocked && !nogKiezen, waarom: !offer ? "Leg eerst het advies vast bij stap 2." : nogKiezen ? "Kies eerst per oppervlak: eerst testen of bevestigd." : blocked ? "Kies eerst de onbekende kleuren in het advies." : "Er zijn nog geen bevestigde kleuren." },
@@ -306,9 +310,12 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
           })}
         </div>
 
-        {gekozen === "voorstel" && hasOffer && (
+        {gekozen === "voorstel" && (hasOffer || deelOffer) && (
           <div className="kk-card">
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>De klant krijgt eerst het verslag met de kleuren, direct daarna het verfplan met de knop "Alles in je winkelmandje" ({eur(offer?.totaal)}). Klopt er iets niet? <button className="rd-textlink" onClick={onEditOffer}>Pas het verfplan aan</button>.</p>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>{deelOffer
+              ? <>De klant krijgt het verslag met de kleuren die al vaststaan, direct daarna het verfplan met de knop "Alles in je winkelmandje" ({eur(offer?.totaal)}). De testkleuren staan er niet in: stuur daarvoor ook het sampleadvies. Na de check-in maakt het systeem zelf een nieuwe versie voor de rest. </>
+              : <>De klant krijgt eerst het verslag met de kleuren, direct daarna het verfplan met de knop "Alles in je winkelmandje" ({eur(offer?.totaal)}). </>}
+              Klopt er iets niet? <button className="rd-textlink" onClick={onEditOffer}>Pas het verfplan aan</button>.</p>
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <button className="rd-btn rd-btn-primary" onClick={() => { ensureMail("voorstel"); setPreview("voorstel"); }} style={{ width: "auto", padding: "0 22px", minHeight: 44 }}>{last(["roll"]) ? "Verstuur het verfplan" : "Verstuur advies en verfplan"}</button>
               <Status k="voorstel" />
