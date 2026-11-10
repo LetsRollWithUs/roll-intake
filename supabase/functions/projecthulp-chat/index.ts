@@ -609,7 +609,8 @@ const alleenLak = (r: any) => /^lakwerk/.test(r.id);
 const metMaat = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) || VOLGT_UIT_MAAT.includes(v.soort));
 /** Wat er nu staat, terugvertaald naar de keuzes van de formulieren (voor Wijzig). */
 const nuVan = (o: any) => { const a = w(o.afwerking); return "muurverf" === a ? ("licht" === w(o.kleurNu) ? "licht" : "donker") : "geen" === a ? "kaal" : "renovlies" === a ? "vlies" : "behang" === a ? "behang" : "onbekend" === a ? "onbekend" : ""; };
-const staatVan = (o: any) => { const c = w(o.conditie); return "vocht" === c ? "vocht" : "scheuren" === c ? "scheuren" : "scheurtjes" === c ? "scheurtjes" : "structuur" === w(o.structuur) ? "structuur" : "onbekend" === c ? "onbekend" : "glad"; };
+const staatVan = (o: any) => { const s = w(o.structuur); return "structuur" === s ? "structuur" : "onbekend" === s ? "onbekend" : "glad"; };
+const gatenVan = (o: any) => { const c = w(o.conditie); return "scheurtjes" === c ? "klein" : "scheuren" === c ? "scheuren" : "goed" === c ? "nee" : ""; };
 const lakStaatVan = (o: any) => { const a = w(o.afwerking), c = w(o.conditie); return "bladdert" === c ? "bladdert" : "lak" === a ? "gelakt" : "geen" === a ? ("metaal" === w(o.materiaal) ? "metaal" : "kaal") : "onbekend" === a ? "onbekend" : ""; };
 // Een trap kies je in de hal of bij alleen lakwerk binnen; een meubel heeft alleen zichzelf.
 const keuzesVan = (r: any) => (r.vlakken.some((v: any) => "meubel" === v.soort) ? ["meubel"] : r.buiten ? LAK_BUITEN : alleenLak(r) ? [...LAK_BINNEN, "trap"] : ["muren", "plafond", ...LAK_BINNEN, ...("hal" === r.type ? ["trap"] : [])]);
@@ -643,7 +644,7 @@ function maakFormulier(soort: string, project: any, alleenRuimtes?: string[], op
     if (!rr.length) return null;
     return { soort, ...bijOpnieuw, ruimtes: rr.map((r: any) => {
       const vl = r.vlakken.find((v: any) => "muren" === v.soort) ?? r.vlakken.find((v: any) => !isLak(v.soort));
-      return { id: r.id, naam: r.naam, plafond: r.vlakken.some((v: any) => "plafond" === v.soort), alleenPlafond: !r.vlakken.some((v: any) => "muren" === v.soort), ...(opnieuw ? { nu: nuVan(vl.ondergrond), staat: staatVan(vl.ondergrond) } : {}) };
+      return { id: r.id, naam: r.naam, plafond: r.vlakken.some((v: any) => "plafond" === v.soort), alleenPlafond: !r.vlakken.some((v: any) => "muren" === v.soort), ...(opnieuw ? { nu: nuVan(vl.ondergrond), staat: staatVan(vl.ondergrond), gaten: gatenVan(vl.ondergrond) } : {}) };
     }) };
   }
   if ("lak" === soort) {
@@ -694,6 +695,12 @@ const MUUR_STAAT: Record<string, [Record<string, string>, string]> = {
   scheuren: [{ structuur: "glad", conditie: "scheuren" }, "scheuren"],
   vocht: [{ conditie: "vocht" }, "vocht of schimmel"],
   onbekend: [{ structuur: "onbekend", conditie: "onbekend" }, "weet ik niet"],
+};
+/** Gaatjes en scheurtjes: geen ondergrond maar iets dat overal kan zitten, dus één vraag voor alle muren (feedback 10 nov 2026). */
+const GATEN: Record<string, [Record<string, string>, string]> = {
+  nee: [{ conditie: "goed" }, "geen gaatjes of scheurtjes"],
+  klein: [{ conditie: "scheurtjes" }, "een paar gaatjes of scheurtjes"],
+  scheuren: [{ conditie: "scheuren" }, "grotere scheuren"],
 };
 const LAK_STAAT: Record<string, [Record<string, string>, string]> = {
   gelakt: [{ materiaal: "hout", afwerking: "lak", conditie: "goed" }, "gelakt"],
@@ -790,14 +797,17 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
     const delen: string[] = [];
     for (const r of ruimtes) {
       const nu = MUUR_NU[v.ruimtes[r.id].nu], st = MUUR_STAAT[v.ruimtes[r.id].staat] ?? MUUR_STAAT.glad;
+      // Nieuw formulier: de gaatjes-vraag geldt voor alle muren en gaat voor de conditie uit de staat.
+      const gat = GATEN[v.gaten] ?? null;
       if (!nu) continue;
       // Dit gaat over de muren. Het plafond volgt uit plafondWijzigingen; alleen zonder muren gaat het antwoord over het plafond zelf.
       const metMuren = r.vlakken.some((x: any) => "muren" === x.soort);
       for (const vl of r.vlakken.filter((x: any) => !isLak(x.soort) && !(metMuren && "plafond" === x.soort))) {
-        for (const [veld, waarde] of Object.entries({ ...nu[0], ...st[0] })) zet(r, vl, `ondergrond.${veld}`, waarde);
+        for (const [veld, waarde] of Object.entries({ ...nu[0], ...st[0], ...(gat ? gat[0] : {}) })) zet(r, vl, `ondergrond.${veld}`, waarde);
       }
       delen.push(`${ruimtes.length > 1 ? r.naam + ": " : ""}${nu[1]}, ${st[1]}`);
     }
+    if (GATEN[v.gaten]) delen.push(GATEN[v.gaten][1]);
     // Alleen het plafond: anders denkt het model dat er muren bij horen en zet het die er weer bij.
     const alleenPlafond = ruimtes.length && ruimtes.every((r: any) => !r.vlakken.some((x: any) => "muren" === x.soort));
     return { wijzigingen: wz, tekst: `${alleenPlafond ? "Plafond" : "Muren"} nu: ${delen.join("; ")}` };
