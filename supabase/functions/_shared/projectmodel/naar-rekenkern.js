@@ -145,6 +145,10 @@ export function naarRekenkern( project ) {
 			samples: ( project.samples || [] ).map( ( s ) => ( { naam: s.naam, type: s.type || 'sticker' } ) ),
 			packs: project.packs || [],
 			land: w( project.land, 'NL' ),
+			// Renovlies alleen als de klant het koos, ook bij grotere scheuren (10 nov 2026). Oudere plannen zonder
+			// deze vlag krijgen in de rekenkern nog automatisch renovlies bij scheuren.
+			renovliesKeuze: true,
+			spuiten: true === w( project.spuiten ),
 		},
 		mens,
 	};

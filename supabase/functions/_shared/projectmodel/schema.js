@@ -107,6 +107,8 @@ export function nieuwProject( id ) {
 		spullen: null,
 		wanneer: null,
 		volgorde: null,
+		// Spuiten in plaats van rollen (10 nov 2026): de rekenkern rekent dan extra verf voor de nevel.
+		spuiten: null,
 		land: gegeven( 'NL', 'aangenomen', 'roll' ),
 		openVragen: [],
 		log: [],

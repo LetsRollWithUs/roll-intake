@@ -156,6 +156,7 @@ function eindKlopt( sleutel, verwacht, r, alle ) {
 	if ( sleutel === 'samplekleurenAantal' ) return ( p?.samplekleuren ?? [] ).length === verwacht;
 	if ( sleutel === 'bron' ) return alle.some( () => true ) && zelfde( r.bron ?? alle.map( ( x ) => x.bron ).find( Boolean ), verwacht );
 	if ( [ 'spullen', 'wanneer' ].includes( sleutel ) ) return alt( w( p?.[ sleutel ] ) );
+	if ( sleutel === 'spuiten' ) return w( p?.spuiten ) === verwacht;
 	if ( sleutel === 'doel' ) return String( w( p?.doel ) ?? '' ).toLowerCase().includes( String( verwacht ).toLowerCase() );
 	const delen = sleutel.split( '.' );
 	if ( delen[ 0 ] === 'status' ) {
@@ -182,7 +183,7 @@ function eindWaarde( sleutel, r ) {
 	const p = r.project, d = sleutel.split( '.' );
 	if ( d[ 0 ] === 'status' ) { const ru = ruimteVan( p, d[ 1 ] ); const o = ( r.status?.onderdelen ?? [] ).find( ( x ) => x.ruimte === ru?.id && x.vlak === d[ 2 ] ); return o ? `${ o.status } ${ [ ...( o.ontbreekt ?? [] ), ...( o.controleren ?? [] ) ].join( ',' ) }` : null; }
 	if ( sleutel === 'samples' ) return ( p?.samples ?? [] ).map( ( s ) => s.naam );
-	if ( [ 'spullen', 'wanneer', 'doel' ].includes( sleutel ) ) return w( p?.[ sleutel ] );
+	if ( [ 'spullen', 'wanneer', 'doel', 'spuiten' ].includes( sleutel ) ) return w( p?.[ sleutel ] );
 	const ru = ruimteVan( p, d[ 0 ] ), vl = vlakVan( ru, d[ 1 ] );
 	if ( d.length === 2 ) return vl ? 'bestaat' : 'bestaat niet';
 	if ( d[ 2 ] === 'kleur' ) return vl ? { status: vl.kleur.status, naam: kleurNaam( vl ) } : null;

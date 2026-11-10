@@ -241,7 +241,7 @@ export function normaliseer( p, ruw ) {
 		wz.ruimte = id;
 	}
 	// Eén ruimte en geen ruimte genoemd: dan bedoelt de klant die ruimte.
-	if ( ! wz.ruimte && 1 === p.ruimtes.length && ( wz.vlak || [ 'vlak-erbij', 'kleur' ].includes( wz.actie ) || ( 'zet' === wz.actie && ! [ 'doel', 'spullen', 'wanneer', 'volgorde', 'land' ].includes( wz.veld ) ) ) ) {
+	if ( ! wz.ruimte && 1 === p.ruimtes.length && ( wz.vlak || [ 'vlak-erbij', 'kleur' ].includes( wz.actie ) || ( 'zet' === wz.actie && ! [ 'doel', 'spullen', 'wanneer', 'volgorde', 'land', 'spuiten' ].includes( wz.veld ) ) ) ) {
 		wz.ruimte = p.ruimtes[ 0 ].id;
 	}
 	if ( 'vlak-erbij' === wz.actie && ! wz.vlak && wz.soort ) {
@@ -302,6 +302,8 @@ function zet( p, r, v, wz, ctx ) {
 			p.volgorde = g( waarde );
 		} else if ( 'land' === a && [ 'NL', 'BE' ].includes( waarde ) ) {
 			p.land = g( waarde );
+		} else if ( 'spuiten' === a && 'boolean' === typeof waarde ) {
+			p.spuiten = g( waarde, p.spuiten );
 		} else {
 			return weiger( wz, 'Onbekend veld of ongeldige waarde.' );
 		}
