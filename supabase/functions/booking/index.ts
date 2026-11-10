@@ -448,6 +448,28 @@ Deno.serve(async (req) => {
           }
         } catch { /* terugval op het vastgelegde advies */ }
       }
+      // Samplefase (besluit 10 nov 2026): voorstrijk voor muren op "Eerst testen" als losse tip, zodat de klant alvast
+      // kan beginnen. Telt niet mee in de offerte en gaat niet vanzelf in de mand; de klant kiest zelf.
+      let voorstrijkTip: any = null;
+      if (phase === "sample" && row.offer_meta?.id && OFFERTE_API_KEY && OFFERTE_V2) {
+        try {
+          const rr = await fetch(`${OFFERTE_API_URL}/${row.offer_meta.id}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
+          const vt = rr.ok ? (await rr.json())?.voorstrijkTip : null;
+          if (vt && Array.isArray(vt.blikken) && vt.blikken.length) {
+            const euro = (n: number) => `€ ${Number(n).toFixed(2).replace(".", ",")}`;
+            const liter = (n: number) => `${String(n).replace(".", ",")} L`;
+            const ruimtes: string[] = (vt.ruimtes ?? []).map((x: string) => String(x).toLowerCase());
+            voorstrijkTip = {
+              product: String(vt.naam ?? "Voorstrijk"),
+              m2: Math.round(Number(vt.m2) || 0),
+              ruimtes: ruimtes.length > 1 ? `${ruimtes.slice(0, -1).join(", ")} en ${ruimtes[ruimtes.length - 1]}` : ruimtes[0] ?? "",
+              blikken: vt.blikken.map((b: any) => `${b.aantal} × ${liter(b.liter)}`).join(" + "),
+              prijs: euro(vt.totaal),
+              url: multiAddUrl(vt.blikken.map((b: any) => [Number(b.variationId) || Number(b.productId), Number(b.aantal) || 1] as [number, number]), "cart"),
+            };
+          }
+        } catch { /* zonder tip */ }
+      }
       const advice = offerRows?.length ? offerRows : bundle && Array.isArray(bundle.rooms)
         ? bundle.rooms.map((r: any) => ({ room: [r.room, r.surface].filter((x: string) => (x ?? "").trim()).join(" · "), color: r.color ?? "", product: r.product ?? "", liters: r.liters ?? "", m2: r.m2 ?? "" }))
         : (Array.isArray(row.advisor_advice) ? row.advisor_advice : []);
@@ -532,6 +554,7 @@ Deno.serve(async (req) => {
         samples_testers_url: multiAddUrl(pouchPairs, "cart"),
         offer_url: row.advisor_offer_url || `${SHOP_BASE}/prijsopgave`,
         has_offer: !!row.advisor_offer_url,
+        voorstrijk_tip: voorstrijkTip,
       };
       const r = await klaviyoTrack(
         "Advies flow",
