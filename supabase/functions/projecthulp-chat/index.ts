@@ -1243,8 +1243,11 @@ async function scanVragen(): Promise<any[] | null> {
   return SCAN_VRAGEN;
 }
 /** Het scan-formulier voor de eerste muur zonder kleur; null als de engine niet bereikbaar is of er geen muur is. */
-async function scanFormulier(project: any) {
-  const doel = openMuren(project)[0];
+async function scanFormulier(project: any, ruimteId?: string) {
+  // De gevraagde ruimte, anders de eerste muur waar nog niets voor staat (een ruimte die al kleuren uit de scan heeft,
+  // krijgt hem niet nog een keer), anders de eerste open muur.
+  const om = openMuren(project);
+  const doel = (ruimteId ? om.find((x: any) => x.r.id === ruimteId) : null) ?? om.find((x: any) => "open" === x.v.kleur.status) ?? om[0];
   const vragen = doel ? await scanVragen() : null;
   if (!doel || !vragen) return null;
   return { soort: "scan", voor: `${doel.r.id}.${doel.v.id}`, ruimteNaam: doel.r.naam, vragen };
@@ -1291,28 +1294,59 @@ function vlakLabel(project: any, ruimteId: string, vlakId: string): string {
 }
 
 /**
+ * Meer ruimtes: staat er voor de ene ruimte een kleur of kleuren uit de scan, en is een andere ruimte nog helemaal
+ * open, dan vragen we daar naar (feedback 11 nov 2026: na de woonkamer kwam de keuken niet meer aan bod). Eén keer
+ * per ruimte; de keuzes handelt de server zelf af (zie de knoppen hieronder in beurt()).
+ */
+function volgendeRuimte(project: any, gesprek: any[], scanMag: boolean) {
+  const muren = project.ruimtes.map((r: any) => ({ r, v: r.vlakken.find((v: any) => "muren" === v.soort) })).filter((x: any) => x.v);
+  const bron = [...muren].reverse().find((x: any) => "gekozen" === x.v.kleur.status) ?? [...muren].reverse().find((x: any) => (x.v.kleur.kandidaten ?? []).length);
+  if (!bron) return null;
+  const al = new Set(gesprek.map((b: any) => b.uit?.antwoord?.volgendeRuimte).filter(Boolean));
+  const doel = muren.find((x: any) => x.r.id !== bron.r.id && "open" === x.v.kleur.status && !al.has(x.r.id));
+  if (!doel) return null;
+  const gekozen = "gekozen" === bron.v.kleur.status;
+  const dn = klein(doel.r.naam), bn = klein(bron.r.naam);
+  return {
+    ruimte: doel.r.id,
+    tekst: `En de ${dn}: ${gekozen ? "dezelfde kleur" : "dezelfde kleuren"} als de ${bn}, of kies je daar apart?`,
+    chips: [`Zelfde ${gekozen ? "kleur" : "kleuren"} als de ${bn}`, ...(scanMag ? [`Kleurenscan voor de ${dn}`] : []), "Later kiezen"],
+  };
+}
+const ZELFDE_ALS = /^zelfde kleur(?:en)? als de (.+?)\.?$/i;
+const SCAN_VOOR = /^kleurenscan voor de (.+?)\.?$/i;
+
+/**
  * Een tik op een kleurkaart, "Probeer als sample" of een sample pack: vast bevestigen en de volgende stap, zonder model
  * (verbeterronde 10 nov 2026: tikken moet direct voelen; langs het model duurde dit 2,5 tot 5 seconden). Geeft null als
  * het model moet meedenken: er wacht nog een andere muur op een kleur, of de tik is geen van deze drie.
  */
-async function naTik(tik: any, project: any, gesprek: any[], ix: any): Promise<{ antwoord: any; klant: string } | null> {
+async function naTik(tik: any, project: any, gesprek: any[], ix: any, scanMag = false): Promise<{ antwoord: any; klant: string } | null> {
   const naam = String(tik.kleur?.naam ?? "");
+  // Is er nog een ruimte waar niets voor staat, dan is dat de volgende vraag (en nog niet de bestelkaart).
+  const vr = volgendeRuimte(project, gesprek, scanMag);
+  const metVolgende = (zin: string) => (vr ? { tekst: `${zin} ${vr.tekst}`, vraag: "eigen", chips: vr.chips, actie: "geen", volgendeRuimte: vr.ruimte } : null);
   if ("pack" === tik.actie && "erbij" === tik.wat && tik.naam) {
-    return { klant: `Sample pack ${tik.naam} in mijn pakket`, antwoord: { tekst: `Het sample pack ${tik.naam} staat in je pakket. Zo vergelijk je de kleuren thuis naast elkaar.`, vraag: "geen", actie: "geen" } };
+    return { klant: `Sample pack ${tik.naam} in mijn pakket`, antwoord: metVolgende(`Het sample pack ${tik.naam} staat in je pakket.`) ?? { tekst: `Het sample pack ${tik.naam} staat in je pakket. Zo vergelijk je de kleuren thuis naast elkaar.`, vraag: "geen", actie: "geen" } };
   }
   if ("sample" === tik.actie && "erbij" === tik.wat && naam) {
-    return { klant: `${naam} als sample`, antwoord: { tekst: `${naam} staat als sample in je pakket. Zo zie je de kleur thuis bij jouw licht.`, vraag: "geen", actie: "geen" } };
+    return { klant: `${naam} als sample`, antwoord: metVolgende(`${naam} staat als sample in je pakket.`) ?? { tekst: `${naam} staat als sample in je pakket. Zo zie je de kleur thuis bij jouw licht.`, vraag: "geen", actie: "geen" } };
   }
   if ("kleur" !== tik.actie || "kies" !== tik.wat || !naam) return null;
   const r = project.ruimtes.find((x: any) => x.id === tik.ruimte);
   const v = r?.vlakken.find((x: any) => x.id === tik.vlak);
   const gekozen = v && "gekozen" === v.kleur.status ? w(v.kleur.gekozen) : null;
-  // Alleen als de kleur er echt staat; en bij meer muren zonder kleur helpt het model verder (zelfde kleur, andere kleur).
-  if (!gekozen || openMuren(project).length) return null;
+  if (!gekozen) return null;
   const d = ix?.c.find((k: Kleur) => k.n === gekozen.naam)?.d;
   const waar = vlakLabel(project, tik.ruimte, tik.vlak);
   const staat = `${gekozen.naam}${d ? `, ${klein(String(d))},` : ""} staat erin voor ${waar}.`;
   const klant = `${gekozen.naam} gekozen voor ${waar}`;
+  // Nog een muur zonder kleur: is die ruimte nog helemaal open, dan vragen we ernaar; twijfelt de klant daar al
+  // tussen kleuren, dan helpt het model verder.
+  if (openMuren(project).length) {
+    const v2 = metVolgende(staat);
+    return v2 ? { klant, antwoord: v2 } : null;
+  }
   // Plafond en lakwerk nog zonder kleur: één keer de snelle keuzes (wit, zelfde als de muren, bijpassend, later).
   const kf = kleurFormulier(project, ix);
   // Hooguit twee keer: wie na de eerste keer een kaart aantikte in plaats van het formulier, krijgt de keuzes nog een keer.
@@ -1475,7 +1509,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       ? ("niets" === tik.waarde ? ["Zet het startpakket erbij", "Het startpakket staat in je pakket."] : ["Zonder startpakket", "Dan laten we het startpakket weg."])
       : null;
     // Een kleur gekozen, een sample of een sample pack erbij: ook vast, als het lukte.
-    const direct = !vast && !u.geweigerd.length && u.toegepast.length ? await naTik(tik, project, rij.gesprek as any[], await ixP) : null;
+    const direct = !vast && !u.geweigerd.length && u.toegepast.length ? await naTik(tik, project, rij.gesprek as any[], await ixP, (extra.klantVersie ?? 1) >= 3) : null;
     if (vast) {
       tikTekst = vast[0];
       const nee = u.geweigerd[0]?.reden;
@@ -1523,6 +1557,37 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     antwoord = samen
       ? { tekst: `Top, dan zetten we naast je samples ook de verf voor ${gekozenOnderdelen(project)} klaar.`, vraag: "geen", actie: "geen" }
       : { tekst: "Top, dan bestel je eerst je samples. Zodra je kleur vaststaat, regelen we je verf; je plan blijft bewaard.", vraag: "geen", actie: "geen" };
+  }
+  // De volgende ruimte (zie volgendeRuimte): dezelfde kleur of kleuren overnemen, of daar de kleurenscan doen.
+  const ruimteOpNaam = (n: string) => project.ruimtes.find((r: any) => klein(r.naam) === String(n).trim().toLowerCase());
+  const zelfdeM = !antwoord ? ZELFDE_ALS.exec(bericht.trim()) : null;
+  const doelZelfde = zelfdeM ? project.ruimtes.find((r: any) => r.id === vorige?.uit?.antwoord?.volgendeRuimte) : null;
+  const bronZelfde = zelfdeM ? ruimteOpNaam(zelfdeM[1]) : null;
+  if (doelZelfde && bronZelfde && doelZelfde.id !== bronZelfde.id) {
+    const bv = bronZelfde.vlakken.find((v: any) => "muren" === v.soort), dv = doelZelfde.vlakken.find((v: any) => "muren" === v.soort);
+    const bk = bv && "gekozen" === bv.kleur.status ? w(bv.kleur.gekozen) : null;
+    const wz = !bv || !dv ? [] : bk
+      ? [{ actie: "kleur", ruimte: doelZelfde.id, vlak: dv.id, wat: "kies", kleur: bk, zekerheid: "zeker" }]
+      : (bv.kleur.kandidaten ?? []).map((k: any) => ({ actie: "kleur", ruimte: doelZelfde.id, vlak: dv.id, wat: "kandidaat", kleur: k, zekerheid: "zeker" }));
+    if (wz.length) {
+      await metKleuren();
+      const u = toepassen(project, { aanvraagId: aanvraagId + "#z", versie: project.versie, door: "klant-chat", wijzigingen: wz }, opties);
+      project = u.project;
+      laatsteWijzigingen = u.toegepast;
+      const dn = klein(doelZelfde.naam);
+      const staat = bk ? `${bk.naam} staat er ook in voor de muren van de ${dn}.` : `Top, voor de ${dn} staan dezelfde kleuren klaar.`;
+      const vr = volgendeRuimte(project, rij.gesprek as any[], (extra.klantVersie ?? 1) >= 3);
+      const klaar = "compleet" === route(project).route && projectStatus(project).teBestellen.length > 0;
+      antwoord = vr
+        ? { tekst: `${staat} ${vr.tekst}`, vraag: "eigen", chips: vr.chips, actie: "geen", volgendeRuimte: vr.ruimte }
+        : { tekst: klaar ? `${staat} Je pakket staat klaar.` : staat, vraag: bk && !klaar ? "kleur" : "geen", actie: "geen" };
+    }
+  }
+  const scanVoorM = !antwoord && (extra.klantVersie ?? 1) >= 3 ? SCAN_VOOR.exec(bericht.trim()) : null;
+  if (scanVoorM) {
+    const r = ruimteOpNaam(scanVoorM[1]);
+    const f = r ? await scanFormulier(project, r.id) : null;
+    if (f && r) antwoord = { tekst: `Top. Dezelfde korte vragen, nu voor de ${klein(r.naam)}.`, vraag: "geen", actie: "geen", formulier: f };
   }
   // Twee lagen omdat de klant niet wist wat er op de muur zit: blijkt het een lichte, geschilderde muur, dan rekenen we daarmee.
   if (!antwoord && LICHT_CHIP.toLowerCase() === bericht.trim().replace(/\.$/, "").toLowerCase()) {
@@ -1991,7 +2056,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Klaar om te bestellen: de browser toont een bestelkaart met pakket, gereedschapskeuze en knop. Dan geen vraag naar rollers en kwasten meer.
   const rt = route(project);
   const heeftSamples = (project.samples ?? []).length + (project.packs ?? []).length > 0;
-  const bestellen = !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !opGrens && !families
+  const bestellen = !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !opGrens && !families && !antwoord.volgendeRuimte
     && ((status.teBestellen.length > 0 && ["compleet", "verf-erbij"].includes(rt.route)) || (heeftSamples && !status.teBestellen.length && ["kiezen", "samples-eerst"].includes(rt.route)));
   if (bestellen) {
     if ("spullen" === antwoord.vraag) { antwoord.vraag = "geen"; antwoord.chips = []; }
@@ -2027,10 +2092,10 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Alleen als de klant de kleur laat liggen of de chat even verlaat (later kiezen, scan, kleuradvies); bij "nog niet
   // weten" zijn de vier keuzes zelf de volgende stap (besluit 10 nov 2026: één stap tegelijk).
   const mailMoment = MAIL_CHIPS.test(bericht.trim());
-  const mailVraag = !rij.bewaard_op && (mailMoment || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen
+  const mailVraag = !rij.bewaard_op && (mailMoment || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen && !antwoord.volgendeRuimte
     && (0 === mailEerder || (1 === mailEerder && mailMoment && !vorigeRoll?.uit?.antwoord?.mailVraag));
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(lagenNoot ? { lagenNoot: true } : {}), ...(antwoord.scanKlaar ? { scanKlaar: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families, ...(antwoord.familiesVoor ? { familiesVoor: String(antwoord.familiesVoor) } : {}) } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(lagenNoot ? { lagenNoot: true } : {}), ...(antwoord.scanKlaar ? { scanKlaar: true } : {}), ...(antwoord.volgendeRuimte ? { volgendeRuimte: String(antwoord.volgendeRuimte) } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families, ...(antwoord.familiesVoor ? { familiesVoor: String(antwoord.familiesVoor) } : {}) } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog, model: !(zonderModel || opGrens) } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), voortgang: voortgang(project, formulierUit),
   };
@@ -2065,7 +2130,7 @@ Deno.serve(async (req) => {
       }
       const sessie = q.get("sessie") ?? "";
       const rij = sessie.length >= 24 ? await laad(sessie) : null;
-      if (q.get("kort")) return j(rij ? { bestaat: true, ruimtes: rij.project.ruimtes.map((r: any) => r.naam) } : { bestaat: false });
+      if (q.get("kort")) return j(rij ? { bestaat: true, ruimtes: rij.project.ruimtes.map((r: any) => r.naam), open: route(rij.project).open.length } : { bestaat: false });
       if (!rij) return j({ leeg: true });
       const status = projectStatus(rij.project);
       if (new URL(req.url).searchParams.get("pakket")) {
