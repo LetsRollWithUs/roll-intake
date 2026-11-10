@@ -1934,6 +1934,14 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     antwoord.vraag = "geen";
     controleLog.push({ poging: "vangnet", fouten: [{ id: "plafondvraag", stuk: "onderdelen al gekozen" }] });
   }
+  // Het plan is compleet en de klant vroeg er niet om: dan geen vraag of er nog lakwerk of andere onderdelen bij
+  // moeten. De bestelkaart is de volgende stap (g70 faalde hierop in de volledige poort van 10 nov 2026).
+  if ("onderdelen" === antwoord.vraag && !antwoord.formulier && "compleet" === route(project).route && projectStatus(project).teBestellen.length > 0
+    && !/\b(ook|nog|erbij|toevoegen|lak\w*|deur\w*|kozijn\w*|plint\w*|radiator\w*|trap|wat kan|andere)\b/i.test(bericht.replace(/\b(doe|schilder|wil) ik (niet|geen)\b[^.!?]*/gi, ""))) {
+    antwoord.tekst = zinnenVan(String(antwoord.tekst ?? "")).filter((z) => !/\?\s*$/.test(z)).join("").trim() || "Genoteerd.";
+    antwoord.vraag = "geen";
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "onderdelenvraag", stuk: "plan is compleet" }] });
+  }
   // De volgordevraag in vaste, eenvoudige woorden: wat de klant net deed (eerste zin) en dan alleen de keuze, zonder
   // opsomming van wat klaar is en wat niet (feedback 10 nov 2026).
   // Samples in het pakket, iets al klaar en de rest nog open, zonder keuze en zonder andere vraag van het model:
@@ -1950,6 +1958,18 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   }
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
+  // De standaardhoogte is een aanname die de klant moet zien. Staat de maat er en noemde het model de hoogte nog niet,
+  // dan zet de server de zin erbij, één keer per gesprek. Anders blijft de hoogte "nog checken" en komt de bestelkaart
+  // een beurt later (g01 hing hierdoor van het model af, volledige poort 10 nov 2026).
+  const hoogteOpen = project.ruimtes.some((r: any) => !telt(r.hoogte) && r.vlakken.some((v: any) => ["muren", "accent"].includes(v.soort)) && ((telt(r.maat.lengte) && telt(r.maat.breedte)) || telt(r.maat.grootte)));
+  const hoogteGetoond = (rij.gesprek as any[]).some((b) => (b.uit?.antwoord?.aannames ?? []).some((a: string) => /\.hoogte$/.test(String(a))));
+  if (hoogteOpen && !hoogteGetoond && !zonderModel && !antwoord.formulier && "maat" !== FORM_VRAGEN[antwoord.vraag] && "overdracht" !== antwoord.actie && !/2,60\s?m/.test(String(antwoord.tekst ?? ""))) {
+    const zin = "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust.";
+    const zinnen = zinnenVan(String(antwoord.tekst ?? ""));
+    const eersteVraag = zinnen.findIndex((z) => /\?\s*$/.test(z));
+    antwoord.tekst = (eersteVraag >= 0 ? [...zinnen.slice(0, eersteVraag), `${zin} `, ...zinnen.slice(eersteVraag)] : [String(antwoord.tekst ?? "").trim(), ` ${zin}`]).join("").trim();
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "hoogte", stuk: "standaardhoogte erbij gezet" }] });
+  }
   // Noemt het antwoord de standaardhoogte, dan is dat een zichtbare aanname: doorgaan = akkoord (ook als het model
   // vergat hem bij aannames te zetten).
   if (/2,60\s?m/.test(String(antwoord.tekst ?? ""))) {
