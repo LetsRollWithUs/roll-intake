@@ -702,6 +702,12 @@ const GATEN: Record<string, [Record<string, string>, string]> = {
   klein: [{ conditie: "scheurtjes" }, "een paar gaatjes of scheurtjes"],
   scheuren: [{ conditie: "scheuren" }, "grotere scheuren"],
 };
+/**
+ * Meerdere soorten muren in één ruimte (feedback 10 nov 2026): we rekenen de hele ruimte met de soort die de meeste
+ * verf vraagt, zodat de klant zeker genoeg heeft. Van zwaar naar licht, met hoe we het tegen de klant zeggen.
+ */
+const MUUR_ORDE = ["kaal", "behang", "onbekend", "donker", "vlies", "licht"];
+const MUUR_KORT: Record<string, string> = { kaal: "kaal stucwerk", behang: "behang dat eraf gaat", onbekend: "twee lagen", donker: "een muur in kleur", vlies: "renovlies", licht: "een lichte muur" };
 const LAK_STAAT: Record<string, [Record<string, string>, string]> = {
   gelakt: [{ materiaal: "hout", afwerking: "lak", conditie: "goed" }, "gelakt"],
   bladdert: [{ materiaal: "hout", afwerking: "lak", conditie: "bladdert" }, "bladdert"],
@@ -711,7 +717,7 @@ const LAK_STAAT: Record<string, [Record<string, string>, string]> = {
 };
 
 /** Een ingevuld formulier naar wijzigingen voor het projectmodel, plus een korte tekst voor het gesprek. */
-function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst: string } {
+function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst: string; noot?: string } {
   const wz: any[] = [];
   const z = { zekerheid: "zeker" };
   let v = f?.waarden ?? {};
@@ -794,9 +800,12 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
     return { wijzigingen: wz, tekst: delen.join("; ") + (hg ? `, muren ${hg.toFixed(2).replace(".", ",")} m hoog` : "") };
   }
   if ("muren" === f?.soort) {
-    const delen: string[] = [];
+    const delen: string[] = [], noten: string[] = [];
     for (const r of ruimtes) {
-      const nu = MUUR_NU[v.ruimtes[r.id].nu], st = MUUR_STAAT[v.ruimtes[r.id].staat] ?? MUUR_STAAT.glad;
+      // Meer soorten aangetikt (nus): de zwaarste telt voor de berekening; de rest noemen we in de uitleg.
+      const nus = (Array.isArray(v.ruimtes[r.id].nus) ? v.ruimtes[r.id].nus : []).filter((k: string) => MUUR_NU[k]);
+      const sleutel = nus.length ? MUUR_ORDE.find((k) => nus.includes(k))! : v.ruimtes[r.id].nu;
+      const nu = MUUR_NU[sleutel], st = MUUR_STAAT[v.ruimtes[r.id].staat] ?? MUUR_STAAT.glad;
       // Nieuw formulier: de gaatjes-vraag geldt voor alle muren en gaat voor de conditie uit de staat.
       const gat = GATEN[v.gaten] ?? null;
       if (!nu) continue;
@@ -805,9 +814,19 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
       for (const vl of r.vlakken.filter((x: any) => !isLak(x.soort) && !(metMuren && "plafond" === x.soort))) {
         for (const [veld, waarde] of Object.entries({ ...nu[0], ...st[0], ...(gat ? gat[0] : {}) })) zet(r, vl, `ondergrond.${veld}`, waarde);
       }
-      delen.push(`${ruimtes.length > 1 ? r.naam + ": " : ""}${nu[1]}, ${st[1]}`);
+      const mix = nus.length > 1;
+      // Kaal plus geschilderde muren is geen nieuwbouw: het plafond rekenen we dan als wit geschilderd, niet als kaal.
+      const pf = r.vlakken.find((x: any) => "plafond" === x.soort);
+      if (mix && "kaal" === sleutel && metMuren && pf && nus.some((k: string) => ["licht", "donker", "vlies"].includes(k)) && "gezegd" !== pf.ondergrond.afwerking?.bron) {
+        // Het formulier liet de klant deze aanname zien ("het plafond rekenen we als wit geschilderd"); vastleggen als
+        // gezien, anders zet plafondWijzigingen het weer op kaal omdat de zwaarste muur kaal is.
+        for (const [veld, waarde] of Object.entries(plafondBijMuren("muurverf", null))) zet(r, pf, `ondergrond.${veld}`, waarde);
+      }
+      delen.push(`${ruimtes.length > 1 ? r.naam + ": " : ""}${mix ? nus.map((k: string) => MUUR_NU[k][1]).join(" en ") : nu[1]}, ${st[1]}`);
+      if (mix) noten.push(`In de ${klein(r.naam)} rekenen we met de muur die de meeste verf vraagt (${MUUR_KORT[sleutel]}), zodat je zeker genoeg hebt.${"behang" !== sleutel && nus.includes("behang") ? " Het behang gaat er eerst af." : ""}`);
     }
     if (GATEN[v.gaten]) delen.push(GATEN[v.gaten][1]);
+    if (noten.length) return { wijzigingen: wz, tekst: `Muren nu: ${delen.join("; ")}`, noot: noten.join(" ") };
     // Alleen het plafond: anders denkt het model dat er muren bij horen en zet het die er weer bij.
     const alleenPlafond = ruimtes.length && ruimtes.every((r: any) => !r.vlakken.some((x: any) => "muren" === x.soort));
     return { wijzigingen: wz, tekst: `${alleenPlafond ? "Plafond" : "Muren"} nu: ${delen.join("; ")}` };
@@ -1333,7 +1352,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   if (formulier && "object" === typeof formulier) {
     let anders: string[] = [];
     let witKiezen: string[] = [];
-    let fw: { wijzigingen: any[]; tekst: string };
+    let fw: { wijzigingen: any[]; tekst: string; noot?: string };
     if ("kleur" === formulier.soort) {
       await metKleuren();
       const kw = kleurWijzigingen(formulier, project, await ixP);
@@ -1379,6 +1398,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
         // Ook als het model verder helpt (richting, twijfel): dit is het moment van de prijs.
         prijsMoment = !antwoord?.kaarten && openMuren(project).length > 0;
       }
+    }
+    // Meer soorten muren in een ruimte: zeg waar we mee rekenen, voor de volgende vraag.
+    if (fw.noot) {
+      if (antwoord?.tekst) antwoord.tekst = `${fw.noot} ${String(antwoord.tekst).replace(/^Genoteerd\.\s*/, "")}`;
+      else tikTekst += `. Zeg eerst kort: ${fw.noot}`;
     }
   }
 
