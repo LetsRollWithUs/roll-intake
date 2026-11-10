@@ -266,7 +266,7 @@ BEVESTIG NEUTRAAL: wat de klant over zijn ruimte zegt, bevestig je zonder oordee
 
 WOORDEN: wat je samen met de klant maakt heet "je verfplan" of "je plan", nooit "schilderplan" of "schilderproject". Zeg niet "gaat mee" of "wat gaat er mee": dat is onduidelijk. Vraag "wat wil je schilderen".
 
-TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Hooguit drie zinnen voor de vraag. Positief, geen druk, geen nepdeadlines. Geen emoji, geen gedachtestreepjes.
+TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Begin een antwoord niet met "Fijn"; zeg "Top" als je iets wilt bevestigen, of ga meteen door. Hooguit drie zinnen voor de vraag. Positief, geen druk, geen nepdeadlines. Geen emoji, geen gedachtestreepjes.
 
 NOOIT: een HEX-code of mengcode noemen; zelf liters, aantallen blikken of bedragen uitrekenen of verzinnen. Vraagt de klant hoeveel verf het is, wat het kost of waarom, vraag dan "pakket" op en noem alleen de getallen die daar staan (en bedragen uit voorwaarden, zoals gratis verzending en de samplekorting); dekking beloven ("een laag is genoeg", "dekt altijd"): zeg "we rekenen met een laag" of "met twee lagen"; retour noemen als geruststelling (op kleur gemengde verf kan niet retour); voorwaarden of productinformatie noemen die niet uit productinfo of voorwaarden komt; renovlies of verf over behang adviseren.
 
@@ -1274,10 +1274,10 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
 
   // De klant weet de richting: laat alle families zien in plaats van er in de tekst een paar te noemen.
   let familiesTonen = RICHTING_CHIP.test(bericht.trim());
-  if (familiesTonen) antwoord = { tekst: "Fijn. Welke kleurfamilie spreekt je aan?", vraag: "geen", actie: "geen" };
+  if (familiesTonen) antwoord = { tekst: "Top. Welke kleurfamilie spreekt je aan?", vraag: "geen", actie: "geen" };
   // De twee knoppen van de kleurvraag: vaste antwoorden, zonder model.
   if (!antwoord && bericht.trim().replace(/\.$/, "").toLowerCase() === WEET_KLEUR.toLowerCase()) {
-    antwoord = { tekst: "Fijn. Welke kleur wordt het? Typ de naam of de code; een kleur van een ander merk kan ook.", vraag: "geen", actie: "geen" };
+    antwoord = { tekst: "Top. Welke kleur wordt het? Typ de naam of de code; een kleur van een ander merk kan ook.", vraag: "geen", actie: "geen" };
   }
   if (!antwoord && bericht.trim().replace(/\.$/, "").toLowerCase() === WEET_NIET.toLowerCase()) {
     antwoord = { tekst: "Dat is helemaal goed. Kies hieronder hoe je verder wilt.", vraag: "geen-idee", actie: "geen" };
@@ -1356,11 +1356,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       // Een meubel heeft alleen zichzelf: meteen door naar hoe het er nu uitziet, met het oppervlak waar we mee rekenen.
       const m = MEUBELS.find((x) => x.k === formulier.waarden.meubel)!;
       const f = volgendeFormulier(project);
-      antwoord = { tekst: `Fijn. Voor je ${klein(m.naam)} rekenen we met ongeveer ${m.m2} m² om te schilderen; noem gerust een andere maat. ${f ? formVraag(f) : ""}`.trim(), vraag: "geen", actie: "geen", formulier: f };
+      antwoord = { tekst: `Top. Voor je ${klein(m.naam)} rekenen we met ongeveer ${m.m2} m² om te schilderen; noem gerust een andere maat. ${f ? formVraag(f) : ""}`.trim(), vraag: "geen", actie: "geen", formulier: f };
     } else if ("start" === formulier.soort) {
       // Na het startscherm: welke onderdelen er per ruimte mee gaan.
       const f = maakFormulier("onderdelen", project, u.toegepast.filter((x: any) => "ruimte-erbij" === x.actie).map((x: any) => x.ruimte));
-      if (f) antwoord = { tekst: `Fijn. ${formVraag(f)}`, vraag: "geen", actie: "geen", formulier: f };
+      if (f) antwoord = { tekst: `Top. ${formVraag(f)}`, vraag: "geen", actie: "geen", formulier: f };
     } else {
       const volgende = volgendeFormulier(project);
       if (volgende) antwoord = { tekst: `Genoteerd. ${formVraag(volgende)}`, vraag: "geen", actie: "geen", formulier: volgende };
