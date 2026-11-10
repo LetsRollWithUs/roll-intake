@@ -170,7 +170,7 @@ RENOVLIES (voorgeschilderd vliesbehang van Roll, een goede onderlaag): bied het 
 ZELF OPLOSSEN: los wat de klant vraagt zelf op. Bied iemand van Roll alleen aan als de klant daar zelf om vraagt, bij vocht, schimmel en de andere gevallen hieronder, of als je het echt niet weet. Vragen over je pakket, lagen, wat erin staat of iets weghalen los je zelf op; bied daarbij geen WhatsApp of meekijken aan.
 DOORZETTEN: actie "overdracht" toont de contactknoppen (WhatsApp, bericht, bellen). Zeg nooit "ik zet het door" of "ik regel dat": de klant kiest zelf hoe hij contact opneemt. Eindig met "Hoe wil je contact opnemen?" en stel daarnaast geen andere vraag.
 WHATSAPP: wil de klant even snel iets vragen of een kleur laten checken, bied dan WhatsApp aan (actie "overdracht"): dat kan altijd en iemand van Roll kijkt mee. Het is minder uitgebreid dan het online kleuradvies (30 minuten video, met kleurplan); noem dat als de klant echt advies wil.
-LEVERTIJD, KLANTENSERVICE, RETOUR, SAMPLES, BETALEN, AFHALEN, SPULLEN, LAKWERK BUITEN, SCHILDERS, PRIJS KLEURADVIES: vraag eerst "voorwaarden" en noem alleen wat daar staat, met "meestal"; beloof geen vaste bezorgdatum.
+LEVERTIJD, KLANTENSERVICE, RETOUR, KLEURGARANTIE, SAMPLES, BETALEN, AFHALEN, SPULLEN, LAKWERK BUITEN, SCHILDERS, PRIJS KLEURADVIES: vraag eerst "voorwaarden" en noem alleen wat daar staat, met "meestal"; beloof geen vaste bezorgdatum.
 SAMPLEKORTING: gaat het over samples bestellen, dan mag je (hooguit een keer per gesprek) noemen dat de klant € 10 korting krijgt op een bestelling vanaf € 100, met de kortingscode bij de samples. Samples komen via de brievenbus; de klant hoeft niet thuis te zijn. Vraag eerst "voorwaarden" en neem die tekst over; noem nooit de code zelf.
 
 DOEL: de klant eindigt met een passend plan, vertrouwen in het resultaat en een duidelijke volgende stap. Elke vraag moet bijdragen aan een mooier resultaat, minder gedoe of een betere aankoop.
@@ -201,9 +201,10 @@ Zet " ?" achter een regel die je afleidt maar die de klant niet zei: dat wordt e
 
 VRAAG VAN DE KLANT GAAT VOOR: stelt de klant een vraag (levertijd, droogtijd, betalen, hoe iets werkt), beantwoord die eerst, met de informatie uit voorwaarden of productinfo (vraag die tool op). Weet je het niet zeker, zeg dat eerlijk en noem de klantenservice. Pas daarna stel je de volgende vraag voor het plan.
 
-VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen. Na de muren toont de server eerst wat het plan ongeveer kost; daarna komt de kleur.
+VOLGORDE NAAR DE KLANT: begint de klant over kleur of twijfel, help dan eerst met kleur; begint hij met een klus, vraag dan het ontbrekende: onderdelen (plafond mee?), maat, de muren nu, kleur. Een vraag mag dingen bundelen die bij elkaar horen. Na de muren vraagt de server meteen naar de kleur. Noem zelf geen prijs voordat de kleuren gekozen zijn, tenzij de klant ernaar vraagt.
 
-WAAROM DEZE PRIJS: vraagt de klant waarom het zoveel kost, of vindt hij het duur, zeg dan kort en zonder druk dat Roll premium muurverf is met dekkingsklasse 1 en schrobklasse 1, de hoogste klassen, en dat hij vaak in een keer dekt. Zeg nooit dat een laag altijd genoeg is. Is de kleur nog open, noem dan de indicatie uit de tool pakket (ongeveer van-tot) en zeg niet dat er nog geen bedrag is. Hooguit drie zinnen; geen rekenuitleg tenzij de klant ernaar vraagt. Vraag daarna of je hem verder kunt helpen.
+WAT KOST HET (kleur nog open): vraagt de klant naar de prijs, noem dan de indicatie uit de tool pakket: "alles in één kleur komt op ongeveer € X". Leg uit dat de prijs afhangt van het aantal kleuren, niet van welke kleur: elke kleur krijgt eigen blikken, dus dezelfde kleur in meer ruimtes scheelt en een andere kleur per muur kost meer. Zeg nooit dat de prijs van de kleur zelf afhangt, en niet dat er nog geen bedrag is.
+WAAROM DEZE PRIJS: vindt de klant het duur, zeg dan kort en zonder druk waarom Roll het waard is: vaak in een laag klaar (dat scheelt verf en een tweede ronde schilderen), streeploos en extreem mat, geurloos en veilig (op waterbasis), en goed schoon te maken (schrobklasse 1). Zeg nooit dat een laag altijd genoeg is. Twijfelt de klant over de kleur, dan mag je de kleurgarantie noemen (uit voorwaarden) en een sample aanraden. Hooguit drie zinnen; geen rekenuitleg tenzij de klant ernaar vraagt. Vraag daarna of je hem verder kunt helpen.
 
 DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij) en vraag alleen naar de muren. Wat de klant over de muren zegt (behang, structuur, scheuren, een duidelijke kleur) geldt NIET voor het plafond. Het plafond rekent de server als wit geschilderd en glad, bij kale muren als kaal en glad, en meldt die aanname zelf: schrijf daarvoor geen regels en vraag er niet naar. Alleen als de klant het plafond zelf noemt ("het plafond is ook donker"), leg je dat vast op <ruimte>.plafond.
 - "Geschilderd, wit of heel licht, glad" = afwerking muurverf, kleurNu licht, structuur glad, conditie goed.
@@ -404,7 +405,7 @@ async function pakketUitleg(project: any) {
   const [d, ind] = await Promise.all([bereken(naarRekenkern(project).plan), indicatie(project).catch(() => null)]);
   return {
     // Zolang er kleuren open zijn: dezelfde prijsindicatie als in de kaart, zodat Charlie niet zegt dat er nog geen bedrag is.
-    ...(ind ? { indicatie_zolang_kleur_open: { van: Math.round(ind.van), tot: Math.round(ind.tot), uitleg: "Verf en voorbereiding voor het hele plan, afhankelijk van de kleur (licht of donker). Noem dit als ongeveer van-tot; het precieze bedrag volgt als de kleur gekozen is." } } : {}),
+    ...(ind ? { indicatie_zolang_kleur_open: { van: Math.round(ind.van), tot: Math.round(ind.tot), uitleg: "Verf en voorbereiding voor het hele plan als alles in een kleur wordt geschilderd. Elke extra kleur is een extra blik, dus meer kleuren kost meer. Noem dit als 'alles in één kleur: ongeveer'; het precieze bedrag volgt als de kleuren gekozen zijn." } } : {}),
     per_ruimte: (d.ruimtes ?? []).map((r: any) => ({ naam: r.naam, vlakken: (r.m2?.vlakken ?? []).filter((v: any) => v.m2).map((v: any) => ({ soort: v.soort, m2: Math.round(v.m2 * 10) / 10, aantal: v.aantal ?? undefined })) })),
     regels: (d.regels ?? []).map((r: any) => ({ aantal: r.aantal, product: r.titel, toelichting: r.detail || r.voordeel || undefined, bedrag: r.totaal })),
     gereedschap: (d.tools ?? []).filter((t: any) => t.aan).map((t: any) => ({ aantal: t.aantal, product: t.naam, waarom: t.tip || undefined, bedrag: t.prijs * t.aantal })),
@@ -1019,7 +1020,8 @@ function meePlan(plan: any, project: any) {
  * Wat de verf ongeveer kost zolang er kleuren open zijn. Hoeveel lagen het worden hangt van de kleur af, dus we
  * rekenen met een lichte en een donkere Roll-kleur (plafond: Blank Page). Zonder startpakket en samples.
  */
-const INDICATIE_KLEUREN = ["Off Duty", "Hidden Depths"];
+// Alles in één kleur (feedback 10 nov 2026): de prijs hangt af van het aantal kleuren, niet van welke kleur.
+const INDICATIE_KLEUREN = ["Off Duty"];
 async function indicatie(project: any) {
   if ("compleet" === route(project).route) return null;
   const basis = meePlan(naarRekenkern(project).plan, project);
@@ -1132,16 +1134,20 @@ function sampleKleurstap(project: any) {
 const openMuren = (project: any) => project.ruimtes.flatMap((r: any) => r.vlakken.filter((v: any) => ["muren", "accent"].includes(v.soort) && "gekozen" !== v.kleur.status).map((v: any) => ({ r, v })));
 
 /**
- * Eerst ruimtes en prijs, dan de kleur (besluit 9 nov 2026): na de laatste vraag over de muren zegt Charlie dat het
- * plan staat; de browser toont eronder wat het ongeveer kost, waarom, en of we het plan mogen mailen. Dan pas de
- * kleurvraag. Heeft de klant al een richting of twijfelt hij tussen kleuren, dan helpt het model daar verder mee.
+ * Na de muren (besluit 10 nov 2026): één ding tegelijk. Kort wat er staat en dan alleen de kleurvraag; geen prijs, geen
+ * pitch, geen mailkaart. De prijs hangt af van het aantal kleuren, dus die komt pas als de kleuren er zijn (of als de
+ * klant ernaar vraagt: dan "alles in één kleur"). Heeft de klant al een richting of twijfel, dan helpt het model verder.
  */
-function prijsStap(project: any) {
+async function kleurStap(project: any) {
   const open = openMuren(project);
   if (!open.length || open.some((x: any) => "open" !== x.v.kleur.status)) return null;
-  const vraag = project.ruimtes.length > 1 ? "weet je al welke kleuren de muren krijgen?" : `weet je al welke kleur de muren van je ${klein(open[0].r.naam)} krijgen?`;
-  // Geen "hieronder": op de telefoon staat de prijs bovenin, op de computer onder het antwoord.
-  return { tekst: `Je plan staat, en je ziet nu ook wat het ongeveer kost. Dan de kleur: ${vraag}`, vraag: "kleurroute", actie: "geen", prijs: true };
+  const namen = project.ruimtes.map((r: any) => klein(r.naam));
+  const lijst = namen.length > 1 ? `${namen.slice(0, -1).join(", ")} en ${namen[namen.length - 1]}` : namen[0];
+  const d = await bereken(naarRekenkern(project).plan).catch(() => null);
+  const m2 = (d?.ruimtes ?? []).reduce((t: number, r: any) => t + (r.m2?.vlakken ?? []).filter((v: any) => ["muren", "accent"].includes(v.soort)).reduce((u: number, v: any) => u + (Number(v.m2) || 0), 0), 0);
+  const maat = m2 >= 1 ? `${namen.length > 1 ? ", samen" : ","} ongeveer ${Math.round(m2)} m² muur` : "";
+  const vraag = project.ruimtes.length > 1 ? "Weet je al welke kleuren je wilt?" : "Weet je al welke kleur de muren krijgen?";
+  return { tekst: `Je plan staat: je ${lijst}${maat}. ${vraag}`, vraag: "kleurroute", actie: "geen" };
 }
 
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
@@ -1308,6 +1314,11 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   if (!antwoord && bericht.trim().replace(/\.$/, "").toLowerCase() === WEET_KLEUR.toLowerCase()) {
     antwoord = { tekst: "Top. Welke kleur wordt het? Typ de naam of de code; een kleur van een ander merk kan ook.", vraag: "geen", actie: "geen" };
   }
+  // "Later kiezen" zonder dat er nog een formulier openstaat: kort bevestigen en geen nieuwe vraag, zodat de vervolgstap
+  // (samples of je plan mailen) de enige stap is (besluit 10 nov 2026: één stap tegelijk).
+  if (!antwoord && /^later kiezen\.?$/i.test(bericht.trim()) && !volgendeFormulier(project)) {
+    antwoord = { tekst: "Prima, de kleur blijft open. Zodra je kiest, zetten we de verf erbij.", vraag: "geen", actie: "geen" };
+  }
   if (!antwoord && bericht.trim().replace(/\.$/, "").toLowerCase() === WEET_NIET.toLowerCase()) {
     antwoord = { tekst: "Dat is helemaal goed. Kies hieronder hoe je verder wilt.", vraag: "geen-idee", actie: "geen" };
   }
@@ -1348,7 +1359,6 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Een ingevuld formulier: direct vastleggen. Is er daarna nog een formulier nodig, dan komt dat meteen,
   // zonder model; anders gaat het model verder met de nieuwe stand.
   let formTekst = "";
-  let prijsMoment = false;
   if (formulier && "object" === typeof formulier) {
     let anders: string[] = [];
     let witKiezen: string[] = [];
@@ -1394,9 +1404,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       const volgende = volgendeFormulier(project);
       if (volgende) antwoord = { tekst: `Genoteerd. ${formVraag(volgende)}`, vraag: "geen", actie: "geen", formulier: volgende };
       else {
-        antwoord = sampleKleurstap(project) ?? prijsStap(project);
-        // Ook als het model verder helpt (richting, twijfel): dit is het moment van de prijs.
-        prijsMoment = !antwoord?.kaarten && openMuren(project).length > 0;
+        antwoord = sampleKleurstap(project) ?? (await kleurStap(project));
       }
     }
     // Meer soorten muren in een ruimte: zeg waar we mee rekenen, voor de volgende vraag.
@@ -1679,11 +1687,13 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Bij de prijs en bij "nog niet weten" of "later kiezen" ook: dan kunnen we opvolgen. Hooguit twee keer, nooit twee beurten op rij.
   const mailEerder = (rij.gesprek as any[]).filter((b) => b.uit?.antwoord?.mailVraag).length;
   const vorigeRoll = [...(rij.gesprek as any[])].reverse().find((b) => "roll" === b.rol);
-  const mailMoment = prijsMoment || MAIL_CHIPS.test(bericht.trim()) || "geen-idee" === antwoord.vraag;
+  // Alleen als de klant de kleur laat liggen of de chat even verlaat (later kiezen, scan, kleuradvies); bij "nog niet
+  // weten" zijn de vier keuzes zelf de volgende stap (besluit 10 nov 2026: één stap tegelijk).
+  const mailMoment = MAIL_CHIPS.test(bericht.trim());
   const mailVraag = !rij.bewaard_op && (mailMoment || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen
     && (0 === mailEerder || (1 === mailEerder && mailMoment && !vorigeRoll?.uit?.antwoord?.mailVraag));
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(prijsMoment || antwoord.prijs ? { prijs: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
     ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), voortgang: voortgang(project, formulierUit),
   };
