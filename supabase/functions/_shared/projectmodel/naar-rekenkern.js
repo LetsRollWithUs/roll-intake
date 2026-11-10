@@ -142,6 +142,7 @@ export function naarRekenkern( project ) {
 			tools: 'onbekend' === spullen ? [] : null,
 			uit: [],
 			zonder: project.zonder || [],
+			met: project.met || [],
 			samples: ( project.samples || [] ).map( ( s ) => ( { naam: s.naam, type: s.type || 'sticker' } ) ),
 			packs: project.packs || [],
 			land: w( project.land, 'NL' ),

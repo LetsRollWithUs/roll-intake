@@ -149,6 +149,7 @@ function eindKlopt( sleutel, verwacht, r, alle ) {
 	if ( [ 'conflict', 'pakketkaart', 'bestellen', 'project', 'ontvangen-status' ].includes( sleutel ) ) return null;
 	if ( sleutel === 'mens' ) return ( r.mens ?? [] ).some( ( m ) => String( m.reden ).includes( String( verwacht ).split( ' ' )[ 0 ] ) ) || alle.some( ( x ) => x.antwoord?.actie === 'overdracht' );
 	if ( sleutel === 'doorverwijzing' ) return alle.some( ( x ) => [ 'stappen', 'overdracht' ].includes( x.antwoord?.actie ) );
+	if ( sleutel === 'met' ) return ( p?.met ?? [] ).some( ( x ) => String( x ).toLowerCase().includes( String( verwacht ).toLowerCase() ) );
 	if ( sleutel === 'zonder' ) return ( p?.zonder ?? [] ).some( ( x ) => String( x ).toLowerCase().includes( String( verwacht ).toLowerCase() ) );
 	if ( sleutel === 'samples' ) return verwacht.every( ( n ) => ( p?.samples ?? [] ).some( ( s ) => zelfde( s.naam, n ) ) );
 	// Samplekleuren uit de link van een mail: precies deze (in elke volgorde), of zoveel, en de bron van het gesprek.
@@ -340,6 +341,13 @@ async function draaiGesprek( g ) {
 			const pk = await fetch( `${ CHAT_URL }?sessie=${ sessie }&pakket=1` ).then( ( x ) => x.json() ).catch( () => ( {} ) );
 			const ok = g.indicatie ? pk.indicatie?.van > 0 && pk.indicatie.tot >= pk.indicatie.van : ! pk.indicatie;
 			if ( ! ok ) fouten.push( `indicatie ${ JSON.stringify( pk.indicatie ) }, verwacht ${ g.indicatie ? 'een bedrag' : 'geen' }` );
+		}
+		// Gereedschap in het pakket (zoals de bestelkaart het toont): wat aan staat en wat niet.
+		if ( g.gereedschap ) {
+			const pk = await fetch( `${ CHAT_URL }?sessie=${ sessie }&pakket=1` ).then( ( x ) => x.json() ).catch( () => ( {} ) );
+			const aan = ( pk.pakket?.tools ?? [] ).filter( ( t ) => t.aan ).map( ( t ) => String( t.naam ).toLowerCase() );
+			for ( const n of g.gereedschap.aan ?? [] ) { checks++; if ( ! aan.some( ( x ) => x.includes( n.toLowerCase() ) ) ) fouten.push( `gereedschap mist ${ n } (aan: ${ aan.join( ', ' ) || 'niets' })` ); }
+			for ( const n of g.gereedschap.uit ?? [] ) { checks++; if ( aan.some( ( x ) => x.includes( n.toLowerCase() ) ) ) fouten.push( `gereedschap bevat ten onrechte ${ n }` ); }
 		}
 		// Wat de klant na herladen ziet: het bewaarde gesprek, inclusief de teksten die de server zelf maakt.
 		if ( g.gesprekBevat || g.gesprekNiet ) {

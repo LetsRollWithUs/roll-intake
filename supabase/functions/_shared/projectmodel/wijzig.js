@@ -190,17 +190,17 @@ export function toepassen( project, aanvraag, opties = {} ) {
 				break;
 			}
 			case 'zonder': {
-				// Gereedschap dat de klant niet wil: weg uit het pakket en de winkelwagen, met 'terug' zet je het weer aan.
+				// Gereedschap dat de klant niet wil: weg uit het pakket en de winkelwagen, met 'terug' zet je het (weer) aan.
 				const naam = String( wz.naam || '' ).trim().slice( 0, 60 );
 				if ( naam.length < 4 ) {
 					weiger( wz, 'Welk product moet eruit?' );
 					break;
 				}
+				// 'terug' ("met <product>") zet het erin, ook een extra die standaard uit staat (losse roller, schuurblok).
 				const klein = naam.toLowerCase();
 				p.zonder = ( p.zonder || [] ).filter( ( x ) => x.toLowerCase() !== klein );
-				if ( 'terug' !== wz.wat ) {
-					p.zonder.push( naam );
-				}
+				p.met = ( p.met || [] ).filter( ( x ) => x.toLowerCase() !== klein );
+				( 'terug' === wz.wat ? p.met : p.zonder ).push( naam );
 				uit.toegepast.push( wz );
 				break;
 			}
