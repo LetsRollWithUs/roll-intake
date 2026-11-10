@@ -1,4 +1,5 @@
-// Reken-engine voor de kleuradvies-offerte. Zelfde constanten als de roll-verfcalculator plugin.
+// Reken-engine voor de kleuradvies-offerte. Zelfde constanten als de roll-verfcalculator plugin
+// (bron: Roll_VC_Config; overzicht op roll.nl/offerte/beheer, dat ook verschillen met deze kopie toont).
 // Het dashboard toont hiermee m² en aantallen; de offerte-tool rekent de definitieve blikken en
 // prijzen (muurverf/lak per kleur via de Ark-configurator, live uit WooCommerce).
 //
@@ -8,8 +9,9 @@
 export const MUURVERF_DEKKING = 8.0; // m² per liter
 export const LAK_PER_M2 = 0.09; // liter per m² (= 90 ml/m²)
 export const VOORSTRIJK_DEKKING = 6.8; // m² per liter
-export const PRIMER_DEKKING = 10.7; // m² per liter
-export const STANDAARD_LAGEN = 2;
+export const PRIMER_DEKKING = 8.7; // m² per liter
+export const STANDAARD_LAGEN = 1; // muurverf; dekt meestal in één laag (Roll_VC_Config::LAGEN)
+export const STANDAARD_LAGEN_LAK = 2; // lak (Roll_VC_Config::LAGEN_LAK)
 export const STANDAARD_HOOGTE = 2.6; // m
 export const MARGE_NORMAAL = 1.1;
 export const MARGE_ZONDER_VOORBEHANDELING = 1.15; // nieuw stucwerk zonder voorstrijk
@@ -57,7 +59,7 @@ export interface RoomMeasure {
   unknown?: boolean;
   // Geschatte kamergrootte (vloer) als de klant de maten niet weet; maten zijn dan afgeleid.
   geschat?: KamerGrootte;
-  coats: number; // standaard 2
+  coats: number; // lagen muurverf, standaard 1 (lak altijd STANDAARD_LAGEN_LAK)
   ceiling_color?: string;
   wood_color?: string;
   // Handmatige keuze van de styliste; leeg = afgeleid uit de ondergrond/staat.
@@ -206,7 +208,7 @@ function paintByColor(m: RoomMeasure): { muur: Map<string, number>; lak: Map<str
   for (const w of m.walls ?? []) add(muur, w.color, (wallVlakArea(w) * lagen) / MUURVERF_DEKKING * marge);
   add(muur, m.ceiling_color, (ceilingArea(m) * lagen) / MUURVERF_DEKKING * marge);
   const lak = new Map<string, number>();
-  add(lak, m.wood_color, woodworkArea(m) * lagen * LAK_PER_M2 * marge);
+  add(lak, m.wood_color, woodworkArea(m) * STANDAARD_LAGEN_LAK * LAK_PER_M2 * marge);
   return { muur, lak };
 }
 

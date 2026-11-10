@@ -6,7 +6,7 @@ import { buildTaskPayload, type RollTask } from "./RollHelpForm";
 import { VoorstelPanel } from "./VoorstelPanel";
 import { TrashIcon, iconBtn } from "./icons";
 import {
-  calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, TRAP_M2, needsVoorstrijk, needsPrimer, needsRenovlies,
+  calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, STANDAARD_LAGEN, TRAP_M2, needsVoorstrijk, needsPrimer, needsRenovlies,
   type RoomMeasure, type MaterialLine,
 } from "@/lib/verfcalc";
 
@@ -272,7 +272,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
               {showWood(r) && toggle("Primer", needsPrimer(m), m.primer === undefined, (v) => setRoom(r.id, { primer: v }), "Standaard aan bij kaal hout of metaal")}
               {showWalls(r) && toggle("Renovlies", needsRenovlies(m), m.renovlies === undefined, (v) => setRoom(r.id, { renovlies: v }), "Zet aan als de muren oneffen zijn of het behang eraf gaat")}
               <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-                lagen <input className="rd-input" inputMode="numeric" value={m.coats || ""} onChange={(e) => setRoom(r.id, { coats: parseInt(e.target.value, 10) || 2 })} style={{ height: 32, width: 52 }} />
+                lagen muurverf <input className="rd-input" inputMode="numeric" value={m.coats || ""} onChange={(e) => setRoom(r.id, { coats: parseInt(e.target.value, 10) || STANDAARD_LAGEN })} style={{ height: 32, width: 52 }} title="Standaard 1 laag; lak rekent altijd met 2 lagen" />
               </label>
             </div>
 

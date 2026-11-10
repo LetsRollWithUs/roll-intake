@@ -34,7 +34,7 @@ export interface OfferSurface {
   naam: string;
   type: "muur" | "lak";
   ondergrond: string;
-  lagen: number;
+  lagen?: number; // weggelaten = standaard van de offerte-tool (muur 1, lak 2)
   renovlies: boolean;
   voorbehandeling: boolean;
   vlakken: Vlak[];
@@ -73,7 +73,8 @@ export function buildOfferPayload(row: {
     const dMuur = mine.find((a) => !isWoodS(a.surface ?? "") && !isCeilS(a.surface ?? ""))?.color ?? "";
     const dPlaf = mine.find((a) => isCeilS(a.surface ?? ""))?.color ?? "";
     const dHout = mine.find((a) => isWoodS(a.surface ?? ""))?.color ?? "";
-    const lagen = n(m.coats) || 2;
+    // Lagen alleen meesturen als ze zijn ingevuld; anders kiest de offerte-tool zijn eigen standaard (muur 1 laag).
+    const lagen = n(m.coats) || undefined;
 
     const walls = (m.walls ?? []).filter((w) => n(w.w) > 0);
     const plaf = (m.ceilings ?? []).filter((c) => n(c.l) > 0 && n(c.b) > 0);
@@ -113,7 +114,7 @@ export function buildOfferPayload(row: {
         naam: `${r.label} houtwerk`,
         type: "lak",
         ondergrond: m.wood_substrate === "kaal" ? "kaal" : "gelakt",
-        lagen,
+        // Lak: geen muurlagen meesturen; de offerte-tool rekent lak met zijn standaard (2 lagen).
         renovlies: false,
         voorbehandeling: m.primer ?? m.wood_substrate === "kaal",
         vlakken: [{ soort: "lak", objecten, kleurId: 0, kleurNaam: (m.wood_color ?? "").trim() || dHout }],
