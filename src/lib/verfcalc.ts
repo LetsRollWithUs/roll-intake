@@ -5,18 +5,39 @@
 //
 // Deze module is puur (geen React, geen I/O) zodat de intake en het dashboard exact hetzelfde rekenen.
 
-// A. Vaste rekenconstanten (uit de plugin, niet zelf verzinnen)
-export const MUURVERF_DEKKING = 8.0; // m² per liter
-export const LAK_PER_M2 = 0.09; // liter per m² (= 90 ml/m²)
-export const VOORSTRIJK_DEKKING = 6.8; // m² per liter
-export const PRIMER_DEKKING = 8.7; // m² per liter
-export const STANDAARD_LAGEN = 1; // muurverf; dekt meestal in één laag (Roll_VC_Config::LAGEN)
-export const STANDAARD_LAGEN_LAK = 2; // lak (Roll_VC_Config::LAGEN_LAK)
+// A. Rekenconstanten. Bron is de offerte-plugin (roll.nl/offerte/beheer); laadRekenregels() in
+// src/lib/rekenregels.ts haalt de geldende waarden live op en zet ze hier via zetRekenregels().
+// De getallen hieronder zijn alleen de terugval als roll.nl niet bereikbaar is.
+export let MUURVERF_DEKKING = 8.0; // m² per liter
+export let LAK_PER_M2 = 0.09; // liter per m² (= 90 ml/m²)
+export let VOORSTRIJK_DEKKING = 6.8; // m² per liter
+export let PRIMER_DEKKING = 8.7; // m² per liter
+export let STANDAARD_LAGEN = 1; // muurverf; dekt meestal in één laag
+export let STANDAARD_LAGEN_LAK = 2; // lak
 export const STANDAARD_HOOGTE = 2.6; // m
-export const MARGE_NORMAAL = 1.1;
-export const MARGE_ZONDER_VOORBEHANDELING = 1.15; // nieuw stucwerk zonder voorstrijk
-export const RENOVLIES_SNIJVERLIES = 1.1; // 10%
+export let MARGE_NORMAAL = 1.1;
+export let MARGE_ZONDER_VOORBEHANDELING = 1.15; // nieuw stucwerk zonder voorstrijk
+export let RENOVLIES_SNIJVERLIES = 1.1; // factor: 10% snijverlies
 export const LIJM_M2_PER_L = 4.8; // 5 L dekt 24-30 m²; we rekenen voorzichtig met de ondergrens
+
+// Rekenregels zoals de plugin ze levert (GET /wp-json/roll-advies/v1/rekenregels → regels).
+export interface PluginRekenregels {
+  dekking_muur?: number; lak_ml_per_m2?: number; dekking_voorstrijk?: number; dekking_primer?: number;
+  lagen?: number; lagen_lak?: number; marge?: number; marge_zonder_voor?: number; snijverlies?: number;
+}
+const ok = (v: unknown, min: number, max: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
+/** Zet de live waarden uit de plugin; onzinnige of ontbrekende waarden laten de terugval staan. */
+export function zetRekenregels(r: PluginRekenregels): void {
+  if (ok(r.dekking_muur, 4, 14)) MUURVERF_DEKKING = r.dekking_muur;
+  if (ok(r.lak_ml_per_m2, 40, 200)) LAK_PER_M2 = r.lak_ml_per_m2 / 1000;
+  if (ok(r.dekking_voorstrijk, 3, 15)) VOORSTRIJK_DEKKING = r.dekking_voorstrijk;
+  if (ok(r.dekking_primer, 4, 15)) PRIMER_DEKKING = r.dekking_primer;
+  if (ok(r.lagen, 1, 3)) STANDAARD_LAGEN = Math.round(r.lagen);
+  if (ok(r.lagen_lak, 1, 3)) STANDAARD_LAGEN_LAK = Math.round(r.lagen_lak);
+  if (ok(r.marge, 1, 1.5)) MARGE_NORMAAL = r.marge;
+  if (ok(r.marge_zonder_voor, 1, 1.6)) MARGE_ZONDER_VOORBEHANDELING = r.marge_zonder_voor;
+  if (ok(r.snijverlies, 0, 0.5)) RENOVLIES_SNIJVERLIES = 1 + r.snijverlies;
+}
 // Standaard vaste trap (lakwerk): 13 treden van 80 cm, aantrede 22 cm, optrede 20 cm, twee trapbomen.
 // Treden 2,3 + stootborden 2,1 + trapbomen 1,9 = ca. 6 m², zonder leuning en spijlen.
 export const TRAP_M2 = 6;

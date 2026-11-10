@@ -10,8 +10,9 @@ import { BookFlow } from "./booking/BookFlow";
 import { BookDone } from "./booking/BookDone";
 import { ManageBooking } from "./booking/ManageBooking";
 import { PlanFlow } from "./booking/PlanFlow";
+import { laadRekenregels } from "./lib/rekenregels";
 
-createRoot(document.getElementById("root")!).render(
+const start = () => createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
@@ -26,3 +27,8 @@ createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// Rekenregels live uit de offerte-plugin. Het beheer (waar we verf uitrekenen) wacht er even op;
+// de klant-intake start meteen en krijgt de waarden op de achtergrond.
+if (location.pathname.startsWith("/beheer")) laadRekenregels().finally(start);
+else { start(); void laadRekenregels(); }
