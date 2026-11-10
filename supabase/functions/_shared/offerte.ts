@@ -91,7 +91,8 @@ export function buildOfferPayload(row: {
         type: "muur",
         ondergrond: m.wall_substrate === "nieuw" ? "nieuw" : "bestaand",
         lagen,
-        renovlies: m.renovlies ?? (m.wall_condition === "oneffen" || m.wall_condition === "scheuren"),
+        // Renovlies kies je zelf (besluit 10 nov 2026); niet meer automatisch aan bij oneffen muren of scheuren.
+        renovlies: m.renovlies ?? false,
         voorbehandeling: m.voorstrijk ?? m.wall_substrate === "nieuw",
         vlakken,
       });

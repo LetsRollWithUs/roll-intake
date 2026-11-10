@@ -83,7 +83,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // Afgeleide vlaggen (briefing): nieuw stucwerk -> voorstrijk, kaal -> primer, oneffen/scheuren -> renovlies.
 export const needsVoorstrijk = (m: RoomMeasure) => m.voorstrijk ?? m.wall_substrate === "nieuw";
 export const needsPrimer = (m: RoomMeasure) => m.primer ?? m.wood_substrate === "kaal";
-export const needsRenovlies = (m: RoomMeasure) => m.renovlies ?? (m.wall_condition === "oneffen" || m.wall_condition === "scheuren");
+// Renovlies kies je zelf (besluit 10 nov 2026); niet meer automatisch aan bij oneffen muren of scheuren.
+export const needsRenovlies = (m: RoomMeasure) => m.renovlies ?? false;
 export const margeFor = (m: RoomMeasure) => (m.wall_substrate === "nieuw" && !needsVoorstrijk(m) ? MARGE_ZONDER_VOORBEHANDELING : MARGE_NORMAAL);
 
 // C. Oppervlaktes

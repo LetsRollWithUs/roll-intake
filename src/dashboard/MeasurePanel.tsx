@@ -270,7 +270,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {(showWalls(r) || showCeiling(r)) && toggle("Voorstrijk", needsVoorstrijk(m), m.voorstrijk === undefined, (v) => setRoom(r.id, { voorstrijk: v }), "Standaard aan bij nieuw stucwerk of gipsplaat")}
               {showWood(r) && toggle("Primer", needsPrimer(m), m.primer === undefined, (v) => setRoom(r.id, { primer: v }), "Standaard aan bij kaal hout of metaal")}
-              {showWalls(r) && toggle("Renovlies", needsRenovlies(m), m.renovlies === undefined, (v) => setRoom(r.id, { renovlies: v }), "Standaard aan bij oneffen muren, scheuren of als het behang eraf gaat")}
+              {showWalls(r) && toggle("Renovlies", needsRenovlies(m), m.renovlies === undefined, (v) => setRoom(r.id, { renovlies: v }), "Zet aan als de muren oneffen zijn of het behang eraf gaat")}
               <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
                 lagen <input className="rd-input" inputMode="numeric" value={m.coats || ""} onChange={(e) => setRoom(r.id, { coats: parseInt(e.target.value, 10) || 2 })} style={{ height: 32, width: 52 }} />
               </label>
