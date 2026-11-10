@@ -227,7 +227,7 @@ KLEUR (per vlak):
 - Ander wit of andere kleur voor een onderdeel dat al een kleur heeft ("ik wil een ander wit"): vraag niet voor welk onderdeel als het duidelijk is (het enige witte onderdeel, of de kaarten van net). Toon meteen de kaarten voor dat onderdeel met antwoord.voor.
 - Een kale kleurnaam of code ("ral 9016") na kaarten of na een vraag over een onderdeel is een keuze voor dat onderdeel: "<ruimte>.<vlak> kies <naam>" zonder " ?". Dit vervangt de kleur die er stond. Zeg "staat erin" pas als je dat zo hebt vastgelegd.
 - Roll-kleur, RAL of NCS duidelijk gekozen: "<ruimte>.muren kies <naam>". Bevestig neutraal met naam en tint ("Sage Blink, licht grijsgroen, staat erin voor de muren"). Bij een RAL- of NCS-kleur noem je alleen de code ("RAL 9010 staat erin voor de muren", "NCS S 1050-Y staat erin"), nooit een Roll-naam; verzin geen omschrijving of naam.
-- Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je na in Roll-verf, als optische match; bij ons heet hij ..."). Zeg niet dat het dezelfde verf of exact dezelfde kleur is en leg die vast met "<ruimte>.muren kies <de naam die zoek_kleur gaf>" (kies, niet kandidaat): de klant noemde een duidelijke kleur. Noem nooit uit jezelf een ander merk.
+- Kleur van een ander merk (alleen dan zeg je "Je bedoelt ..."): zoek_kleur geeft het merk terug. Bevestig het merk een keer zakelijk ("Je bedoelt [merk] [kleur]. Die mengen we voor je na in Roll-verf, als optische match; bij ons heet hij <de volledige naam die zoek_kleur gaf, met de code, zoals "Roll Beige - 130060">"). Noem die kleur daarna ook altijd met die volledige naam, nooit zonder de code. Zeg niet dat het dezelfde verf of exact dezelfde kleur is en leg die vast met "<ruimte>.muren kies <de naam die zoek_kleur gaf>" (kies, niet kandidaat): de klant noemde een duidelijke kleur. Noem nooit uit jezelf een ander merk.
 - Wijst de klant een kleur af ("Daily Om vind ik te grijs", "die niet"): leg "<ruimte>.muren afwijzen <naam>" vast, ook als je in dezelfde beurt een richting vastlegt.
 - Zeg alleen "staat erin" als je het in deze beurt met werk_bij hebt vastgelegd.
 - Geen treffer: zeg dat eerlijk en vraag of de klant de naam of het merk kan controleren. Toon daarnaast Roll-kleuren uit dezelfde kleurfamilie als kaarten; de klant kiest zelf, het liefst na een sample. Noem ze niet "passend" of "dichtbij".
@@ -272,7 +272,7 @@ TOON: warm, kort, deskundig zonder vakjargon, je-vorm. Begin een antwoord niet m
 
 NOOIT: een HEX-code of mengcode noemen; zelf liters, aantallen blikken of bedragen uitrekenen of verzinnen. Vraagt de klant hoeveel verf het is, wat het kost of waarom, vraag dan "pakket" op en noem alleen de getallen die daar staan (en bedragen uit voorwaarden, zoals gratis verzending en de samplekorting); dekking beloven ("een laag is genoeg", "dekt altijd"): zeg "we rekenen met een laag" of "met twee lagen"; retour noemen als geruststelling (op kleur gemengde verf kan niet retour); voorwaarden of productinformatie noemen die niet uit productinfo of voorwaarden komt; renovlies of verf over behang adviseren.
 
-UITKOMST ALS ER NOG KLEUREN OPEN ZIJN: verf voor een onderdeel zonder gekozen kleur verkopen we niet; de pakketkaart toont dan alleen samples. Zijn er nog kleuren open en is minstens een onderdeel al klaar (staat [klaar] in de stand) en is volgorde nog ?: vraag "volgorde" ("Wil je eerst de samples bekijken, of zetten we de verf voor de kleuren die al vaststaan alvast klaar?"). "Eerst de samples" = volgorde samples-eerst; "Zet de verf ... alvast klaar" = volgorde verf-erbij. Is nog geen onderdeel klaar, vraag het dan niet: help met kleur (sample packs, kleurenscan, stylist). Zeg nooit dat de verf al klaarstaat als volgorde samples-eerst is.
+UITKOMST ALS ER NOG KLEUREN OPEN ZIJN: verf voor een onderdeel zonder gekozen kleur verkopen we niet; de pakketkaart toont dan alleen samples. Zijn er nog kleuren open en is minstens een onderdeel al klaar (staat [klaar] in de stand) en is volgorde nog ?: vraag "volgorde" (de server zet de vraag zelf in je tekst: eerst samples en daarna verf, of samples en verf samen; noem geen stand van het plan erbij). "Eerst de samples" = volgorde samples-eerst; "Samples en verf samen" = volgorde verf-erbij. Is nog geen onderdeel klaar, vraag het dan niet: help met kleur (sample packs, kleurenscan, stylist). Zeg nooit dat de verf al klaarstaat als volgorde samples-eerst is.
 
 VOLGENDE STAP (antwoord.actie): "samples" als er samples klaarstaan en de kleur nog open is; "bestellen" als onderdelen klaar zijn; "bewaren" bij later verder; "geen" als je nog een vraag stelt.`;
 
@@ -576,7 +576,7 @@ function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
     case "kleurroute": return [WEET_KLEUR, WEET_NIET];
     case "geen-idee": return GEEN_IDEE;
     case "wanneer": return ["Binnen een week", "Over een paar weken", "Weet ik nog niet"];
-    case "volgorde": return ["Eerst de samples", "Zet de verf voor de gekozen kleuren alvast klaar"];
+    case "volgorde": return [VOLG_SAMPLES, VOLG_SAMEN];
     default: return eigen.slice(0, 12);
   }
 }
@@ -1142,10 +1142,42 @@ const openMuren = (project: any) => project.ruimtes.flatMap((r: any) => r.vlakke
  * pitch, geen mailkaart. De prijs hangt af van het aantal kleuren, dus die komt pas als de kleuren er zijn (of als de
  * klant ernaar vraagt: dan "alles in één kleur"). Heeft de klant al een richting of twijfel, dan helpt het model verder.
  */
+/**
+ * Een nagemengde kleur (merkkleur, RAL of NCS) heet bij Roll "Roll Beige - 130060": de naam zonder code is niet
+ * compleet (feedback 10 nov 2026). Vult de code aan waar het antwoord alleen de Roll-naam noemt.
+ */
+function metRollCode(tekst: string, project: any): string {
+  const namen = new Map<string, string>();
+  for (const r of project?.ruimtes ?? []) for (const v of r.vlakken ?? []) {
+    const k = w(v.kleur?.gekozen);
+    const km = k?.km;
+    if (km?.rollNaam && km?.rollCode) namen.set(String(km.rollNaam), String(km.rollCode));
+  }
+  let uit = String(tekst);
+  for (const [naam, code] of namen) {
+    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    uit = uit.replace(new RegExp(`${esc(naam)}(?!\\s*[-–]?\\s*${esc(code)})(?![\\w-])`, "g"), `${naam} - ${code}`);
+  }
+  return uit;
+}
+
 /** Muren met grotere scheuren waar de klant nog niet koos of er renovlies op komt (besluit 10 nov 2026). */
 const RENO_JA = "Ja, renovlies erbij", RENO_NEE = "Nee, ik vul de scheuren zelf", RENO_FOTO = "Eerst een foto laten zien";
 const RENO_CHIPS = [RENO_JA, RENO_NEE, RENO_FOTO];
 const LICHT_CHIP = "Mijn muur is licht geschilderd";
+/** Eerst samples of samples en verf samen (feedback 10 nov 2026: eenvoudiger gevraagd, vaste tekst en knoppen). */
+const VOLG_SAMPLES = "Eerst de samples", VOLG_SAMEN = "Samples en verf samen";
+const LAK_KORT: Record<string, string> = { accent: "accentmuur", deuren: "deuren", kozijnen: "kozijnen", plinten: "plinten", lambrisering: "lambrisering", radiatoren: "radiatoren", kasten: "kasten", trap: "trap", meubel: "meubel" };
+function gekozenOnderdelen(project: any): string {
+  const delen: string[] = [];
+  for (const r of project.ruimtes) for (const v of r.vlakken) {
+    if ("gekozen" !== v.kleur?.status) continue;
+    const n = LAK_KORT[v.soort] ?? v.soort;
+    if (!delen.includes(n)) delen.push(n);
+  }
+  return delen.length > 1 ? `je ${delen.slice(0, -1).join(", ")} en ${delen[delen.length - 1]}` : delen.length ? `je ${delen[0]}` : "wat al vaststaat";
+}
+const volgordeVraag = (project: any) => `Wil je eerst de samples bestellen, en regelen we daarna je verf? Of bestel je naast de samples ook al de verf voor ${gekozenOnderdelen(project)}?`;
 function scheurVlakken(project: any, alleenOpen = true) {
   const uit: { r: any; v: any }[] = [];
   for (const r of project.ruimtes) for (const v of r.vlakken) {
@@ -1353,6 +1385,17 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       const voor = ja ? "Top, renovlies staat erbij; de lijm zit er ook bij." : "Prima. Vul de scheuren vooraf met een vulmiddel uit de bouwmarkt en schuur ze glad.";
       antwoord = k ? { ...k, tekst: `${voor} ${k.tekst}` } : { tekst: voor, vraag: "geen", actie: "geen" };
     }
+  }
+  // De twee knoppen van de volgordevraag: vast vastleggen en kort bevestigen, zonder model.
+  const volgKeuze = !antwoord ? [VOLG_SAMPLES, VOLG_SAMEN].find((c) => c.toLowerCase() === bericht.trim().replace(/\.$/, "").toLowerCase()) : undefined;
+  if (volgKeuze) {
+    const samen = VOLG_SAMEN === volgKeuze;
+    const u = toepassen(project, { aanvraagId: aanvraagId + "#v", versie: project.versie, door: "klant-chat", wijzigingen: [{ actie: "zet", veld: "volgorde", waarde: samen ? "verf-erbij" : "samples-eerst", zekerheid: "zeker" }] }, opties);
+    project = u.project;
+    laatsteWijzigingen = u.toegepast;
+    antwoord = samen
+      ? { tekst: `Top, dan zetten we naast je samples ook de verf voor ${gekozenOnderdelen(project)} klaar.`, vraag: "geen", actie: "geen" }
+      : { tekst: "Top, dan bestel je eerst je samples. Zodra je kleur vaststaat, regelen we je verf; je plan blijft bewaard.", vraag: "geen", actie: "geen" };
   }
   // Twee lagen omdat de klant niet wist wat er op de muur zit: blijkt het een lichte, geschilderde muur, dan rekenen we daarmee.
   if (!antwoord && LICHT_CHIP.toLowerCase() === bericht.trim().replace(/\.$/, "").toLowerCase()) {
@@ -1643,6 +1686,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   if (!antwoord) antwoord = { tekst: "Even geen antwoord. Probeer het nog een keer, of ga verder met de stappen.", vraag: "geen", actie: "stappen" };
   // Laatste vangnet voor elk antwoord (ook losse tekst zonder tool): opschonen en zinnen met een fout eruit.
   antwoord.tekst = opschonen(String(antwoord.tekst ?? ""));
+  antwoord.tekst = metRollCode(antwoord.tekst, project);
   const restFouten = controleer(antwoord.tekst, controleCtx());
   if (restFouten.length) {
     controleLog.push({ poging: "vangnet", fouten: restFouten.map((f: any) => ({ id: f.id, stuk: f.stuk })) });
@@ -1717,6 +1761,20 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     antwoord.tekst = zinnenVan(String(antwoord.tekst ?? "")).filter((z) => !(/\?\s*$/.test(z) && /plafond/i.test(z))).join("").trim() || "Genoteerd.";
     antwoord.vraag = "geen";
     controleLog.push({ poging: "vangnet", fouten: [{ id: "plafondvraag", stuk: "onderdelen al gekozen" }] });
+  }
+  // De volgordevraag in vaste, eenvoudige woorden: wat de klant net deed (eerste zin) en dan alleen de keuze, zonder
+  // opsomming van wat klaar is en wat niet (feedback 10 nov 2026).
+  // Samples in het pakket, iets al klaar en de rest nog open, zonder keuze en zonder andere vraag van het model:
+  // dan stelt de server de volgordevraag zelf, zodat de klant hem altijd krijgt (feedback 10 nov 2026).
+  if ("geen" === (antwoord.vraag ?? "geen") && !/\?\s*$/.test(String(antwoord.tekst ?? "").trim()) && !antwoord.formulier && !(antwoord.kaarten ?? []).length
+    && "overdracht" !== antwoord.actie && null == w(project.volgorde) && "kiezen" === route(project).route
+    && (project.samples ?? []).length + (project.packs ?? []).length > 0
+    && projectStatus(project).onderdelen.some((o: any) => "klaar" === o.status)) {
+    antwoord.vraag = "volgorde";
+  }
+  if ("volgorde" === antwoord.vraag) {
+    const eerste = zinnenVan(String(antwoord.tekst ?? "")).find((z) => !/\?\s*$/.test(z) && !/\b(klaar|nog geen kleur|nog open)\b/i.test(z)) ?? "";
+    antwoord.tekst = `${eerste.trim()} ${volgordeVraag(project)}`.trim();
   }
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
