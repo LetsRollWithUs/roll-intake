@@ -1315,14 +1315,16 @@ async function naTik(tik: any, project: any, gesprek: any[], ix: any): Promise<{
   const klant = `${gekozen.naam} gekozen voor ${waar}`;
   // Plafond en lakwerk nog zonder kleur: één keer de snelle keuzes (wit, zelfde als de muren, bijpassend, later).
   const kf = kleurFormulier(project, ix);
-  const alGevraagd = gesprek.some((b: any) => "kleur" === b.uit?.antwoord?.formulier?.soort);
+  // Hooguit twee keer: wie na de eerste keer een kaart aantikte in plaats van het formulier, krijgt de keuzes nog een keer.
+  const alGevraagd = gesprek.filter((b: any) => "kleur" === b.uit?.antwoord?.formulier?.soort).length >= 2;
   if (kf && !alGevraagd) {
     const soorten = [...new Set(kf.onderdelen.map((o: any) => ("plafond" === o.soort ? "het plafond" : "meubel" === o.soort ? "het meubel" : "het lakwerk")))] as string[];
     const wat = soorten.length > 1 ? `${soorten.slice(0, -1).join(", ")} en ${soorten[soorten.length - 1]}` : soorten[0];
     return { klant, antwoord: { tekst: `${staat} En ${wat}: welke kleur ${soorten.length > 1 ? "krijgen die" : "krijgt dat"}?`, vraag: "kleur", actie: "geen" } };
   }
   const klaar = "compleet" === route(project).route && projectStatus(project).teBestellen.length > 0;
-  return { klant, antwoord: { tekst: klaar ? `${staat} Je pakket staat klaar.` : staat, vraag: "geen", actie: "geen" } };
+  const open = route(project).open.length > 0;
+  return { klant, antwoord: { tekst: klaar ? `${staat} Je pakket staat klaar.` : open ? `${staat} Wat nog open is, komt erbij zodra je kiest.` : staat, vraag: "geen", actie: "geen" } };
 }
 
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
