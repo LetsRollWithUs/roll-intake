@@ -453,7 +453,7 @@ Deno.serve(async (req) => {
       let voorstrijkTip: any = null;
       if (phase === "sample" && row.offer_meta?.id && OFFERTE_API_KEY && OFFERTE_V2) {
         try {
-          const rr = await fetch(`${OFFERTE_API_URL}/${row.offer_meta.id}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY } });
+          const rr = await fetch(`${OFFERTE_API_URL}/${row.offer_meta.id}`, { headers: { "X-Roll-Advies-Key": OFFERTE_API_KEY }, signal: AbortSignal.timeout(8000) });
           const vt = rr.ok ? (await rr.json())?.voorstrijkTip : null;
           if (vt && Array.isArray(vt.blikken) && vt.blikken.length) {
             const euro = (n: number) => `€ ${Number(n).toFixed(2).replace(".", ",")}`;
