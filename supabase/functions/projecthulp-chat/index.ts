@@ -1711,6 +1711,13 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   ixP.catch(() => null);
   const ix = antwoord.kaarten?.length ? await ixP : null;
   const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix?.c.find((k) => k.n === n)).filter(Boolean).slice(0, antwoord.alleKaarten ? 20 : MAX_KAARTEN).map((k: any) => kaart(k));
+  // Koos de klant in het onderdelenformulier zelf wat hij schildert, dan vraagt Charlie niet alsnog of het plafond
+  // ook mee moet (open punt 10 nov 2026: die vraag kwam naast de bestelkaart en hield hem tegen).
+  if ("plafond" === antwoord.vraag && (rij.gesprek as any[]).some((b) => "onderdelen" === b.form)) {
+    antwoord.tekst = zinnenVan(String(antwoord.tekst ?? "")).filter((z) => !(/\?\s*$/.test(z) && /plafond/i.test(z))).join("").trim() || "Genoteerd.";
+    antwoord.vraag = "geen";
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "plafondvraag", stuk: "onderdelen al gekozen" }] });
+  }
   const status = projectStatus(project);
   const { plan } = naarRekenkern(project);
   // Noemt het antwoord de standaardhoogte, dan is dat een zichtbare aanname: doorgaan = akkoord (ook als het model
@@ -1746,11 +1753,13 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       const nm = tl.ruimtes.map((x: string) => klein(x));
       const waar = nm.length > 1 ? `${nm.slice(0, -1).join(", ")} en ${nm[nm.length - 1]}` : nm[0];
       // Eén stap tegelijk: geen andere vraag van het model ernaast (zoals het plafond), alleen deze keuze.
-      const zonderVraag = zinnenVan(String(antwoord.tekst ?? "")).filter((z) => !/\?\s*$/.test(z)).join("").trim();
+      const zonderVraag = zinnenVan(String(antwoord.tekst ?? "")).filter((z) => !/\?\s*$/.test(z) && !/twee lagen/i.test(z)).join("").trim();
       antwoord.vraag = "geen";
       antwoord.tekst = `${zonderVraag} In de ${waar} rekenen we met twee lagen, omdat we niet weten wat er nu op de muur zit. Is het een lichte, geschilderde muur, dan is één laag vaak genoeg en scheelt het ongeveer € ${tl.scheelt}.`.trim();
       antwoord.chips = [LICHT_CHIP];
       lagenNoot = true;
+      // Het bedrag komt uit de rekenkern (zoals de tool pakket): zo telt de vaste controle het als berekend.
+      toolLog.push({ tool: "pakket", door: "server" });
     }
   }
   // Een keer per gesprek: op het moment dat er iets te bewaren is, of als de klant de chat even verlaat. Niet bovenop een formulier of kleurkaarten.

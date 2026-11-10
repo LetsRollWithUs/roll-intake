@@ -286,7 +286,9 @@ function zet( p, r, v, wz, ctx ) {
 	const { door, op, vraag, weiger, toegepast } = ctx;
 	const bron = bronVan( wz.zekerheid );
 	// Een aanname zet een gelijke waarde die de klant al zei of accepteerde niet terug naar "nog te controleren".
-	const g = ( waarde, oud ) => ( oud && 'aangenomen' === bron && oud.waarde === waarde && ( oud.geaccepteerd || 'gezegd' === oud.bron ) ? oud : gegeven( waarde, bron, door, { op } ) );
+	// Dezelfde waarde nog een keer (ook als het model hem opnieuw vastlegt) laat een geaccepteerde of gezegde waarde staan;
+	// anders vervalt bijvoorbeeld het akkoord op "weet ik niet" uit het formulier (g95, 10 nov 2026).
+	const g = ( waarde, oud ) => ( oud && oud.waarde === waarde && ( oud.geaccepteerd || 'gezegd' === oud.bron ) ? oud : gegeven( waarde, bron, door, { op } ) );
 	const [ a, b ] = String( wz.veld || '' ).split( '.' );
 	const waarde = wz.waarde;
 
