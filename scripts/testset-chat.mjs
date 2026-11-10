@@ -10,6 +10,7 @@
  * Vrijgavenormen (zie het plan): alle kritieke gevallen slagen, 95% van alle controles slaagt, geen enkele
  * fout uit de vaste controle en geen eigen kleuradvies. Niet gehaald = exitcode 1 (scripts/vrijgeven.sh stopt dan).
  *
+ * Gratis rooktest (zonder model): npm run rook  (= --rook, alleen gesprekken met "rook": true)
  * Gebruik: node scripts/testset-chat.mjs [--alleen k01,g03] [--zonder-beoordeling] [--model gemini-3.5-flash-lite] [--beoordelaar gemini-3.5-flash]
  * Omgeving: CHAT_URL (standaard de testkopie), TESTSET_DIR, PARALLEL (standaard 4).
  * Kosten: ongeveer 165 beurten van ± 1 cent plus de beoordelingen, samen ± $2 per volledige run.
@@ -26,7 +27,9 @@ const PARALLEL = Number( process.env.PARALLEL || 4 );
 const TOKEN = 'vergelijk-7d3f9a';
 const args = process.argv.slice( 2 );
 const ALLEEN = args.includes( '--alleen' ) ? String( args[ args.indexOf( '--alleen' ) + 1 ] ?? '' ).split( ',' ) : null;
-const BEOORDELEN = ! args.includes( '--zonder-beoordeling' );
+// --rook: alleen de gesprekken die zonder model lopen (formulieren en tikken). Gratis, dus geschikt voor elke wijziging.
+const ROOK = args.includes( '--rook' );
+const BEOORDELEN = ! ROOK && ! args.includes( '--zonder-beoordeling' );
 // Een ander model dan de live chat, om modellen te vergelijken (de chat staat dat alleen toe met de testsleutel).
 const MODEL = args.includes( '--model' ) ? String( args[ args.indexOf( '--model' ) + 1 ] ?? '' ) : '';
 const BEOORDELAAR = args.includes( '--beoordelaar' ) ? String( args[ args.indexOf( '--beoordelaar' ) + 1 ] ?? '' ) : '';
@@ -53,7 +56,7 @@ const HANDMATIG = new Set( [ 'g04', 'g25', 'g26', 'g27' ] );
 const rid = () => Math.random().toString( 36 ).slice( 2 ).padEnd( 10, '0' ).slice( 0, 10 );
 async function post( body, poging = 0 ) {
 	try {
-		const r = await fetch( CHAT_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify( { test: TOKEN, klantVersie: 2, ...( MODEL && ! body.beoordeel ? { model: MODEL } : {} ), ...body } ) } );
+		const r = await fetch( CHAT_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify( { test: TOKEN, klantVersie: 3, ...( MODEL && ! body.beoordeel ? { model: MODEL } : {} ), ...body } ) } );
 		const d = await r.json();
 		if ( d.fout && poging < 1 && r.status >= 500 ) return post( body, poging + 1 );
 		return d;
@@ -276,7 +279,8 @@ async function draaiGesprek( g ) {
 			antwoorden.push( { klant: '(samplelink)', tekst: '', antwoord: null } );
 			continue;
 		}
-		r = await post( { sessie, aanvraagId: rid(), bericht: t, tik, formulier, wijzigForm } );
+		// Oudere pagina's (klantVersie 2) openen de kleurenscan nog in een nieuw tabblad; een geval kan dat pad kiezen.
+		r = await post( { sessie, aanvraagId: rid(), bericht: t, tik, formulier, wijzigForm, ...( g.klantVersie ? { klantVersie: g.klantVersie } : {} ) } );
 		if ( r.fout ) { fouten.push( `chat gaf een fout bij "${ t || formulier?.soort || wijzigForm }": ${ r.fout }` ); break; }
 		antwoorden.push( { klant: t || ( formulier ? `(formulier ${ formulier.soort })` : wijzigForm ? `(wijzig ${ wijzigForm })` : '' ), tekst: r.antwoord?.tekst ?? '', test: r.test, antwoord: r.antwoord, voortgang: r.voortgang } );
 	}
@@ -309,6 +313,16 @@ async function draaiGesprek( g ) {
 			checks++;
 			const echt = antwoorden[ Number( beurt ) ]?.antwoord?.chips ?? [];
 			if ( JSON.stringify( echt ) !== JSON.stringify( chips ) ) fouten.push( `antwoord ${ beurt } toont knoppen ${ JSON.stringify( echt ) }, verwacht ${ JSON.stringify( chips ) }` );
+		}
+		// Rooktest: deze gesprekken lopen helemaal zonder model (formulieren en tikken), dus ze kosten niets.
+		if ( g.rook ) {
+			antwoorden.forEach( ( a, i ) => { checks++; if ( false !== a.test?.model ) fouten.push( `beurt ${ i } gebruikte het model (rooktest hoort zonder model te lopen)` ); } );
+		}
+		// Hoeveel kleurkaarten er bij een beurt staan.
+		for ( const [ beurt, n ] of Object.entries( g.kaartenBij ?? {} ) ) {
+			checks++;
+			const echt = ( antwoorden[ Number( beurt ) ]?.antwoord?.kaarten ?? [] ).length;
+			if ( echt !== n ) fouten.push( `antwoord ${ beurt } toont ${ echt } kaarten, verwacht ${ n }` );
 		}
 		// Welk formulier er bij een beurt verschijnt ("geen" = geen formulier).
 		for ( const [ beurt, soort ] of Object.entries( g.formulierBij ?? {} ) ) {
@@ -376,7 +390,7 @@ async function inPartijen( lijst, n, f ) {
 /* ---------- draaien en rapporteren ---------- */
 
 const start = Date.now();
-const kies = ( g ) => ! ALLEEN || ALLEEN.includes( g.id );
+const kies = ( g ) => ( ! ALLEEN || ALLEEN.includes( g.id ) ) && ( ! ROOK || true === g.rook );
 const bGevallen = berichten.filter( kies );
 const gGevallen = gesprekken.filter( ( g ) => kies( g ) && ! HANDMATIG.has( g.id ) );
 console.log( `Testset tegen ${ CHAT_URL }: ${ bGevallen.length } berichten, ${ gGevallen.length } gesprekken${ BEOORDELEN ? ', met beoordeling' : '' }.` );

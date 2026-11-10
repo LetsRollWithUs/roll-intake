@@ -23,6 +23,8 @@ type Gesprek = {
   utm: Record<string, string> | null;
 };
 type Order = { order_id: number; sessie: string; status: string | null; totaal: number | null; soort: string | null };
+// Een stap uit de trechter, gemeld door de browser (ook voor het eerste bericht): zie projecthulp_stap.
+type Stap = { sessie: string; stap: string; extra: Record<string, string> | null; created_at: string };
 type Beurt = { id: number; sessie: string; bericht: string | null; onderwerp: string | null; onbeantwoord: boolean | null; created_at: string; nagekeken_op: string | null };
 
 const BETAALD = ["processing", "completed", "on-hold"];
@@ -82,6 +84,7 @@ export function InzichtenPage() {
   const [gesprekken, setGesprekken] = useState<Gesprek[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [beurten, setBeurten] = useState<Beurt[]>([]);
+  const [stappen, setStappen] = useState<Stap[]>([]);
   const [loading, setLoading] = useState(true);
   const [fout, setFout] = useState("");
   const [dagen, setDagen] = useState<7 | 30 | 0>(30);
@@ -91,13 +94,15 @@ export function InzichtenPage() {
   const [email, setEmail] = useState("");
 
   const laad = async () => {
-    const [g, o, b] = await Promise.all([
+    const [g, o, b, st] = await Promise.all([
       supabase.from("projecthulp_chat").select("sessie,status,code,overdracht_op,mand_op,mand_soort,created_at,updated_at,project,gesprek,bron,utm")
         .not("sessie", "like", "test%").order("created_at", { ascending: false }).limit(1000),
       supabase.from("projecthulp_chat_order").select("order_id,sessie,status,totaal,soort").limit(2000),
       supabase.from("projecthulp_chat_log").select("id,sessie,bericht,onderwerp,onbeantwoord,created_at,nagekeken_op")
         .not("onderwerp", "is", null).not("sessie", "like", "test%").order("created_at", { ascending: false }).limit(3000),
+      supabase.from("projecthulp_stap").select("sessie,stap,extra,created_at").order("created_at", { ascending: false }).limit(5000),
     ]);
+    setStappen((st.data as Stap[]) ?? []);
     if (g.error || o.error || b.error) setFout("Laden lukte niet. Ben je ingelogd als beheerder?");
     setGesprekken((g.data as unknown as Gesprek[]) ?? []);
     setOrders((o.data as Order[]) ?? []);
@@ -151,7 +156,36 @@ export function InzichtenPage() {
       mails.set(k, [...(mails.get(k) ?? []), g]);
     }
 
+    // Voor het gesprek: wie de startpagina zag, wie koos wat hij schildert, en waar ze vandaan kwamen.
+    const periodeStappen = stappen.filter((x) => new Date(x.created_at).getTime() >= vanaf);
+    const uniek = (stap: string) => new Set(periodeStappen.filter((x) => x.stap === stap).map((x) => x.sessie));
+    const gezien = uniek("start_gezien");
+    const herkomst = new Map<string, number>();
+    const apparaat = new Map<string, number>();
+    for (const x of periodeStappen) {
+      if ("start_gezien" !== x.stap) continue;
+      const e = x.extra ?? {};
+      const k = e.utm_source ? `${e.utm_source}${e.utm_medium ? ` (${e.utm_medium})` : ""}` : e.ref ?? "Direct of onbekend";
+      herkomst.set(k, (herkomst.get(k) ?? 0) + 1);
+      if (e.apparaat) apparaat.set(e.apparaat, (apparaat.get(e.apparaat) ?? 0) + 1);
+    }
+    const gestartNaStart = echt.filter((g) => gezien.has(g.sessie)).length;
+
     return {
+      voor: {
+        gezien: gezien.size,
+        rijen: [
+          { label: "Startpagina gezien", n: gezien.size },
+          { label: "Koos wat hij schildert", n: uniek("start_keuze").size },
+          { label: "Gesprek gestart", n: gestartNaStart },
+          { label: "Kleurvraag bereikt", n: uniek("kleurvraag").size },
+          { label: "Kleurenscan in het gesprek gestart", n: uniek("scan_start").size },
+          { label: "Winkelwagen bekeken", n: uniek("bestelkaart").size },
+          { label: "Klikte op bestellen", n: uniek("mand").size },
+        ],
+        herkomst: [...herkomst.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8),
+        apparaat: [...apparaat.entries()].sort((a, b) => b[1] - a[1]),
+      },
       mails: [...mails.entries()].sort((a, b) => b[1].length - a[1].length).map(([k, lijst]) => ({
         k, lijst,
         gestart: lijst.filter((g) => klantBerichten(g).length > 0).length,
@@ -177,7 +211,7 @@ export function InzichtenPage() {
       onderwerpen: [...onderwerpen.entries()].sort((a, b) => b[1].length - a[1].length),
       open: periodeBeurten.filter((b) => b.onbeantwoord && !b.nagekeken_op),
     };
-  }, [gesprekken, orders, beurten, vanaf, nu]);
+  }, [gesprekken, orders, beurten, stappen, vanaf, nu]);
 
   return (
     <div>
@@ -204,6 +238,32 @@ export function InzichtenPage() {
             <p className="rd-sub" style={{ marginBottom: 0 }}>
               Omzet {euro(cijfers.omzet)} · {cijfers.samples} {1 === cijfers.samples ? "bestelling" : "bestellingen"} alleen samples · {cijfers.verf} met verf · {cijfers.hulp} vroeg om hulp
             </p>
+          </section>
+
+          <section className="rd-card-white">
+            <div className="rd-card-title" style={{ marginBottom: 8 }}>Van startpagina tot winkelwagen</div>
+            <p className="rd-sub" style={{ marginTop: 0 }}>Elke bezoeker telt een keer per stap. Telt vanaf de dag dat deze meting live ging; eerdere gesprekken staan er niet in.</p>
+            {0 === cijfers.voor.gezien && <p className="rd-sub">Nog niets gemeten.</p>}
+            {cijfers.voor.gezien > 0 && cijfers.voor.rijen.map((t) => (
+              <div key={t.label} style={rij}>
+                <span>{t.label}</span>
+                <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{t.n} <span style={{ fontWeight: 400, opacity: 0.6 }}>({procent(t.n, cijfers.voor.gezien)})</span></span>
+              </div>
+            ))}
+            {cijfers.voor.herkomst.length > 0 && (
+              <>
+                <div className="rd-card-title" style={{ margin: "14px 0 8px" }}>Waar komen ze vandaan?</div>
+                {cijfers.voor.herkomst.map(([k, n]) => (
+                  <div key={k} style={rij}>
+                    <span>{k}</span>
+                    <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{n} <span style={{ fontWeight: 400, opacity: 0.6 }}>({procent(n, cijfers.voor.gezien)})</span></span>
+                  </div>
+                ))}
+                {cijfers.voor.apparaat.length > 0 && (
+                  <p className="rd-sub" style={{ marginBottom: 0 }}>{cijfers.voor.apparaat.map(([k, n]) => `${k} ${procent(n, cijfers.voor.gezien)}`).join(" · ")}</p>
+                )}
+              </>
+            )}
           </section>
 
           <section className="rd-card-white">

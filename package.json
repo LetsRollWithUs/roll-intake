@@ -12,7 +12,8 @@
     "sync:collection": "node scripts/sync-collection.mjs",
     "testset": "node scripts/testset-chat.mjs",
     "vrijgeven": "bash scripts/vrijgeven.sh",
-    "vergelijk": "bash scripts/vergelijk.sh"
+    "vergelijk": "bash scripts/vergelijk.sh",
+    "rook": "CHAT_URL=${CHAT_URL:-https://lsboujprrvhntgbvlvyu.supabase.co/functions/v1/projecthulp-chat-test} node scripts/testset-chat.mjs --rook"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

@@ -44,7 +44,10 @@ const MAX_STAPPEN = 6;
 const TEST_TOKEN = "vergelijk-7d3f9a";
 
 const db = createClient(SB_URL, SB_SERVICE, { auth: { persistSession: false } });
-const claude = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "" });
+// Tijdslimieten (verbeterronde 10 nov 2026): hangt het model of roll.nl, dan krijgt de klant binnen een minuut een
+// nette melding met "Opnieuw proberen" in plaats van eindeloos "Even nadenken".
+const claude = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") ?? "", timeout: 45_000, maxRetries: 1 });
+const binnen = (ms: number) => ({ signal: AbortSignal.timeout(ms) });
 
 /* ---------- kleurdata van roll.nl (een uur in het geheugen) ---------- */
 
@@ -53,8 +56,13 @@ let INDEX: { c: Kleur[]; f: { s: string; n: string }[] } | null = null;
 let INDEX_OP = 0;
 async function index() {
   if (!INDEX || Date.now() - INDEX_OP > 3600_000) {
-    INDEX = await (await fetch(`${ROLL}/wp-json/roll/v1/search-index`)).json();
-    INDEX_OP = Date.now();
+    // Lukt verversen niet, dan werken we door met de lijst die we al hadden.
+    try {
+      INDEX = await (await fetch(`${ROLL}/wp-json/roll/v1/search-index`, binnen(10_000))).json();
+      INDEX_OP = Date.now();
+    } catch (e) {
+      if (!INDEX) throw e;
+    }
   }
   return INDEX!;
 }
@@ -90,6 +98,15 @@ async function samplekleurenUit(kleuren: unknown, packs: unknown) {
   }
   return [...new Set(namen)];
 }
+/** Stappen die de browser mag melden (zie meet() in chat.js). */
+const MEET_STAPPEN = ["start_gezien", "start_keuze", "kleurvraag", "kleur_gekozen", "bestelkaart", "plan_open", "mand", "samples_aanbod", "samples_kiezen", "mail", "exit_vraag", "scan_start", "scan_klaar"];
+/** Waar de bezoeker vandaan kwam: utm uit de link, de verwijzende site en het apparaat. */
+const herkomstUit = (x: any) => {
+  if (!x || "object" !== typeof x) return {};
+  const ref = "string" === typeof x.ref && /^[a-z0-9.-]{3,80}$/i.test(x.ref) ? { ref: x.ref.toLowerCase() } : {};
+  const app = ["mobiel", "desktop"].includes(x.apparaat) ? { apparaat: x.apparaat } : {};
+  return { ...utmUit(x), ...ref, ...app };
+};
 const utmUit = (x: any) => Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((k) => [k, x?.[k]]).filter(([, v]) => "string" === typeof v && v.trim()).map(([k, v]) => [k, String(v).trim().slice(0, 80)]));
 
 /* ---------- tools ---------- */
@@ -239,7 +256,7 @@ KLEUR (per vlak):
   - "Ik weet mijn kleur": vraag welke kleur het is ("Welke kleur wordt het? Typ de naam of de code; een kleur van een ander merk kan ook."), vraag "geen", zonder chips.
 - Kleur nog onbekend ("Ik weet het nog niet", "geen idee", "weet ik nog niet") en geen richting genoemd: vraag "geen-idee". De server zet vier keuzes erbij; noem ze in je tekst niet allemaal op, zeg alleen kort dat dat helemaal goed is en dat de klant kan kiezen hoe hij verder wil. Gebruik "geen-idee" nooit als eerste kleurvraag.
   - "Ik heb wel een richting" (of "Ik weet de richting"): de server toont alle kleurfamilies als tegels met voorbeeldkleuren. Wil je zelf naar een richting vragen, gebruik dan vraag "richting" en noem geen losse voorbeelden of eigen chips met kleuren. Noemt de klant een richting: richting vastleggen, stel_kleuren_voor en de kleuren als kaarten met het sample pack.
-  - "Doe de kleurenscan": de scan op advies.roll.nl opent in een nieuw tabblad en je plan blijft hier staan. Zeg kort dat de klant daarna terug kan komen met de uitkomst: de kleuren noemen die hij wil proberen, dan zet je de samples of het sample pack in zijn pakket. Leg nog niets vast.
+  - "Doe de kleurenscan": de server start de korte kleurenscan hier in het gesprek (een paar vragen over licht, vloer en gevoel) en toont daarna drie kleuren als kaarten met het sample pack. Jij hoeft dan niets te doen. Vraagt de klant wat de scan is, zeg dat kort. De uitgebreide scan op advies.roll.nl noem je alleen als de klant erom vraagt.
   - "Boek online kleuradvies": de boekpagina opent in een nieuw tabblad; zeg dat het plan hier bewaard blijft. Leg niets vast.
   - "Later kiezen": leg geen kleur vast; de kleur blijft open en de verf komt erbij zodra hij kiest. Ga door met wat nog ontbreekt (onderdelen, maat, de muren nu, lakwerk).
 - Terug met de uitkomst van de kleurenscan ("uit de scan kwamen X, Y en Z"): leg die kleuren vast als kandidaat (nooit kies, tenzij de klant er duidelijk een kiest), toon ze als kaarten voor dat onderdeel en vraag welke hij als sample wil. Je zegt niets over welke het beste is.
@@ -304,7 +321,7 @@ async function voorwaarden() {
     const eur = (c: unknown) => `€ ${(Number(c) / 100).toLocaleString("nl-NL")}`;
     let tekst = "Online kleuradvies: 30 minuten videobellen met een stylist van Roll. Normaal € 59; of er een aanbieding loopt, zie je bij het boeken.";
     try {
-      const p = await (await fetch(`${ROLL}/wp-json/wc/store/v1/products/15239`)).json();
+      const p = await (await fetch(`${ROLL}/wp-json/wc/store/v1/products/15239`, binnen(10_000))).json();
       const normaal = Number(p?.prices?.regular_price), nu = Number(p?.prices?.sale_price);
       if (normaal > 0) {
         tekst = p.on_sale && nu > 0 && nu < normaal
@@ -330,7 +347,7 @@ async function zoekKleur(term: string) {
   const ncs = /^(?:ncs\s*[-:]?\s*)(?:s\s*)?(\d{4}-[a-z0-9]+)$/i.exec(t) ?? /^s\s*(\d{4}-[a-z0-9]+)$/i.exec(t);
   const ncsCode = ncs ? `S ${ncs[1].toUpperCase()}` : "";
   const zoek = ral ? `RAL ${ral[1]}` : ncsCode || t;
-  const km = async (q: string) => { const r = await (await fetch(`${ROLL}/wp-json/ark-kleurmatch/v1/colors?search=${encodeURIComponent(q)}&per_page=5`)).json().catch(() => []); return Array.isArray(r) ? r : []; };
+  const km = async (q: string) => { const r = await (await fetch(`${ROLL}/wp-json/ark-kleurmatch/v1/colors?search=${encodeURIComponent(q)}&per_page=5`, binnen(10_000))).json().catch(() => []); return Array.isArray(r) ? r : []; };
   let lijst = await km(zoek);
   // "Nigiri van LAB" vindt niets, "nigiri" wel: probeer de losse woorden en houd treffers die bij de rest passen.
   if (!lijst.length && !ral && !ncs) {
@@ -423,7 +440,7 @@ async function pakketUitleg(project: any) {
 
 async function bereken(plan: any) {
   const body = new URLSearchParams({ action: "roll_vc_kleurplan", wat: "bereken", plan: JSON.stringify(plan) });
-  const res = await fetch(`${ROLL}/wp-admin/admin-ajax.php`, { method: "POST", body });
+  const res = await fetch(`${ROLL}/wp-admin/admin-ajax.php`, { method: "POST", body, ...binnen(15_000) });
   const jj = await res.json();
   if (!jj?.success) throw new Error("rekenkern");
   return jj.data;
@@ -1209,6 +1226,105 @@ async function kleurStap(project: any) {
   return { tekst: `Je plan staat: je ${lijst}${maat}. ${vraag}`, vraag: "kleurroute", actie: "geen" };
 }
 
+/* ---------- de kleurenscan in het gesprek (verbeterronde 10 nov 2026) ---------- */
+
+// Dezelfde engine als advies.roll.nl (edge function advies-engine): GET geeft de vragen, POST drie kleuren met waarom
+// en de sample packs. Zo blijft de klant in het gesprek in plaats van in een ander tabblad te verdwijnen.
+const ENGINE = `${Deno.env.get("SUPABASE_URL") ?? "https://lsboujprrvhntgbvlvyu.supabase.co"}/functions/v1/advies-engine`;
+let SCAN_VRAGEN: any[] | null = null;
+let SCAN_OP = 0;
+async function scanVragen(): Promise<any[] | null> {
+  if (!SCAN_VRAGEN || Date.now() - SCAN_OP > 3600_000) {
+    try {
+      const j = await (await fetch(ENGINE, binnen(8_000))).json();
+      if (Array.isArray(j?.vragen) && j.vragen.length) { SCAN_VRAGEN = j.vragen; SCAN_OP = Date.now(); }
+    } catch { /* de vragen die we al hadden blijven staan */ }
+  }
+  return SCAN_VRAGEN;
+}
+/** Het scan-formulier voor de eerste muur zonder kleur; null als de engine niet bereikbaar is of er geen muur is. */
+async function scanFormulier(project: any) {
+  const doel = openMuren(project)[0];
+  const vragen = doel ? await scanVragen() : null;
+  if (!doel || !vragen) return null;
+  return { soort: "scan", voor: `${doel.r.id}.${doel.v.id}`, ruimteNaam: doel.r.naam, vragen };
+}
+/** De antwoorden van de klant naar de engine: alleen waarden die in de vragenset staan. */
+async function scanUitkomst(project: any, doel: { ruimte: string; vlak: string }, waarden: any, sessie: string, ip = "") {
+  const vragen = (await scanVragen()) ?? [];
+  const mag = (id: string) => new Set((vragen.find((v: any) => v.id === id)?.opties ?? []).map((o: any) => String(o.waarde)));
+  const antwoorden: Record<string, unknown> = {};
+  for (const v of vragen) {
+    if ("families" === v.id) continue;
+    const x = waarden?.antwoorden?.[v.id];
+    const ok = mag(v.id);
+    if (v.meerdere) { const lijst = (Array.isArray(x) ? x : []).map(String).filter((y) => ok.has(y)).slice(0, 6); if (lijst.length) antwoorden[v.id] = lijst; }
+    else if (ok.has(String(x))) antwoorden[v.id] = String(x);
+  }
+  const famOk = mag("families");
+  const families = (Array.isArray(waarden?.families) ? waarden.families : []).map(String).filter((y: string) => famOk.has(y)).slice(0, 3);
+  const r = project.ruimtes.find((x: any) => x.id === doel.ruimte);
+  const l = Number(w(r?.maat?.lengte)), b = Number(w(r?.maat?.breedte));
+  const ruimte = { type: r?.type ?? "woonkamer", ...(l > 0 && b > 0 ? { vloer_m2: Math.round(l * b * 10) / 10 } : { grootte: w(r?.maat?.grootte) ?? "middel" }) };
+  const res = await fetch(ENGINE, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(ip ? { "x-forwarded-for": ip } : {}) },
+    body: JSON.stringify({ versie: 1, bron: "verfplan-chat", sessie: `vp_${sessie.slice(0, 40)}`, ruimte, antwoorden, families, log: !/^test/i.test(sessie) }),
+    ...binnen(12_000),
+  });
+  if (!res.ok) throw new Error(`engine ${res.status}`);
+  const j = await res.json();
+  const kleuren = (Array.isArray(j?.kleuren) ? j.kleuren : []).slice(0, 3).map((c: any) => ({ naam: String(c.naam ?? ""), label: String(c.label ?? ""), waarom: (Array.isArray(c.waarom) ? c.waarom : []).map(String).slice(0, 2) })).filter((c: any) => c.naam);
+  if (!kleuren.length) throw new Error("engine leeg");
+  const packIds = (Array.isArray(j?.packs) ? j.packs : j?.pack ? [j.pack] : []).map((p: any) => Number(p?.productId)).filter((n: number) => n > 0).slice(0, 3);
+  return { kleuren, packIds };
+}
+
+/** "de muren", "het plafond", "de deuren", "je commode"; met de ruimte erbij als er meer ruimtes zijn. */
+function vlakLabel(project: any, ruimteId: string, vlakId: string): string {
+  const r = project.ruimtes.find((x: any) => x.id === ruimteId);
+  const v = r?.vlakken.find((x: any) => x.id === vlakId);
+  if (!r || !v) return "dit onderdeel";
+  if ("meubel" === v.soort) return `je ${klein(r.naam)}`;
+  const n = "muren" === v.soort ? "de muren" : "plafond" === v.soort ? "het plafond" : "accent" === v.soort ? "de accentmuur" : "trap" === v.soort ? "de trap" : "lambrisering" === v.soort ? "de lambrisering" : `de ${LAK_KORT[v.soort] ?? v.soort}`;
+  return project.ruimtes.length > 1 ? `${n} van de ${klein(r.naam)}` : n;
+}
+
+/**
+ * Een tik op een kleurkaart, "Probeer als sample" of een sample pack: vast bevestigen en de volgende stap, zonder model
+ * (verbeterronde 10 nov 2026: tikken moet direct voelen; langs het model duurde dit 2,5 tot 5 seconden). Geeft null als
+ * het model moet meedenken: er wacht nog een andere muur op een kleur, of de tik is geen van deze drie.
+ */
+async function naTik(tik: any, project: any, gesprek: any[], ix: any): Promise<{ antwoord: any; klant: string } | null> {
+  const naam = String(tik.kleur?.naam ?? "");
+  if ("pack" === tik.actie && "erbij" === tik.wat && tik.naam) {
+    return { klant: `Sample pack ${tik.naam} in mijn pakket`, antwoord: { tekst: `Het sample pack ${tik.naam} staat in je pakket. Zo vergelijk je de kleuren thuis naast elkaar.`, vraag: "geen", actie: "geen" } };
+  }
+  if ("sample" === tik.actie && "erbij" === tik.wat && naam) {
+    return { klant: `${naam} als sample`, antwoord: { tekst: `${naam} staat als sample in je pakket. Zo zie je de kleur thuis bij jouw licht.`, vraag: "geen", actie: "geen" } };
+  }
+  if ("kleur" !== tik.actie || "kies" !== tik.wat || !naam) return null;
+  const r = project.ruimtes.find((x: any) => x.id === tik.ruimte);
+  const v = r?.vlakken.find((x: any) => x.id === tik.vlak);
+  const gekozen = v && "gekozen" === v.kleur.status ? w(v.kleur.gekozen) : null;
+  // Alleen als de kleur er echt staat; en bij meer muren zonder kleur helpt het model verder (zelfde kleur, andere kleur).
+  if (!gekozen || openMuren(project).length) return null;
+  const d = ix?.c.find((k: Kleur) => k.n === gekozen.naam)?.d;
+  const waar = vlakLabel(project, tik.ruimte, tik.vlak);
+  const staat = `${gekozen.naam}${d ? `, ${klein(String(d))},` : ""} staat erin voor ${waar}.`;
+  const klant = `${gekozen.naam} gekozen voor ${waar}`;
+  // Plafond en lakwerk nog zonder kleur: één keer de snelle keuzes (wit, zelfde als de muren, bijpassend, later).
+  const kf = kleurFormulier(project, ix);
+  const alGevraagd = gesprek.some((b: any) => "kleur" === b.uit?.antwoord?.formulier?.soort);
+  if (kf && !alGevraagd) {
+    const soorten = [...new Set(kf.onderdelen.map((o: any) => ("plafond" === o.soort ? "het plafond" : "meubel" === o.soort ? "het meubel" : "het lakwerk")))] as string[];
+    const wat = soorten.length > 1 ? `${soorten.slice(0, -1).join(", ")} en ${soorten[soorten.length - 1]}` : soorten[0];
+    return { klant, antwoord: { tekst: `${staat} En ${wat}: welke kleur ${soorten.length > 1 ? "krijgen die" : "krijgt dat"}?`, vraag: "kleur", actie: "geen" } };
+  }
+  const klaar = "compleet" === route(project).route && projectStatus(project).teBestellen.length > 0;
+  return { klant, antwoord: { tekst: klaar ? `${staat} Je pakket staat klaar.` : staat, vraag: "geen", actie: "geen" } };
+}
+
 /** Voor welk onderdeel kaarten zijn: wat het model noemde als dat bestaat, anders het eerste onderdeel zonder kleur. */
 function kaartDoel(project: any, pad?: string) {
   const [ruimte, vlak] = String(pad ?? "").split(".");
@@ -1283,7 +1399,7 @@ async function beurtBijRoll(rij: any, aanvraagId: string, bericht: string, formu
   return uit;
 }
 
-async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null, metTest = false, extra: { wijzigForm?: string; klantVersie?: number } = {}) {
+async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: any, modelKeuze = MODEL, meld: Meld = () => {}, formulier: any = null, metTest = false, extra: { wijzigForm?: string; klantVersie?: number; herkomst?: Record<string, string>; ip?: string } = {}) {
   const start = Date.now();
   // Alleen in de testset: "model:denken" om de denkstand te vergelijken (uit, tussen, adaptief).
   const [model, denkTest] = modelKeuze.split(":");
@@ -1334,7 +1450,8 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     const ix = await ixP;
     const f = ix.f.find((x: any) => x.s === tik.familie);
     const namen = f ? familieKleuren(ix, f.s).map((k: Kleur) => k.n) : [];
-    const doel = kaartDoel(project);
+    // De families horen bij een onderdeel als de klant daar "andere kleur" koos (plafond, lakwerk).
+    const doel = kaartDoel(project, "string" === typeof tik.voor ? tik.voor : undefined);
     if (f && namen.length && doel) {
       project = toepassen(project, { aanvraagId: aanvraagId + "#t", versie: project.versie, door: "klant-kaart", wijzigingen: [{ actie: "kleur", ruimte: doel.ruimte, vlak: doel.vlak, wat: "richting", richting: f.n.toLowerCase(), zekerheid: "zeker" }] }, opties).project;
       tikTekst = f.n;
@@ -1355,10 +1472,16 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       : "zet" === tik.actie && "spullen" === tik.veld
       ? ("niets" === tik.waarde ? ["Zet het startpakket erbij", "Het startpakket staat in je pakket."] : ["Zonder startpakket", "Dan laten we het startpakket weg."])
       : null;
+    // Een kleur gekozen, een sample of een sample pack erbij: ook vast, als het lukte.
+    const direct = !vast && !u.geweigerd.length && u.toegepast.length ? await naTik(tik, project, rij.gesprek as any[], await ixP) : null;
     if (vast) {
       tikTekst = vast[0];
       const nee = u.geweigerd[0]?.reden;
       antwoord = { tekst: nee ?? vast[1], vraag: "geen", actie: "geen" };
+    } else if (direct) {
+      tikTekst = direct.klant;
+      antwoord = direct.antwoord;
+      laatsteWijzigingen = u.toegepast;
     } else tikTekst = "pack" === tik.actie
       ? `De klant zette het sample pack ${tik.naam ?? ""} in zijn pakket`
       : "zet" === tik.actie
@@ -1448,8 +1571,16 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     antwoord = { tekst: "Leuk. Wat voor meubel ga je schilderen?", vraag: "geen", actie: "geen", formulier: maakFormulier("meubel", project) };
   }
   // De scan opent in een nieuw tabblad. Tegelijk bieden we de kortste weg om hier verder te gaan: een richting met sample pack.
+  // Nieuwe pagina's (klantVersie 3): de scan loopt in het gesprek zelf, als een paar korte vragen.
+  const scanForm = !antwoord && SCAN_CHIP.test(bericht.trim()) && (extra.klantVersie ?? 1) >= 3 ? await scanFormulier(project) : null;
+  if (scanForm) {
+    antwoord = { tekst: "Top. Een paar korte vragen over het licht, je vloer en het gevoel dat je zoekt. Daarna zie je drie kleuren die uit jouw antwoorden komen.", vraag: "geen", actie: "geen", formulier: scanForm };
+  }
   if (!antwoord && SCAN_CHIP.test(bericht.trim())) {
-    antwoord = { tekst: "De kleurenscan opent in een nieuw tabblad en je plan blijft hier staan. Kom daarna gerust terug en noem de kleuren die je wilt proberen. Wil je liever meteen vergelijken? Kies een kleurfamilie, dan zie je de kleuren en het sample pack.", vraag: "geen", actie: "geen" };
+    // Oudere pagina's openen de scan nog in een nieuw tabblad; nieuwe pagina's doen dat niet meer.
+    antwoord = (extra.klantVersie ?? 1) >= 3
+      ? { tekst: "De kleurenscan lukt nu even niet. Kies een kleurfamilie, dan zie je de kleuren en het sample pack erbij.", vraag: "geen", actie: "geen" }
+      : { tekst: "De kleurenscan opent in een nieuw tabblad en je plan blijft hier staan. Kom daarna gerust terug en noem de kleuren die je wilt proberen. Wil je liever meteen vergelijken? Kies een kleurfamilie, dan zie je de kleuren en het sample pack.", vraag: "geen", actie: "geen" };
     familiesTonen = true;
   }
 
@@ -1458,7 +1589,29 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Een ingevuld formulier: direct vastleggen. Is er daarna nog een formulier nodig, dan komt dat meteen,
   // zonder model; anders gaat het model verder met de nieuwe stand.
   let formTekst = "";
-  if (formulier && "object" === typeof formulier) {
+  if (formulier && "object" === typeof formulier && "scan" === formulier.soort) {
+    // De kleurenscan in het gesprek: de engine kiest drie kleuren, wij zetten ze als kandidaat bij de muur en tonen
+    // ze als kaarten met het waarom erbij. Lukt het niet, dan de kleurfamilies als kortste weg.
+    formTekst = "Kleurenscan ingevuld";
+    const doel = kaartDoel(project, String(formulier.waarden?.voor ?? ""));
+    const uitkomst = doel ? await scanUitkomst(project, doel, formulier.waarden ?? {}, sessie, extra.ip ?? "").catch((e) => { console.error("scan", e); return null; }) : null;
+    if (uitkomst && doel) {
+      await metKleuren();
+      const u = toepassen(project, { aanvraagId: aanvraagId + "#sc", versie: project.versie, door: "klant-kaart", wijzigingen: uitkomst.kleuren.map((k: any) => ({ actie: "kleur", ruimte: doel.ruimte, vlak: doel.vlak, wat: "kandidaat", kleur: { type: "roll", naam: k.naam }, zekerheid: "zeker" })) }, opties);
+      project = u.project;
+      laatsteWijzigingen = u.toegepast;
+      const [een, ...rest] = uitkomst.kleuren.map((k: any) => k.naam);
+      const andere = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} en ${rest[rest.length - 1]}` : rest[0];
+      antwoord = {
+        tekst: `Uit jouw antwoorden komt ${een} als winnaar${andere ? `, met ${andere} als alternatief` : ""}. Tik op een kleur om hem te kiezen voor ${vlakLabel(project, doel.ruimte, doel.vlak)}, of probeer ze eerst thuis als sample.`,
+        vraag: "geen", actie: "geen", kaarten: uitkomst.kleuren.map((k: any) => k.naam), voor: `${doel.ruimte}.${doel.vlak}`, kaartenTitel: "Uit jouw kleurenscan",
+        kaartInfo: Object.fromEntries(uitkomst.kleuren.map((k: any) => [k.naam, { label: k.label, waarom: k.waarom[0] ?? "" }])), packIds: uitkomst.packIds, scanKlaar: true,
+      };
+    } else {
+      antwoord = { tekst: "De kleurenscan lukt nu even niet. Kies een kleurfamilie, dan zie je de kleuren en het sample pack erbij.", vraag: "geen", actie: "geen" };
+      familiesTonen = true;
+    }
+  } else if (formulier && "object" === typeof formulier) {
     let anders: string[] = [];
     let witKiezen: string[] = [];
     let fw: { wijzigingen: any[]; tekst: string; noot?: string };
@@ -1504,6 +1657,23 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
       if (volgende) antwoord = { tekst: `Genoteerd. ${formVraag(volgende)}`, vraag: "geen", actie: "geen", formulier: volgende };
       else {
         antwoord = renovliesVraag(project) ?? sampleKleurstap(project) ?? (await kleurStap(project));
+      }
+      // De snelle kleurkeuzes voor plafond en lakwerk: vast bevestigen, zonder model. "Andere kleur" toont de
+      // kleurfamilies voor dat onderdeel (verbeterronde 10 nov 2026).
+      if (!antwoord && "kleur" === formulier.soort && !openMuren(project).length) {
+        const gekozenNu = u.toegepast.filter((x: any) => "kleur" === x.actie && "kies" === x.wat);
+        // "Fresh Sheets staat erin voor het plafond en Blank Page voor de deuren."
+        const delen = gekozenNu.map((x: any, i: number) => `${x.kleur?.naam ?? "de kleur"}${0 === i ? " staat erin" : ""} voor ${vlakLabel(project, x.ruimte, x.vlak)}`);
+        const staat = delen.length ? `${delen.length > 1 ? `${delen.slice(0, -1).join(", ")} en ${delen[delen.length - 1]}` : delen[0]}.` : "";
+        if (anders.length) {
+          const [ar, av] = anders[0].split(".");
+          antwoord = { tekst: `${staat} Welke kleurfamilie spreekt je aan voor ${vlakLabel(project, ar, av)}?`.trim(), vraag: "geen", actie: "geen", familiesVoor: anders[0] };
+          familiesTonen = true;
+        } else {
+          const klaar = "compleet" === route(project).route && projectStatus(project).teBestellen.length > 0;
+          const open = route(project).open.length > 0;
+          antwoord = { tekst: `${staat || "Prima."}${klaar ? " Je pakket staat klaar." : open ? " Wat nog open is, komt erbij zodra je kiest." : ""}`.trim(), vraag: "geen", actie: "geen" };
+        }
       }
     }
     // Meer soorten muren in een ruimte: zeg waar we mee rekenen, voor de volgende vraag.
@@ -1756,7 +1926,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // we niet op de kleurenlijst (een formulier is dan meteen klaar).
   ixP.catch(() => null);
   const ix = antwoord.kaarten?.length ? await ixP : null;
-  const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix?.c.find((k) => k.n === n)).filter(Boolean).slice(0, antwoord.alleKaarten ? 20 : MAX_KAARTEN).map((k: any) => kaart(k));
+  const kaarten = (antwoord.kaarten ?? []).map((n: string) => ix?.c.find((k) => k.n === n)).filter(Boolean).slice(0, antwoord.alleKaarten ? 20 : MAX_KAARTEN).map((k: any) => ({ ...kaart(k), ...(antwoord.kaartInfo?.[k.n] ?? {}) }));
   // Koos de klant in het onderdelenformulier zelf wat hij schildert, dan vraagt Charlie niet alsnog of het plafond
   // ook mee moet (open punt 10 nov 2026: die vraag kwam naast de bestelkaart en hield hem tegen).
   if ("plafond" === antwoord.vraag && (rij.gesprek as any[]).some((b) => "onderdelen" === b.form)) {
@@ -1793,7 +1963,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   if ("richting" === antwoord.vraag) { familiesTonen = true; antwoord.vraag = "geen"; }
   const families = familiesTonen ? familiesVoorKeuze(await ixP) : null;
   if (families) antwoord.chips = [];
-  const packs = antwoord.packsVan ? packsVanFamilie(antwoord.packsVan, project) : [];
+  const packs = Array.isArray(antwoord.packIds) && antwoord.packIds.length
+    ? antwoord.packIds.map((id: number) => PACKS.packs.find((p: any) => p.productId === id)).filter(Boolean).map((p: any) => packKaart(p, project))
+    : antwoord.packsVan ? packsVanFamilie(antwoord.packsVan, project) : [];
   // Klaar om te bestellen: de browser toont een bestelkaart met pakket, gereedschapskeuze en knop. Dan geen vraag naar rollers en kwasten meer.
   const rt = route(project);
   const heeftSamples = (project.samples ?? []).length + (project.packs ?? []).length > 0;
@@ -1806,7 +1978,10 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Twee lagen omdat de klant niet wist wat er op de muur zit: één keer per gesprek, bij de bestelkaart, zeggen wat het
   // scheelt als het een lichte muur blijkt (feedback rekenregels 10 nov 2026). Het bedrag komt uit de rekenkern.
   let lagenNoot = false;
-  if (bestellen && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.lagenNoot)) {
+  // Alleen rekenen als er echt een muur is waarvan we de ondergrond niet weten: anders kost elke beurt bij de
+  // bestelkaart twee seconden wachten op de rekenkern (verbeterronde 10 nov 2026).
+  const muurOnbekend = project.ruimtes.some((r: any) => r.vlakken.some((v: any) => !isLak(v.soort) && "onbekend" === w(v.ondergrond?.afwerking)));
+  if (bestellen && muurOnbekend && !(rij.gesprek as any[]).some((b) => b.uit?.antwoord?.lagenNoot)) {
     const d2 = await bereken(plan).catch(() => null);
     const tl = d2?.tweeLagenOnbekend;
     if (tl?.scheelt > 0 && tl.ruimtes?.length) {
@@ -1833,8 +2008,8 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   const mailVraag = !rij.bewaard_op && (mailMoment || heeftIets) && !formulierUit && !kaarten.length && "overdracht" !== antwoord.actie && !bestellen
     && (0 === mailEerder || (1 === mailEerder && mailMoment && !vorigeRoll?.uit?.antwoord?.mailVraag));
   const uit = {
-    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(lagenNoot ? { lagenNoot: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
-    ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog } } : {}),
+    antwoord: { tekst: String(antwoord.tekst ?? ""), vraag: String(antwoord.vraag ?? "geen"), ...(mailVraag ? { mailVraag: true } : {}), ...(bestellen ? { bestellen: true } : {}), ...(lagenNoot ? { lagenNoot: true } : {}), ...(antwoord.scanKlaar ? { scanKlaar: true } : {}), ...(packs.length ? { packs } : {}), ...(antwoord.ruimteKeuze ? { ruimteKeuze: true } : {}), ...(families ? { families, ...(antwoord.familiesVoor ? { familiesVoor: String(antwoord.familiesVoor) } : {}) } : {}), pack: packs[0] ?? (kaarten.length && !antwoord.zonderPack ? packVoor(kaarten.map((k: any) => k.naam), project, richting) : null), ...(antwoord.kaartenTitel && kaarten.length ? { kaartenTitel: antwoord.kaartenTitel } : {}), kaartenVoor: kaarten.length ? kaartDoel(project, antwoord.voor) : null, chips: formulierUit ? [] : chipsVoor(String(antwoord.vraag ?? "geen"), project, antwoord.chips ?? []), kaarten, actie: antwoord.actie ?? "geen", aannames: (antwoord.aannames ?? []).slice(0, 6), formulier: formulierUit },
+    ...(metTest ? { test: { tools: toolLog.map((x) => x.tool), controle: controleLog, model: !(zonderModel || opGrens) } } : {}),
     project, status, pakket: null, pakketVolgt: true, mens, versie: project.versie, mandPlan: mandPlan(plan, status, project), route: route(project), voortgang: voortgang(project, formulierUit),
   };
   const nu = new Date().toISOString();
@@ -1842,7 +2017,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
     { rol: "klant", tekst: bericht || formTekst || tikTekst, aanvraagId, op: nu, ...(formulier && WIJZIGBAAR.includes(formulier.soort) ? { form: formulier.soort } : {}) },
     { rol: "roll", tekst: uit.antwoord.tekst, aanvraagId, op: nu, ...(zonderModel || opGrens ? {} : { model: true }), uit: { antwoord: uit.antwoord } }];
   const t2 = Date.now();
-  await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu });
+  // De herkomst hoort bij het gesprek zodra die bekend is (een maillink zette hem er al eerder in).
+  const herkomst = !rij.utm && extra.herkomst && Object.keys(extra.herkomst).length ? { utm: extra.herkomst } : {};
+  await db.from("projecthulp_chat").upsert({ sessie, project, gesprek, status: rij.status ?? "actief", updated_at: nu, ...herkomst });
   tokens.t.opslaan = Date.now() - t2;
   await db.from("projecthulp_chat_log").insert({ sessie, aanvraag_id: aanvraagId, versie: project.versie, bericht: (bericht || formTekst || tikTekst).replace(/\b\d{4}\s?[a-z]{2}\b|\b0\d{9}\b|\S+@\S+/gi, "[weg]"), wijzigingen: laatsteWijzigingen, tools: toolLog, model: modelKeuze, controle: controleLog.length ? controleLog : null, onderwerp: antwoord.onderwerp ?? null, onbeantwoord: antwoord.onderwerp ? !!antwoord.onbeantwoord : null, tokens, duur_ms: Date.now() - start });
   return uit;
@@ -1916,6 +2093,22 @@ Deno.serve(async (req) => {
       else await db.from("projecthulp_chat").insert({ sessie, project, gesprek: [], status: "actief", ...extra, updated_at: nu });
       return j({ samplekleuren: project.samplekleuren, nieuw: namen.filter((n) => !al.includes(n)), bron: bron ?? rij?.bron ?? null, versie: project.versie });
     }
+    // De stappen van de trechter, voor de inzichten (ook voor het eerste bericht). Hooguit een rij per stap per sessie
+    // per uur, zodat herladen niet dubbel telt. De testset telt niet mee.
+    if (body.stap) {
+      const stap = String(body.stap);
+      if (MEET_STAPPEN.includes(stap) && !/^test/i.test(sessie)) {
+        const sinds = new Date(Date.now() - 3600_000).toISOString();
+        const { data: al } = await db.from("projecthulp_stap").select("id").eq("sessie", sessie).eq("stap", stap).gte("created_at", sinds).limit(1);
+        if (!(al ?? []).length) {
+          const h = herkomstUit(body.herkomst);
+          const e = body.extra && "object" === typeof body.extra ? Object.fromEntries(Object.entries(body.extra).slice(0, 4).map(([k, v]) => [String(k).slice(0, 20), String(v).slice(0, 60)])) : {};
+          const extraStap = { ...e, ...("start_gezien" === stap ? h : {}) };
+          await db.from("projecthulp_stap").insert({ sessie, stap, extra: Object.keys(extraStap).length ? extraStap : null });
+        }
+      }
+      return j({ ok: true });
+    }
     // De klik op bestellen, voor de inzichten. updated_at blijft staan: dit is geen gespreksactiviteit.
     if (body.mand) {
       await db.from("projecthulp_chat").update({ mand_op: new Date().toISOString(), mand_soort: "samples" === body.mand ? "samples" : "bestelling" }).eq("sessie", sessie);
@@ -1953,8 +2146,8 @@ Deno.serve(async (req) => {
       return j({ code, tekst: `Hoi Roll, ik heb een vraag over mijn verfplan (code ${code}).` });
     }
     const bericht = String(body.bericht ?? "").slice(0, MAX_TEKENS);
-    const formulier = body.formulier && "object" === typeof body.formulier && ["start", "onderdelen", "maat", "muren", "lak", "kleur"].includes(body.formulier.soort) ? body.formulier : null;
-    const extra = { wijzigForm: WIJZIGBAAR.includes(body.wijzigForm) ? String(body.wijzigForm) : "", klantVersie: Number(body.klantVersie) || 1 };
+    const formulier = body.formulier && "object" === typeof body.formulier && ["start", "onderdelen", "maat", "muren", "lak", "kleur", "scan"].includes(body.formulier.soort) ? body.formulier : null;
+    const extra = { wijzigForm: WIJZIGBAAR.includes(body.wijzigForm) ? String(body.wijzigForm) : "", klantVersie: Number(body.klantVersie) || 1, herkomst: herkomstUit(body.herkomst), ip: (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 60) };
     if (!bericht.trim() && !body.tik && !formulier && !extra.wijzigForm) return j({ fout: "Leeg bericht." }, 400);
     const aanvraagId = String(body.aanvraagId ?? crypto.randomUUID()).slice(0, 64);
     const model = TEST_TOKEN === body.test && /^(claude-(haiku|sonnet|opus)-[\d-]+(:(uit|tussen|adaptive))?|gemini-[\w.-]+)$/.test(String(body.model ?? "")) ? String(body.model) : MODEL;
