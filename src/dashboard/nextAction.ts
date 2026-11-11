@@ -17,7 +17,7 @@ export interface NextActionInput {
     advisor_followup_sent_at: string | null;
     planning: string | null;
   } | null;
-  rollTask?: { type: "offerte" | "contact" | "maatwerk" | "nazorg"; status: string; owner: string | null } | null;
+  rollTask?: { type: "offerte" | "contact" | "maatwerk" | "nazorg" | "korting"; status: string; owner: string | null } | null;
   // Open opvolgtaken (fase 4): de eerstvolgende bepaalt de actie.
   openTasks?: { action: string; owner: "styliste" | "roll" | "klant"; due_date: string | null }[];
   // Na de sample-check-in: wat is de logische volgende stap (alleen vanuit de werkplek meegegeven).
@@ -64,7 +64,7 @@ export function nextAction(b: NextActionInput): NextAction {
   }
   const rt = b.rollTask ?? null;
   if (rt && (rt.status === "aangevraagd" || rt.status === "opgepakt")) {
-    const what = ({ offerte: "Verfplan aangevraagd bij Roll", contact: "Contactverzoek bij Roll", maatwerk: "Maatwerk bij Roll", nazorg: "Roll volgt de klant op" } as Record<string, string>)[rt.type] ?? "Taak bij Roll";
+    const what = ({ offerte: "Verfplan aangevraagd bij Roll", contact: "Contactverzoek bij Roll", maatwerk: "Maatwerk bij Roll", nazorg: "Roll volgt de klant op", korting: "Korting aangevraagd bij Roll" } as Record<string, string>)[rt.type] ?? "Taak bij Roll";
     return { title: `${what}${rt.owner ? `. ${rt.owner} pakt dit op` : ", nog geen eigenaar"}`, sub: rt.status === "opgepakt" ? "Roll is ermee bezig." : "Roll wijst een eigenaar toe.", owner: "Roll", to: gesprek, phase: "versturen" };
   }
   if (rt && rt.status === "verstuurd") {

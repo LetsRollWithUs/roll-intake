@@ -68,6 +68,7 @@ const REASONS = [
   { key: "kleur", label: "Kleur of leverbaarheid onzeker" },
   { key: "product", label: "Productkeuze (lak, trap, buiten)" },
   { key: "maatwerk", label: "Groot project: maatwerk met extra korting" },
+  { key: "korting", label: "Korting nodig om deze klant binnen te halen" },
   { key: "anders", label: "Iets anders" },
 ];
 
@@ -197,7 +198,7 @@ export function Afronden({ intake, message, setMessage, bookingId, stylistId, st
     const why = REASONS.find((r) => r.key === reason)?.label ?? reason;
     const due = new Date(); due.setDate(due.getDate() + 1);
     const { data, error } = await supabase.from("roll_tasks").insert({
-      type: reason === "maatwerk" ? "maatwerk" : "contact", booking_id: bookingId, intake_id: intake.id, stylist_id: stylistId,
+      type: reason === "maatwerk" ? "maatwerk" : reason === "korting" ? "korting" : "contact", booking_id: bookingId, intake_id: intake.id, stylist_id: stylistId,
       requested_by: u?.user?.email ?? null, due_date: due.toISOString().slice(0, 10), payload: buildTaskPayload(intake, [why + ".", context.trim()].filter(Boolean).join(" ")),
     }).select("id,type,status,owner,due_date,payload,result,created_at,updated_at").single();
     if (error || !data) { setState({ k: "roll", s: "fout", t: "Overdragen lukte niet. Probeer het opnieuw." }); return; }

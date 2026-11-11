@@ -8,7 +8,7 @@ interface Row {
   id: string;
   woo_order_id: string;
   stylist_id: string | null;
-  route: "advies" | "code";
+  route: "advies" | "code" | "offerte";
   customer_email: string | null;
   verf_excl: number;
   amount: number;
@@ -33,7 +33,7 @@ const NEXT: Record<string, { to: string; label: string } | undefined> = {
   te_controleren: { to: "uitbetaalbaar", label: "Goedkeuren (te factureren)" },
   uitbetaalbaar: { to: "uitbetaald", label: "Markeer gefactureerd" },
 };
-const routeLabel = (r: string) => (r === "code" ? "Eigen klant (code)" : "Via Roll-advies");
+const routeLabel = (r: string) => (r === "offerte" ? "Eigen klant (offerte)" : r === "code" ? "Eigen klant (code)" : "Via Roll-advies");
 
 export function CommissiePage() {
   const [rows, setRows] = useState<Row[]>([]);

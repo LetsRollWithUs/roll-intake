@@ -9,6 +9,8 @@ interface Row extends RollTask {
   booking_id: string | null;
   intake_id: string | null;
   requested_by: string | null;
+  offer_id: string | null;
+  stylist_id: string | null;
   bookings: { customer_name: string | null; customer_email: string | null } | null;
   stylists: { name: string } | null;
 }
@@ -26,7 +28,7 @@ export function TakenPage() {
   const load = async () => {
     const { data } = await supabase
       .from("roll_tasks")
-      .select("id,type,status,owner,due_date,payload,result,created_at,updated_at,booking_id,intake_id,requested_by, bookings(customer_name,customer_email), stylists(name)")
+      .select("id,type,status,owner,due_date,payload,result,created_at,updated_at,booking_id,intake_id,requested_by,offer_id,stylist_id, bookings(customer_name,customer_email), stylists(name)")
       .order("created_at", { ascending: false });
     const list = (data as unknown as Row[]) ?? [];
     setRows(list);
@@ -74,7 +76,19 @@ export function TakenPage() {
     if (d?.ok) await load();
   };
 
-  const visible = useMemo(() => (filter === "open" ? rows.filter((t) => t.status !== "afgerond") : rows), [rows, filter]);
+  // Korting aangevraagd door een styliste: toekennen (5 of 10 procent) of afwijzen. De offerte-tool zet de korting.
+  const [stylist, setStylist] = useState("");
+  const kortingBesluit = async (t: Row, pct: number) => {
+    setSending(t.id); setSendMsg({ ...sendMsg, [t.id]: "" });
+    const { data } = await supabase.functions.invoke("offerte-eigen", { body: { action: "korting_besluit", task_id: t.id, pct } });
+    const d = data as { ok?: boolean; error?: string } | null;
+    setSending(null);
+    setSendMsg({ ...sendMsg, [t.id]: d?.ok ? (pct > 0 ? `${pct}% korting toegekend en op de offerte gezet.` : "Aanvraag afgewezen.") : d?.error ?? "Dat lukte niet." });
+    if (d?.ok) await load();
+  };
+  const stylistes = useMemo(() => [...new Map(rows.filter((t) => t.stylist_id && t.stylists?.name).map((t) => [t.stylist_id as string, t.stylists!.name])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [rows]);
+
+  const visible = useMemo(() => (filter === "open" ? rows.filter((t) => t.status !== "afgerond") : rows).filter((t) => !stylist || t.stylist_id === stylist), [rows, filter, stylist]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
 
@@ -85,6 +99,12 @@ export function TakenPage() {
       <div style={{ display: "flex", gap: 8, margin: "12px 0 14px" }}>
         <button className={`rd-plan-chip${filter === "open" ? " is-on" : ""}`} onClick={() => setFilter("open")}>Open ({rows.filter((t) => t.status !== "afgerond").length})</button>
         <button className={`rd-plan-chip${filter === "alles" ? " is-on" : ""}`} onClick={() => setFilter("alles")}>Alles</button>
+        {stylistes.length > 1 && (
+          <select className="rd-input" value={stylist} onChange={(e) => setStylist(e.target.value)} style={{ height: 38, width: "auto" }} aria-label="Filter op styliste">
+            <option value="">Alle stylistes</option>
+            {stylistes.map(([id, naam]) => <option key={id} value={id}>{naam}</option>)}
+          </select>
+        )}
       </div>
       {visible.length === 0 ? <p className="rd-sub">Geen taken.</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -95,9 +115,10 @@ export function TakenPage() {
               <div key={t.id} className="rd-card-white" style={{ border: overdue ? "1px solid var(--rd-pink-dark)" : "1px solid transparent" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15 }}>{TASK_TYPE[t.type]} · {t.bookings?.customer_name || "Klant"}</div>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>{TASK_TYPE[t.type]} · {t.bookings?.customer_name || (t.payload as { klant_naam?: string } | null)?.klant_naam || "Klant"}</div>
                     <div style={{ fontSize: 13, opacity: 0.7 }}>Aangevraagd {formatDate(t.created_at)} door {t.requested_by ?? t.stylists?.name ?? "—"}{t.bookings?.customer_email ? ` · ${t.bookings.customer_email}` : ""}</div>
                     {t.booking_id && <Link to={`/beheer/gesprek/${t.booking_id}`} className="rd-textlink" style={{ fontSize: 13 }}>Open gesprek</Link>}
+                    {t.offer_id && <Link to={`/beheer/offertes/${t.offer_id}`} className="rd-textlink" style={{ fontSize: 13 }}>Open offerte</Link>}
                   </div>
                   <span className="rd-chip" style={{ background: t.status === "afgerond" ? "#C9E6CE" : "var(--rd-aubergine)", color: t.status === "afgerond" ? "#1e4429" : "#fff", fontWeight: 700 }}>{TASK_STATUS[t.status]}{overdue ? " · te laat" : ""}</span>
                 </div>
@@ -125,7 +146,14 @@ export function TakenPage() {
                 <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <button className="rd-plan-chip" onClick={() => save(t)}>Opslaan</button>
                   {NEXT[t.status] && <button className="rd-plan-chip is-on" onClick={() => save(t, { status: NEXT[t.status]! } as Partial<Row>)}>{NEXT_LABEL[t.status]}</button>}
-                  {t.intake_id && t.type !== "nazorg" && t.status !== "verstuurd" && t.status !== "afgerond" && (
+                  {t.type === "korting" && t.status !== "afgerond" && (
+                    <>
+                      <button className="rd-plan-chip is-on" onClick={() => kortingBesluit(t, 10)} disabled={sending === t.id}>10% toekennen</button>
+                      <button className="rd-plan-chip is-on" onClick={() => kortingBesluit(t, 5)} disabled={sending === t.id}>5% toekennen</button>
+                      <button className="rd-plan-chip" onClick={() => kortingBesluit(t, 0)} disabled={sending === t.id}>Afwijzen</button>
+                    </>
+                  )}
+                  {t.intake_id && t.type !== "nazorg" && t.type !== "korting" && t.status !== "verstuurd" && t.status !== "afgerond" && (
                     <button className="rd-plan-chip is-on" onClick={() => sendVoorstel(t)} disabled={sending === t.id}>{sending === t.id ? "Versturen..." : "Verstuur voorstel naar klant"}</button>
                   )}
                 </div>

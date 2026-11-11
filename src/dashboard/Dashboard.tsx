@@ -19,6 +19,7 @@ import { KanbanPage } from "./KanbanPage";
 import { KlantDossier } from "./KlantDossier";
 import { GesprekPage } from "./GesprekPage";
 import { TakenPage } from "./TakenPage";
+import { OffertesPage, OfferteDetail } from "./OffertesPage";
 import { KlantKaart } from "./klant/KlantKaart";
 import { NotificationsPage } from "./NotificationsPage";
 import { SchilderplanPage } from "./SchilderplanPage";
@@ -130,6 +131,7 @@ export function Dashboard() {
             <nav>
               <NavLink to="/beheer" end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Overzicht</NavLink>
               <NavLink to="/beheer/gesprekken" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Adviesgesprekken</NavLink>
+              <NavLink to="/beheer/offertes" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Offertes</NavLink>
               <NavLink to="/beheer/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
             </nav>
             <Link to="/beheer" className="rd-logo" aria-label="Roll advies">
@@ -202,6 +204,8 @@ export function Dashboard() {
       <Route path="gesprek/:bookingId" element={<KlantKaart />} />
       <Route path="gesprek-oud/:bookingId" element={<GesprekPage />} />
       <Route path="taken" element={<TakenPage />} />
+      <Route path="offertes" element={<OffertesPage />} />
+      <Route path="offertes/:id" element={<OfferteDetail />} />
       <Route path="commissie" element={<CommissiePage />} />
       <Route path="notificaties" element={<NotificationsPage />} />
       <Route path="account" element={<AccountPage />} />

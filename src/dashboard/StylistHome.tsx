@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { MijnOffertes } from "./OffertesPage";
 import { loadNotifications, type Notif } from "./notifications";
 
 interface Stylist { id: string; name: string; email?: string; meet_url: string | null }
@@ -208,6 +209,8 @@ export function StylistHome() {
               </div>
             )}
           </section>
+
+          <MijnOffertes stylistId={effective?.id ?? null} />
 
           {rows.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 20 }}>

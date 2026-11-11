@@ -1,7 +1,9 @@
 // Verfcommissie voor stylisten. Eén regel per betaalde verforder in de tabel `commissions`.
-// Twee toeschrijvingsroutes: 'code' (persoonlijke kortingscode van de styliste op de order)
-// en 'advies' (klant had binnen het venster een Roll-adviesgesprek bij die styliste).
-// Bij conflict: code wint (expliciete klantactie), maar we markeren voor controle.
+// Drie toeschrijvingsroutes: 'offerte' (bestelling via een offerte die de styliste voor een eigen klant
+// maakte; de order draagt het offerte-id en de afgesproken verdeling), 'code' (persoonlijke kortingscode
+// van de styliste op de order) en 'advies' (klant had binnen het venster een Roll-adviesgesprek bij die
+// styliste). Een offerte gaat voor (meest expliciet), daarna advies, daarna code; wijzen ze naar
+// verschillende stylisten, dan markeren we voor controle.
 
 import { notifyStylist, fmtDag, datumNL } from "./klaviyo.ts";
 
@@ -68,11 +70,27 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
     adviesBookingId = b?.id ?? null;
   }
 
+  // Route 'offerte': de winkelmandlink van een offerte voor een eigen klant zet de offerte, de styliste en
+  // de verdeling op de order (offerte-tool >= 1.86.0). Het percentage komt uit onze eigen offerte-rij,
+  // niet uit de order, zodat het niet te beinvloeden is.
+  const meta = (k: string) => (order.meta_data ?? []).find((m: any) => m.key === k)?.value;
+  let offerte: { id: string; stylist_id: string; commissie_pct: number; korting_pct: number } | null = null;
+  if (String(meta("_roll_offerte_herkomst") ?? "") === "styliste") {
+    const oid = Number(meta("_roll_offerte_id"));
+    if (oid) {
+      const { data: of } = await admin.from("stylist_offers").select("id,stylist_id,commissie_pct,korting_pct").eq("offerte_id", oid).maybeSingle();
+      if (of?.stylist_id) offerte = { id: of.id, stylist_id: of.stylist_id, commissie_pct: Number(of.commissie_pct), korting_pct: Number(of.korting_pct) };
+    }
+  }
+
   // E-mail (advies) is primair en het meest betrouwbaar; de persoonlijke code is de fallback
   // voor eigen klanten zonder adviesgesprek. Wijzen ze naar verschillende stylisten, dan markeren
   // we voor controle. De gedeelde samplekorting-code matcht nooit een styliste en wordt genegeerd.
   let stylist: string | null = null, route: string | null = null, conflict = false;
-  if (adviesStylist && codeStylist) {
+  if (offerte) {
+    stylist = offerte.stylist_id; route = "offerte";
+    conflict = (!!adviesStylist && adviesStylist !== stylist) || (!!codeStylist && codeStylist !== stylist);
+  } else if (adviesStylist && codeStylist) {
     stylist = adviesStylist; route = "advies"; conflict = adviesStylist !== codeStylist;
   } else if (adviesStylist) { stylist = adviesStylist; route = "advies"; }
   else if (codeStylist) { stylist = codeStylist; route = "code"; }
@@ -80,7 +98,8 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
 
   // Percentage uit de samenwerkingsafspraken van de styliste (ingesteld door beheer), anders de standaard.
   const { data: sr } = await admin.from("stylist_agreements").select("commission_rate").eq("stylist_id", stylist).maybeSingle();
-  const rate = sr?.commission_rate != null ? Number(sr.commission_rate) : RATE;
+  // Bij een offerte voor een eigen klant geldt de verdeling van die offerte.
+  const rate = offerte && Number.isFinite(offerte.commissie_pct) ? offerte.commissie_pct / 100 : sr?.commission_rate != null ? Number(sr.commission_rate) : RATE;
   const amount = Math.round(verf * rate * 100) / 100;
 
   // Bestaat er al een regel voor deze order? Niet overschrijven zodra 'ie verder is dan te_controleren.
@@ -90,11 +109,17 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
     verf_excl: Math.round(verf * 100) / 100, rate, amount,
     order_total: Number(order.total ?? 0), currency: order.currency ?? "EUR",
     conflict, updated_at: new Date().toISOString(),
+    offer_id: offerte?.id ?? null, klant_korting_pct: offerte ? offerte.korting_pct : null,
   };
   if (!existing) {
     await admin.from("commissions").insert({ ...row, status: "te_controleren" });
   } else if (existing.status === "te_controleren") {
     await admin.from("commissions").update(row).eq("id", existing.id);
+  }
+
+  // De offerte staat nu op besteld, met de order erbij.
+  if (offerte) {
+    await admin.from("stylist_offers").update({ status: "besteld", ordered_at: new Date().toISOString(), woo_order_id: wooId, updated_at: new Date().toISOString() }).eq("id", offerte.id);
   }
 
   // Kanban automatisch naar 'verf gekocht' voor de advies-boeking (tenzij afgehaakt), en

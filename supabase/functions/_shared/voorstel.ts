@@ -11,6 +11,9 @@ export interface Offer {
   subtotaal: number | null; korting: { label: string; bedrag: number } | null;
   extra: { label: string; bedrag: number }[]; verzending: number | null; totaal: number | null; bijgewerkt: string | null;
   vlakken: OfferVlak[]; klaarVoorOfferte: boolean;
+  // Offerte voor een eigen klant van de styliste (offerte-tool >= 1.86.0): verdeling en commissiebasis.
+  versie: number | null; intakeId: string | null; eigenKlant: boolean;
+  kortingPct: number; commissiePct: number | null; commissieBasis: number | null;
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
@@ -35,6 +38,8 @@ export function normalizeOffer(d: any): Offer {
       testKleuren: arr<any>(v?.testKleuren).slice(0, 24).map((t) => ({ kleurId: num(t?.kleurId), naam: String(t?.naam ?? t?.kleurNaam ?? ""), hex: t?.hex ?? t?.kleurHex ?? null })).filter((t) => t.naam),
     })).filter((v) => v.vid),
     klaarVoorOfferte: d?.klaarVoorOfferte !== false,
+    versie: num(d?.versie), intakeId: typeof d?.intakeId === "string" && d.intakeId ? d.intakeId : null, eigenKlant: d?.eigenKlant === true,
+    kortingPct: num(d?.kortingPct) ?? 0, commissiePct: num(d?.commissiePct), commissieBasis: num(d?.commissieBasis),
   };
 }
 
