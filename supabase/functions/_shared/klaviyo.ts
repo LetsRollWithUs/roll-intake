@@ -49,6 +49,12 @@ export const serviceMode = (key?: string | null) =>
 export const serviceLabel = (key?: string | null) =>
   key === "post_sample" ? "Al samples getest" : "Nog geen samples getest";
 
+// Alleen de dag, zonder tijd: "zaterdag 14 november".
+export const fmtDag = (iso: string) =>
+  new Intl.DateTimeFormat("nl-NL", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" }).format(new Date(iso));
+// Kalenderdatum in Nederland als JJJJ-MM-DD (voor due_date).
+export const datumNL = (d: Date) => new Intl.DateTimeFormat("sv-SE", { timeZone: TZ }).format(d);
+
 export const fmtLocal = (iso: string) =>
   new Intl.DateTimeFormat("nl-NL", {
     timeZone: TZ, weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
@@ -122,7 +128,9 @@ export async function buildBookingContext(
 // Interne notificatie naar de styliste (via Klaviyo, aan haar eigen e-mailadres).
 // Eén metric "Styliste melding" met een `soort`, zodat Furkan er één interne flow op bouwt.
 // soort: nieuwe_boeking | gewijzigd | geannuleerd | intake_binnen
-export async function notifyStylist(admin: any, bookingId: string, soort: string): Promise<void> {
+// extra: aanvullende velden voor de mail. key: vaste sleutel, zodat dezelfde melding nooit dubbel uitgaat
+// (Klaviyo ontdubbelt op unique_id); zonder key krijgt elke aanroep een eigen sleutel.
+export async function notifyStylist(admin: any, bookingId: string, soort: string, extra: Record<string, unknown> = {}, key?: string): Promise<void> {
   const { data: b } = await admin
     .from("bookings")
     .select("id,start_at,customer_name,customer_email,customer_phone,intake_id,format,address,preferences, services(key), stylists(name,email)")
@@ -135,6 +143,7 @@ export async function notifyStylist(admin: any, bookingId: string, soort: string
   const props = {
     soort,
     klant_naam: row.customer_name ?? null,
+    klant_voornaam: row.customer_name ? String(row.customer_name).trim().split(/\s+/)[0] : null,
     klant_email: row.customer_email ?? null,
     klant_telefoon: row.customer_phone ?? null,
     start_at: row.start_at,
@@ -147,13 +156,14 @@ export async function notifyStylist(admin: any, bookingId: string, soort: string
     klantkaart_url: `${INTAKE_BASE}/beheer/gesprek/${row.id}`,
     boekingen_url: `${INTAKE_BASE}/beheer/boekingen`,
     intake_dashboard_url: row.intake_id ? `${INTAKE_BASE}/beheer/${row.intake_id}` : null,
+    ...extra,
   };
   await klaviyoTrack(
     "Styliste melding",
     { email, first_name: row.stylists?.name ?? undefined },
     props,
     {},
-    `${bookingId}:styliste:${soort}:${Date.now()}`,
+    key ?? `${bookingId}:styliste:${soort}:${Date.now()}`,
     admin,
   );
 }

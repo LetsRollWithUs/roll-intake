@@ -3,6 +3,8 @@
 // en 'advies' (klant had binnen het venster een Roll-adviesgesprek bij die styliste).
 // Bij conflict: code wint (expliciete klantactie), maar we markeren voor controle.
 
+import { notifyStylist, fmtDag, datumNL } from "./klaviyo.ts";
+
 const RATE = Number(Deno.env.get("COMMISSION_RATE") ?? "0.10");
 const WINDOW_DAYS = Number(Deno.env.get("COMMISSION_WINDOW_DAYS") ?? "60");
 const ADVICE_IDS: number[] = [
@@ -107,25 +109,55 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
   return { ok: true, stylist, route, amount, conflict };
 }
 
-// Zet de sample-badge op de bijbehorende boeking wanneer een klant samples bestelt.
+// Samples besteld door een klant met een adviesgesprek: badge op de boeking, de styliste krijgt een
+// seintje ("goed nieuws, de samples zijn besteld") en haar check-in komt op besteldatum + CHECKIN_DAGEN
+// te staan, zodat ze op het juiste moment vraagt hoe de kleuren bevallen en de keuze in het verfplan zet.
+// Eenmalig per order: de webhook komt per statuswissel opnieuw binnen.
+export const CHECKIN_ACTIE = "Check hoe de samples bevallen";
+export const CHECKIN_DAGEN = Number(Deno.env.get("SAMPLE_CHECKIN_DAGEN") ?? "3");
+
 export async function flagSamplesOrdered(admin: any, order: any) {
-  const hasSample = (order.line_items ?? []).some((li: any) => /^SMP[-_]/i.test(li.sku || ""));
-  if (!hasSample) return;
+  const sampleRegels = (order.line_items ?? []).filter((li: any) => isSampleSku(li.sku));
+  if (!sampleRegels.length) return;
   const email = String(order.billing?.email ?? "").trim().toLowerCase();
   if (!email) return;
   const orderMs = new Date(order.date_created ?? order.date_created_gmt ?? Date.now()).getTime();
   const since = new Date(orderMs - WINDOW_DAYS * 864e5).toISOString();
   const { data: bk } = await admin
     .from("bookings")
-    .select("id")
+    .select("id,stylist_id,kanban_stage")
     .ilike("customer_email", email)
     .in("status", ["confirmed", "manual"])
     .gte("start_at", since)
     .lte("start_at", new Date(orderMs).toISOString())
     .order("start_at", { ascending: false })
     .limit(1);
-  const id = ((bk ?? [])[0] as any)?.id;
-  if (id) await admin.from("bookings").update({ samples_besteld: true }).eq("id", id);
+  const b = (bk ?? [])[0] as any;
+  if (!b?.id) return;
+  await admin.from("bookings").update({ samples_besteld: true }).eq("id", b.id);
+
+  // Verf al gekocht of klant afgehaakt: geen check-in meer nodig.
+  if (["verf", "afgehaakt"].includes(b.kanban_stage)) return;
+  const key = `${b.id}:styliste:samples_besteld:${order.id}`;
+  const { data: al } = await admin.from("notification_outbox").select("id").eq("unique_id", key).limit(1);
+  if ((al ?? []).length) return;
+
+  const checkin = new Date(orderMs + CHECKIN_DAGEN * 864e5);
+  const due = datumNL(checkin);
+  const { data: open } = await admin.from("followup_tasks").select("id")
+    .eq("booking_id", b.id).eq("kind", "sample_checkin").is("done_at", null).limit(1);
+  const taakId = ((open ?? [])[0] as any)?.id;
+  if (taakId) await admin.from("followup_tasks").update({ due_date: due }).eq("id", taakId);
+  else await admin.from("followup_tasks").insert({
+    booking_id: b.id, stylist_id: b.stylist_id ?? null, action: CHECKIN_ACTIE, owner: "styliste",
+    due_date: due, kind: "sample_checkin", created_by: "systeem",
+  });
+
+  const samples = sampleRegels.map((li: any) => String(li.name ?? "").trim()).filter(Boolean).slice(0, 12);
+  await notifyStylist(admin, b.id, "samples_besteld", {
+    samples, order_nummer: String(order.number ?? order.id),
+    checkin_datum_local: fmtDag(checkin.toISOString()),
+  }, key);
 }
 
 // Bij refund/annulering: commissie laten vervallen, tenzij al uitbetaald (dan handmatig terugvorderen).
