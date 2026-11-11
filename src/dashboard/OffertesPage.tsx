@@ -38,7 +38,7 @@ async function roep<T = Record<string, unknown>>(body: Record<string, unknown>):
   return data as (T & { ok?: boolean; error?: string }) | null;
 }
 
-async function laadVerdelingen(): Promise<Paar[]> {
+export async function laadVerdelingen(): Promise<Paar[]> {
   const { data } = await supabase.from("stylist_offer_settings").select("verdelingen").eq("id", true).maybeSingle();
   const ruw = (data as { verdelingen?: unknown } | null)?.verdelingen;
   const lijst = Array.isArray(ruw) ? (ruw as unknown[]).filter((p): p is Paar => Array.isArray(p) && p.length === 2).map((p) => [Number(p[0]), Number(p[1])] as Paar) : [];

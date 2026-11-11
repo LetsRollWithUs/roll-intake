@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { laadVerdelingen } from "./OffertesPage";
 
 // Kleine sectiekaart met kop en inhoud.
 function Block({ kicker, title, children }: { kicker: string; title: string; children: React.ReactNode }) {
@@ -14,6 +16,45 @@ function Block({ kicker, title, children }: { kicker: string; title: string; chi
 }
 
 // Genummerd stappenrijtje voor "hoe het beheer werkt".
+// Offertes voor eigen klanten: de verdelingen komen uit de instellingen, zodat de uitleg klopt als beheer er een uitzet.
+function EigenKlanten() {
+  const [paren, setParen] = useState<[number, number][]>([[10, 10], [15, 5], [20, 0]]);
+  useEffect(() => { laadVerdelingen().then(setParen).catch(() => {}); }, []);
+  const pct = (n: number) => `${String(n).replace(".", ",")}%`;
+  return (
+    <Block kicker="Je eigen klanten" title="Zelf een offerte maken">
+      <p style={{ margin: 0 }}>
+        Heb je een klant uit je eigen netwerk, dus zonder adviesgesprek via Roll? Dan maak je zelf een offerte
+        onder <Link to="/beheer/offertes" style={{ color: "inherit", fontWeight: 700 }}>Offertes</Link>. Je vult de naam
+        en het e-mailadres van je klant in en bouwt de offerte in dezelfde editor als bij het verfplan: ruimtes, maten,
+        kleuren en wat er verder nodig is.
+      </p>
+      <p style={{ margin: 0 }}><strong>Jij kiest per offerte de verdeling:</strong></p>
+      <ul style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
+        {paren.map(([c, k]) => (
+          <li key={`${c}-${k}`}>{pct(c)} commissie voor jou en {k > 0 ? `${pct(k)} korting voor je klant` : "geen korting voor je klant"}.</li>
+        ))}
+      </ul>
+      <ul style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
+        <li>De korting geldt op de verf. Andere kortingscodes werken er niet naast, en de korting werkt alleen via de link van jouw offerte.</li>
+        <li>Je kunt de verdeling aanpassen tot je klant bestelt.</li>
+        <li>Versturen doe je per mail, of je kopieert de link en deelt hem zelf, bijvoorbeeld via WhatsApp.</li>
+        <li>Je commissie wordt berekend over het bedrag zonder btw en verzending. Bij elke offerte zie je wat hij je oplevert.</li>
+      </ul>
+      <p style={{ margin: 0 }}>
+        <strong>Had je klant kort geleden een adviesgesprek via Roll?</strong> Dan is het een Roll-klant: je krijgt 10%
+        commissie en de klant krijgt de samplekorting van de winkel, geen extra korting. Heeft deze klant toch een
+        steuntje nodig om te bestellen, vraag dan korting aan bij Roll. Dat kan bij de offerte, of bij Afronden via
+        "Roll laten meekijken". Leg kort uit waarom; Roll laat je weten of het kan.
+      </p>
+      <p style={{ margin: 0 }}>
+        Bestelt je klant, dan staat je commissie bij <Link to="/beheer/commissie" style={{ color: "inherit", fontWeight: 700 }}>Commissie</Link>,
+        samen met je andere commissie. Die factureer je periodiek aan Roll.
+      </p>
+    </Block>
+  );
+}
+
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -111,6 +152,8 @@ export function OnboardingPage() {
           </p>
         </Block>
 
+        <EigenKlanten />
+
         <Block kicker="Hoe het beheer werkt" title="Zo werk je met dit dashboard">
           <Step n={1} title="Start: jouw afspraken">
             Op je startpagina zie je de afspraken die voor jou klaarstaan, met vandaag bovenaan. Per afspraak
@@ -132,6 +175,10 @@ export function OnboardingPage() {
           <Step n={5} title="Boekingen: verzetten of overdragen">
             Onder Boekingen kun je een afspraak verzetten of aan een collega overdragen als dat nodig is. De
             klant krijgt daar automatisch bericht over.
+          </Step>
+          <Step n={6} title="Offertes: voor je eigen klanten">
+            Onder Offertes maak je een offerte voor een klant uit je eigen netwerk en kies je de verdeling tussen
+            jouw commissie en de korting voor je klant. Op je startpagina zie je wat er loopt en wat het oplevert.
           </Step>
         </Block>
 
