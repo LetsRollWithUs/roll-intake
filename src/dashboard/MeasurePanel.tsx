@@ -5,6 +5,7 @@ import type { DbRoom, IntakeRow, OfferMeta } from "./types";
 import { buildTaskPayload, type RollTask } from "./RollHelpForm";
 import { VoorstelPanel } from "./VoorstelPanel";
 import { TrashIcon, iconBtn } from "./icons";
+import { inMeter, MAAT_MAX } from "@/lib/maten";
 import {
   calcRoom, calcProject, emptyMeasure, STANDAARD_HOOGTE, STANDAARD_LAGEN, TRAP_M2, needsVoorstrijk, needsPrimer, needsRenovlies,
   type RoomMeasure, type MaterialLine,
@@ -59,14 +60,27 @@ interface Props {
   onTask: (t: RollTask) => void;
 }
 
+/** Al bewaarde maten in centimeters (van voor het vangnet) meteen in meters, zodat het advies niet meer vastloopt. */
+function metersVan(m: RoomMeasure | undefined): RoomMeasure | undefined {
+  if (!m) return m;
+  const o = (x: { w: number; h: number }) => ({ ...x, w: inMeter(x.w, MAAT_MAX.object), h: inMeter(x.h, MAAT_MAX.object) });
+  return {
+    ...m,
+    walls: (m.walls ?? []).map((x) => ({ ...x, w: inMeter(x.w, MAAT_MAX.muur), h: inMeter(x.h, MAAT_MAX.hoogte) })),
+    ceilings: (m.ceilings ?? []).map((x) => ({ ...x, l: inMeter(x.l, MAAT_MAX.plafond), b: inMeter(x.b, MAAT_MAX.plafond) })),
+    woodwork: m.woodwork ? { ...m.woodwork, plinths_m: inMeter(m.woodwork.plinths_m, MAAT_MAX.plint), windows: (m.woodwork.windows ?? []).map(o), radiators: (m.woodwork.radiators ?? []).map(o), cabinets: (m.woodwork.cabinets ?? []).map(o) } : m.woodwork,
+  };
+}
+
 export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offerUrl, colorsByRoom, task, onSaved, onOffer, onIntake, onTask, embedded, beforeSend, sendLabel }: Props) {
   const intakeId = intake.id;
   const measured = rooms.filter((r) => showWalls(r) || showCeiling(r) || showWood(r));
   const [map, setMap] = useState<Record<string, RoomMeasure>>(() => {
     const m: Record<string, RoomMeasure> = {};
-    for (const r of measured) m[r.id] = value?.[r.id] ?? { ...emptyMeasure(), walls: showWalls(r) ? [{ w: 0, h: STANDAARD_HOOGTE }] : [] };
+    for (const r of measured) m[r.id] = metersVan(value?.[r.id]) ?? { ...emptyMeasure(), walls: showWalls(r) ? [{ w: 0, h: STANDAARD_HOOGTE }] : [] };
     return m;
   });
+  const [maatMelding, setMaatMelding] = useState("");
   const [toolsInCart, setToolsInCart] = useState<boolean>(intake.offer_meta?.tools_in_cart ?? true);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -124,11 +138,15 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
 
   if (measured.length === 0) return <p className="rd-sub" style={{ margin: 0 }}>Geen ruimtes met te verven oppervlakken in de intake.</p>;
 
-  const numField = (label: string, val: number, on: (n: number) => void, ph = "", w = 84) => (
+  // Maten zijn in meters (11 nov 2026): een getal dat als meter niet kan, is in centimeters ingevuld. Bij het
+  // verlaten van het veld zetten we het om en zeggen we dat (410 bij een plafond gaf anders 100.000 m2 in het advies).
+  const numField = (label: string, val: number, on: (n: number) => void, ph = "", w = 84, max = 0) => (
     <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <span style={{ fontSize: 11, opacity: 0.6 }}>{label}</span>
       <input className="rd-input" inputMode="decimal" value={val || ""} placeholder={ph}
-        onChange={(e) => on(parseFloat(e.target.value.replace(",", ".")) || 0)} style={{ height: 36, width: w }} />
+        onChange={(e) => on(parseFloat(e.target.value.replace(",", ".")) || 0)}
+        onBlur={() => { const m = max ? inMeter(val, max) : val; if (m !== val) { on(m); setMaatMelding(`${String(val).replace(".", ",")} is omgezet naar ${String(m).replace(".", ",")} m. Vul maten in meters in, bijvoorbeeld 3,6.`); } }}
+        style={{ height: 36, width: w }} />
     </label>
   );
   const colorField = (val: string | undefined, placeholder: string, on: (v: string) => void) => {
@@ -167,6 +185,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <datalist id="mp-colors">{rollColors.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+      {maatMelding && <p role="status" style={{ margin: 0, padding: "8px 12px", borderRadius: 10, background: "#FFF6E5", border: "1px solid #F2DDB0", fontSize: 13 }}>{maatMelding}</p>}
       <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>De maten komen uit de intake; stel bij waar nodig (een schatting is prima). De kleuren staan al goed vanuit het verf-advies; zet per vlak een andere kleur voor bijvoorbeeld een accentwand.</p>
 
       {measured.map((r) => {
@@ -186,8 +205,8 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {m.walls.map((w, i) => (
                     <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-                      {numField("breedte (m)", w.w, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, w: n } : x) }), "11")}
-                      {numField("hoogte (m)", w.h, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, h: n } : x) }), "2,6")}
+                      {numField("breedte (m)", w.w, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, w: n } : x) }), "11", 84, MAAT_MAX.muur)}
+                      {numField("hoogte (m)", w.h, (n) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, h: n } : x) }), "2,6", 84, MAAT_MAX.hoogte)}
                       {colorField(w.color, d.muur, (v) => setRoom(r.id, { walls: m.walls.map((x, j) => j === i ? { ...x, color: v } : x) }))}
                       <button onClick={() => setRoom(r.id, { walls: m.walls.filter((_, j) => j !== i) })} aria-label="Muurvlak verwijderen" title="Verwijderen" style={iconBtn}><TrashIcon /></button>
                     </div>
@@ -216,8 +235,8 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {m.ceilings.map((c, i) => (
                     <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-                      {numField("lengte (m)", c.l, (n) => setRoom(r.id, { ceilings: m.ceilings.map((x, j) => j === i ? { ...x, l: n } : x) }), "5")}
-                      {numField("breedte (m)", c.b, (n) => setRoom(r.id, { ceilings: m.ceilings.map((x, j) => j === i ? { ...x, b: n } : x) }), "4")}
+                      {numField("lengte (m)", c.l, (n) => setRoom(r.id, { ceilings: m.ceilings.map((x, j) => j === i ? { ...x, l: n } : x) }), "5", 84, MAAT_MAX.plafond)}
+                      {numField("breedte (m)", c.b, (n) => setRoom(r.id, { ceilings: m.ceilings.map((x, j) => j === i ? { ...x, b: n } : x) }), "4", 84, MAAT_MAX.plafond)}
                       <button onClick={() => setRoom(r.id, { ceilings: m.ceilings.filter((_, j) => j !== i) })} aria-label="Plafondvlak verwijderen" title="Verwijderen" style={iconBtn}><TrashIcon /></button>
                     </div>
                   ))}
@@ -232,7 +251,7 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                 {sectionLabel("Houtwerk")}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                   {numField("deuren met kozijn", m.woodwork.doors, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, doors: n } }), "1", 120)}
-                  {numField("plinten (m)", m.woodwork.plinths_m, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, plinths_m: n } }), "12")}
+                  {numField("plinten (m)", m.woodwork.plinths_m, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, plinths_m: n } }), "12", 84, MAAT_MAX.plint)}
                   <label style={{ display: "flex", flexDirection: "column", gap: 3 }} title={`Standaard vaste trap: 13 treden van 80 cm met stootborden en trapbomen, ca. ${TRAP_M2} m² lakwerk (zonder leuning)`}>
                     <span style={{ fontSize: 11, opacity: 0.6 }}>trappen (standaard, {TRAP_M2} m²)</span>
                     <input className="rd-input" inputMode="numeric" value={m.woodwork.stairs || ""} placeholder="0" onChange={(e) => setRoom(r.id, { woodwork: { ...m.woodwork, stairs: parseInt(e.target.value, 10) || 0 } })} style={{ height: 36, width: 84 }} />
@@ -245,8 +264,8 @@ export function MeasurePanel({ intake, bookingId, stylistId, rooms, value, offer
                       {m.woodwork[k].map((o, i) => (
                         <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
                           <span style={{ fontSize: 12.5, width: 84, paddingBottom: 9 }}>{extraName[k]}</span>
-                          {numField("breedte (m)", o.w, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].map((x, j) => j === i ? { ...x, w: n } : x) } }), "1,2")}
-                          {numField("hoogte (m)", o.h, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].map((x, j) => j === i ? { ...x, h: n } : x) } }), "1,4")}
+                          {numField("breedte (m)", o.w, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].map((x, j) => j === i ? { ...x, w: n } : x) } }), "1,2", 84, MAAT_MAX.object)}
+                          {numField("hoogte (m)", o.h, (n) => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].map((x, j) => j === i ? { ...x, h: n } : x) } }), "1,4", 84, MAAT_MAX.object)}
                           <button onClick={() => setRoom(r.id, { woodwork: { ...m.woodwork, [k]: m.woodwork[k].filter((_, j) => j !== i) } })} aria-label={`${extraName[k]} verwijderen`} title="Verwijderen" style={iconBtn}><TrashIcon /></button>
                         </div>
                       ))}

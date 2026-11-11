@@ -76,8 +76,9 @@ export function buildOfferPayload(row: {
     // Lagen alleen meesturen als ze zijn ingevuld; anders kiest de offerte-tool zijn eigen standaard (muur 1 laag).
     const lagen = n(m.coats) || undefined;
 
-    const walls = (m.walls ?? []).filter((w) => n(w.w) > 0);
-    const plaf = (m.ceilings ?? []).filter((c) => n(c.l) > 0 && n(c.b) > 0);
+    // Maten in meters (11 nov 2026): centimeters uit de intake (410) worden 4,1 m; zie src/lib/maten.ts.
+    const walls = (m.walls ?? []).filter((w) => n(w.w) > 0).map((w) => ({ ...w, w: inMeter(n(w.w), 100), h: inMeter(n(w.h), 8) }));
+    const plaf = (m.ceilings ?? []).filter((c) => n(c.l) > 0 && n(c.b) > 0).map((c) => ({ ...c, l: inMeter(n(c.l), 30), b: inMeter(n(c.b), 30) }));
     if (!walls.length && !plaf.length && opts.alleRuimtes && (wil.has("muren") || wil.has("plafond") || !wil.size)) {
       const leeg: Vlak[] = [];
       if (wil.has("muren") || !wil.size) leeg.push({ soort: "muur", breedte: 0, hoogte: 2.6, kleurId: 0, kleurNaam: dMuur });
@@ -102,10 +103,10 @@ export function buildOfferPayload(row: {
     const w = m.woodwork ?? {};
     const objecten: Record<string, unknown>[] = [];
     if (n(w.doors) > 0) objecten.push({ soort: "deur", n: n(w.doors) });
-    for (const x of w.windows ?? []) if (n(x.w) > 0 || n(x.h) > 0) objecten.push({ soort: "raam", b: n(x.w), h: n(x.h) });
+    for (const x of w.windows ?? []) if (n(x.w) > 0 || n(x.h) > 0) objecten.push({ soort: "raam", b: inMeter(n(x.w), 4), h: inMeter(n(x.h), 3) });
     if (n(w.plinths_m) > 0) objecten.push({ soort: "plint", m: n(w.plinths_m) });
-    for (const x of w.radiators ?? []) if (n(x.w) > 0) objecten.push({ soort: "radiator", b: n(x.w), h: n(x.h) });
-    for (const x of w.cabinets ?? []) if (n(x.w) > 0) objecten.push({ soort: "kast", b: n(x.w), h: n(x.h) });
+    for (const x of w.radiators ?? []) if (n(x.w) > 0) objecten.push({ soort: "radiator", b: inMeter(n(x.w), 3), h: inMeter(n(x.h), 2) });
+    for (const x of w.cabinets ?? []) if (n(x.w) > 0) objecten.push({ soort: "kast", b: inMeter(n(x.w), 5), h: inMeter(n(x.h), 3) });
     // De tool kent geen trap-object: een standaard trap gaat als vrij oppervlak van 6 m² (6 x 1) mee.
     for (let i = 0; i < Math.round(n(w.stairs)); i++) objecten.push({ soort: "vrij", b: TRAP_M2, h: 1 });
     if (!objecten.length && opts.alleRuimtes && !gemeten && ["kozijnen", "deuren", "houtwerk"].some((k) => wil.has(k))) objecten.push({ soort: "vrij", b: 0, h: 0 });
@@ -131,4 +132,12 @@ export function buildOfferPayload(row: {
     bron: "kleuradvies-dashboard",
     intake_id: row.id,
   };
+}
+
+/** Een getal dat als meter niet kan, is in centimeters (of millimeters) ingevuld. Zelfde regel als src/lib/maten.ts. */
+function inMeter(v: number, max: number): number {
+  if (!(v > max)) return v;
+  if (v / 100 <= max) return Math.round(v) / 100;
+  if (v / 1000 <= max) return Math.round(v / 10) / 100;
+  return max;
 }

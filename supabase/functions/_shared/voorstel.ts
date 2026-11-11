@@ -32,7 +32,7 @@ export function normalizeOffer(d: any): Offer {
     vlakken: arr<any>(d?.vlakken).slice(0, 200).map((v) => ({
       vid: String(v?.vid ?? ""), ruimte: v?.ruimte ?? "", type: v?.type ?? "", soort: v?.soort ?? "", m2: num(v?.m2), status: v?.status ?? "bevestigd",
       kleurId: num(v?.kleurId), kleurNaam: v?.kleurNaam ?? null, kleurHex: v?.kleurHex ?? null, merkkleur: !!v?.merkkleur,
-      testKleuren: arr<any>(v?.testKleuren).slice(0, 3).map((t) => ({ kleurId: num(t?.kleurId), naam: String(t?.naam ?? t?.kleurNaam ?? ""), hex: t?.hex ?? t?.kleurHex ?? null })).filter((t) => t.naam),
+      testKleuren: arr<any>(v?.testKleuren).slice(0, 24).map((t) => ({ kleurId: num(t?.kleurId), naam: String(t?.naam ?? t?.kleurNaam ?? ""), hex: t?.hex ?? t?.kleurHex ?? null })).filter((t) => t.naam),
     })).filter((v) => v.vid),
     klaarVoorOfferte: d?.klaarVoorOfferte !== false,
   };
