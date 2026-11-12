@@ -533,7 +533,8 @@ function Verwijder({ p }: { p: WpPartner }) {
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const weg = async () => {
-    if (!window.confirm(`${p.naam} verwijderen? De kortingscode ${p.afspraken.kortingscode.toUpperCase()} verdwijnt uit de webshop.`)) return;
+    const codes = [p.afspraken.kortingscode, p.afspraken.thuisCode, p.config?.inkoopcode].filter(Boolean).map((c) => String(c).toUpperCase());
+    if (!window.confirm(`${p.naam} verwijderen?${codes.length ? ` ${codes.length > 1 ? "De codes" : "De code"} ${codes.join(" en ")} ${codes.length > 1 ? "verdwijnen" : "verdwijnt"} uit de webshop.` : ""}`)) return;
     setBezig(true); setFout(null);
     const { fout } = await roep("partners-beheer", { action: "partner_verwijderen", slug: p.slug });
     setBezig(false);
