@@ -212,6 +212,8 @@ export function StylistHome() {
             )}
           </section>
 
+          <MijnCodes stylistId={effective?.id ?? null} />
+
           <MijnOffertes stylistId={effective?.id ?? null} />
 
           {rows.length > 0 && (
@@ -233,5 +235,40 @@ export function StylistHome() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * De kortingscodes van de styliste voor haar eigen klanten, op het overzicht zodat ze ze niet hoeft op te zoeken.
+ * Elke code heeft een eigen verdeling tussen korting voor de klant en commissie voor haar.
+ */
+function MijnCodes({ stylistId }: { stylistId: string | null }) {
+  const [codes, setCodes] = useState<{ code: string; korting_pct: number; commissie_pct: number }[]>([]);
+  const [gekopieerd, setGekopieerd] = useState<string | null>(null);
+  useEffect(() => {
+    if (!stylistId) { setCodes([]); return; }
+    supabase.from("stylist_codes").select("code,korting_pct,commissie_pct").eq("stylist_id", stylistId).eq("actief", true).order("korting_pct", { ascending: false })
+      .then(({ data }) => setCodes((data as { code: string; korting_pct: number; commissie_pct: number }[]) ?? []));
+  }, [stylistId]);
+  if (!codes.length) return null;
+  const kopieer = async (code: string) => {
+    try { await navigator.clipboard.writeText(code); setGekopieerd(code); setTimeout(() => setGekopieerd(null), 1800); } catch { /* geen klembord */ }
+  };
+  return (
+    <section style={{ marginTop: 20 }}>
+      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Jouw codes voor eigen klanten</div>
+      <div className="rd-card-white" style={{ padding: "12px 16px" }}>
+        {codes.map((c, i) => (
+          <div key={c.code} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", borderTop: i ? "1px solid var(--rd-line)" : 0, padding: "8px 0" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, letterSpacing: ".03em" }}>{c.code.toUpperCase()}</div>
+              <div style={{ fontSize: 13, opacity: 0.7 }}>{Number(c.korting_pct)}% korting voor je klant, {Number(c.commissie_pct)}% commissie voor jou</div>
+            </div>
+            <button className="rd-plan-chip" style={{ minHeight: 36, padding: "0 14px", fontSize: 13 }} onClick={() => kopieer(c.code.toUpperCase())}>{gekopieerd === c.code.toUpperCase() ? "Gekopieerd" : "Kopieer"}</button>
+          </div>
+        ))}
+        <p style={{ fontSize: 13, opacity: 0.7, margin: "8px 0 0" }}>Je klant vult de code in bij het afrekenen op roll.nl. Bestel je zelf voor een klantproject, dan gebruik je ook een van deze codes. Je commissie zie je bij Commissie.</p>
+      </div>
+    </section>
   );
 }
