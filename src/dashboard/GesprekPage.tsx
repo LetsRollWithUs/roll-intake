@@ -181,7 +181,7 @@ export function GesprekPage() {
   }) : null), [b, intake, task, tasks, sends]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
-  if (!b || !action) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Gesprek niet gevonden.</p></div>;
+  if (!b || !action) return <div><Link to="/dashboard/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Gesprek niet gevonden.</p></div>;
 
   const name = b.customer_name || intake?.contact_name || "Klant";
   const email = b.customer_email || intake?.contact_email || null;
@@ -262,7 +262,7 @@ export function GesprekPage() {
         .gp-panel:not([open]) > summary .gp-hint{display:none}
         .gp-panel > summary:hover{background:var(--rd-grey-light)}
       `}</style>
-      <Link to="/beheer/gesprekken" className="rd-textlink" style={{ textDecoration: "none" }}>← Adviesgesprekken</Link>
+      <Link to="/dashboard/gesprekken" className="rd-textlink" style={{ textDecoration: "none" }}>← Adviesgesprekken</Link>
 
       {/* KOP */}
       <div className="rd-card-white" style={{ marginTop: 8, padding: 0, overflow: "hidden" }}>
@@ -274,7 +274,7 @@ export function GesprekPage() {
             <div style={{ fontSize: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
               {email && <a href={`mailto:${email}`} style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>{email}</a>}
               {b.customer_phone && <a href={`tel:${b.customer_phone}`} style={{ color: "var(--rd-aubergine)", fontWeight: 600 }}>{b.customer_phone}</a>}
-              {others.length > 0 && <Link to={`/beheer/klant/${b.id}`} className="rd-textlink" style={{ fontSize: 13 }}>{others.length + 1} gesprekken · klantkaart</Link>}
+              {others.length > 0 && <Link to={`/dashboard/klant/${b.id}`} className="rd-textlink" style={{ fontSize: 13 }}>{others.length + 1} gesprekken · klantkaart</Link>}
             </div>
           </div>
           {lead && <span className="rd-chip" style={{ background: TEMP_LABEL[lead.temp].bg, color: TEMP_LABEL[lead.temp].ink, fontWeight: 700 }}>{TEMP_LABEL[lead.temp].label}</span>}
@@ -303,7 +303,7 @@ export function GesprekPage() {
               <>
                 <div style={{ fontWeight: 700 }}>Ontvangen {formatDate(intake.created_at)}</div>
                 <div style={{ fontSize: 13, marginTop: 2 }}>{missing.length ? <span style={{ color: "var(--rd-pink-dark)", fontWeight: 600 }}>Ontbreekt: {missing.join(", ")}</span> : <span style={{ opacity: 0.7 }}>Compleet</span>}</div>
-                <Link to={`/beheer/${intake.id}`} className="rd-textlink" style={{ fontSize: 13 }}>Volledige intake</Link>
+                <Link to={`/dashboard/${intake.id}`} className="rd-textlink" style={{ fontSize: 13 }}>Volledige intake</Link>
               </>
             ) : (
               <div style={{ fontWeight: 700, color: "var(--rd-pink-dark)" }}>Nog niet ingevuld</div>
@@ -313,7 +313,7 @@ export function GesprekPage() {
             <div className="rd-kicker rd-kicker-pink" style={{ fontSize: 11 }}>Volgende actie · {action.owner}</div>
             <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.3 }}>{action.title}</div>
             {action.sub && <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{action.sub}</div>}
-            {action.to && action.to !== `/beheer/gesprek/${b.id}` && <Link to={action.to} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 14px", marginTop: 8, display: "inline-block" }}>Ga naar de actie</Link>}
+            {action.to && action.to !== `/dashboard/gesprek/${b.id}` && <Link to={action.to} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 14px", marginTop: 8, display: "inline-block" }}>Ga naar de actie</Link>}
           </div>
         </div>
       </div>
@@ -521,7 +521,7 @@ export function GesprekPage() {
         <Kv k="Gesprekken">
           {others.length === 0 ? <span style={{ opacity: 0.6 }}>Dit is het enige gesprek met deze klant.</span> : (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {others.map((o) => <Link key={o.id} to={`/beheer/gesprek/${o.id}`} className="rd-textlink" style={{ fontSize: 13 }}>{formatDate(o.start_at)} · {o.stylists?.name ?? "—"} · {STAGES.find((s) => s.key === o.kanban_stage)?.label}{new Date(o.start_at).getTime() > Date.now() ? " · komend" : ""}</Link>)}
+              {others.map((o) => <Link key={o.id} to={`/dashboard/gesprek/${o.id}`} className="rd-textlink" style={{ fontSize: 13 }}>{formatDate(o.start_at)} · {o.stylists?.name ?? "—"} · {STAGES.find((s) => s.key === o.kanban_stage)?.label}{new Date(o.start_at).getTime() > Date.now() ? " · komend" : ""}</Link>)}
             </div>
           )}
         </Kv>

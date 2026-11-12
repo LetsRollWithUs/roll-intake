@@ -99,7 +99,7 @@ export function AdvisorsAdmin() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>← Overzicht</Link>
+      <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>← Overzicht</Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>Team</h1>
       <p className="rd-sub" style={{ marginTop: 0 }}>
         Accounts, rollen en samenwerkingsafspraken. Alleen beheerders zien deze pagina. Medewerkers zien alleen hun eigen klanten en commissie.

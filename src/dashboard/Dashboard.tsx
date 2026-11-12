@@ -27,6 +27,7 @@ import { KennisbankPage } from "./KennisbankPage";
 import { NakijkenPage } from "./NakijkenPage";
 import { InzichtenPage } from "./InzichtenPage";
 import { loadNotifications } from "./notifications";
+import { PartnerHome, type Partner } from "./PartnerHome";
 
 // Menubalk in roll.nl-stijl: paarse afgeronde balk, wit menu, roze Roll-logo in het midden.
 const BAR_CSS = `
@@ -74,6 +75,8 @@ export function Dashboard() {
   const [ready, setReady] = useState(false);
   const [isAdvisor, setIsAdvisor] = useState<boolean | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Partners waar deze gebruiker bij hoort (makelaar, creator, merk); leeg voor stylistes en Roll.
+  const [partners, setPartners] = useState<Partner[] | null>(null);
   const [stylistName, setStylistName] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,6 +87,7 @@ export function Dashboard() {
     const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
       setSession(s);
       setIsAdvisor(null);
+      setPartners(null);
       if (e === "PASSWORD_RECOVERY") setRecovery(true);
     });
     return () => sub.subscription.unsubscribe();
@@ -94,6 +98,8 @@ export function Dashboard() {
     supabase.rpc("is_advisor").then(({ data }) => setIsAdvisor(data === true));
     // Beheerder is een rol (advisors.role), niet het e-maildomein.
     supabase.rpc("is_admin").then(({ data }) => setIsAdmin(data === true));
+    // Een antwoord voor het hele dashboard: welke soort partner is dit? Bepaalt wat iemand te zien krijgt.
+    supabase.rpc("mijn_toegang").then(({ data }) => setPartners(((data as { partners?: Partner[] } | null)?.partners) ?? []));
   }, [session]);
 
   // Belletje: aantal openstaande acties (styliste: eigen; beheerder: alles incl. systeemmeldingen).
@@ -107,6 +113,9 @@ export function Dashboard() {
       setNotifCount(list.length);
     })();
   }, [session, isAdvisor, isAdmin]);
+
+  // De pagina heet anders dan het intakeformulier dat dezelfde app deelt.
+  useEffect(() => { document.title = "Roll dashboard"; }, []);
 
   // Profielmenu sluiten bij klik buiten.
   useEffect(() => {
@@ -129,41 +138,41 @@ export function Dashboard() {
         <header style={{ position: "sticky", top: 0, zIndex: 20, padding: "12px 12px 0", background: "var(--rd-offwhite)" }}>
           <div className="rd-topbar">
             <nav>
-              <NavLink to="/beheer" end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Overzicht</NavLink>
-              <NavLink to="/beheer/gesprekken" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Adviesgesprekken</NavLink>
-              <NavLink to="/beheer/offertes" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Offertes</NavLink>
-              <NavLink to="/beheer/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
+              <NavLink to="/dashboard" end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Overzicht</NavLink>
+              <NavLink to="/dashboard/gesprekken" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Adviesgesprekken</NavLink>
+              <NavLink to="/dashboard/offertes" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Offertes</NavLink>
+              <NavLink to="/dashboard/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
             </nav>
-            <Link to="/beheer" className="rd-logo" aria-label="Roll advies">
-              <img src="/roll-advies-logo.png" alt="Roll advies" style={{ height: 40, width: "auto", display: "block" }} />
+            <Link to="/dashboard" className="rd-logo" aria-label="Roll dashboard">
+              <img src={`${import.meta.env.BASE_URL}roll-advies-logo.png`} alt="Roll" style={{ height: 40, width: "auto", display: "block" }} />
             </Link>
             <div className="rd-right">
-              <NavLink to="/beheer/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
-              <NavLink to="/beheer/notificaties" title="Notificaties" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}>
+              <NavLink to="/dashboard/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
+              <NavLink to="/dashboard/notificaties" title="Notificaties" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}>
                 <BellIcon />
                 {notifCount > 0 && <span className="rd-badge">{notifCount > 99 ? "99+" : notifCount}</span>}
               </NavLink>
-              <NavLink to="/beheer/agenda" title="Agenda" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}><CalendarIcon /></NavLink>
+              <NavLink to="/dashboard/agenda" title="Agenda" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}><CalendarIcon /></NavLink>
               <div ref={menuRef} style={{ position: "relative" }}>
                 <button className="rd-avatar" onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen} title="Profiel">{initials}</button>
                 {menuOpen && (
                   <div className="rd-menu" role="menu" onClick={() => setMenuOpen(false)}>
                     <div style={{ padding: "6px 12px 8px", fontSize: 12, opacity: 0.6 }}>{session.user.email}</div>
-                    <Link to="/beheer/account">Mijn profiel</Link>
-                    <Link to="/beheer/agenda">Agenda &amp; beschikbaarheid</Link>
+                    <Link to="/dashboard/account">Mijn profiel</Link>
+                    <Link to="/dashboard/agenda">Agenda &amp; beschikbaarheid</Link>
                     {isAdmin && (
                       <>
                         <div className="rd-sep" />
-                        <Link to="/beheer/taken">Roll-taken</Link>
-                        <Link to="/beheer/schilderplan">Verfplan</Link>
-                        <Link to="/beheer/kennisbank">Kennisbank chat</Link>
-                        <Link to="/beheer/nakijken">Nakijken chat</Link>
-                        <Link to="/beheer/inzichten">Inzichten chat</Link>
-                        <Link to="/beheer/intakes">Alle intakes</Link>
-                        <Link to="/beheer/boekingen">Boekingen</Link>
-                        <Link to="/beheer/cadeaucodes">Cadeaucodes</Link>
-                        <Link to="/beheer/adviseurs">Team &amp; afspraken</Link>
-                        <Link to="/beheer/meldingen">Systeemmeldingen</Link>
+                        <Link to="/dashboard/taken">Roll-taken</Link>
+                        <Link to="/dashboard/schilderplan">Verfplan</Link>
+                        <Link to="/dashboard/kennisbank">Kennisbank chat</Link>
+                        <Link to="/dashboard/nakijken">Nakijken chat</Link>
+                        <Link to="/dashboard/inzichten">Inzichten chat</Link>
+                        <Link to="/dashboard/intakes">Alle intakes</Link>
+                        <Link to="/dashboard/boekingen">Boekingen</Link>
+                        <Link to="/dashboard/cadeaucodes">Cadeaucodes</Link>
+                        <Link to="/dashboard/adviseurs">Team &amp; afspraken</Link>
+                        <Link to="/dashboard/meldingen">Systeemmeldingen</Link>
                       </>
                     )}
                     <div className="rd-sep" />
@@ -180,15 +189,16 @@ export function Dashboard() {
   );
 
   if (!ready) return null;
-  if (recovery) return <NewPassword session={session} onDone={() => { setRecovery(false); navigate("/beheer", { replace: true }); }} />;
+  if (recovery) return <NewPassword session={session} onDone={() => { setRecovery(false); navigate("/dashboard", { replace: true }); }} />;
   if (!session) return <Login />;
-  if (isAdvisor === null) return shell(<p className="rd-sub">Toegang controleren...</p>, false);
+  if (isAdvisor === null || (!isAdvisor && partners === null)) return shell(<p className="rd-sub">Toegang controleren...</p>, false);
+  if (!isAdvisor && partners && partners.length > 0) return shell(<PartnerHome partners={partners} email={session.user.email ?? ""} />, false);
   if (!isAdvisor)
     return shell(
       <div className="rd-card-white" style={{ maxWidth: 520, margin: "40px auto 0" }}>
         <div className="rd-h2-sm" style={{ marginBottom: 8 }}>Geen toegang</div>
         <p className="rd-sub" style={{ marginTop: 0 }}>
-          Dit account staat niet op de lijst van kleuradviseurs. Vraag de beheerder om je e-mailadres ({session.user.email}) toe te voegen.
+          Dit account is nog niet gekoppeld aan een dashboard. Vraag Roll om je e-mailadres ({session.user.email}) toe te voegen.
         </p>
         <button className="rd-textlink" style={{ minHeight: 40, marginTop: 8 }} onClick={() => supabase.auth.signOut()}>Uitloggen</button>
       </div>,

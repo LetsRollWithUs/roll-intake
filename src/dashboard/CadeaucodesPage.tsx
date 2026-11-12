@@ -56,7 +56,7 @@ export function CadeaucodesPage() {
 
   return (
     <div>
-      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>
+      <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>
         ← Alle intakes
       </Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>

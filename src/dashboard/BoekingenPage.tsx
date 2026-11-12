@@ -158,7 +158,7 @@ export function BoekingenPage() {
 
   return (
     <div>
-      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>
+      <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>
         ← Alle intakes
       </Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>
@@ -208,7 +208,7 @@ export function BoekingenPage() {
                   </div>
                 </div>
                 {r.intake_id ? (
-                  <Link to={`/beheer/${r.intake_id}`} className="rd-plan-chip" style={{ textDecoration: "none" }}>
+                  <Link to={`/dashboard/${r.intake_id}`} className="rd-plan-chip" style={{ textDecoration: "none" }}>
                     Bekijk intake
                   </Link>
                 ) : (

@@ -135,7 +135,7 @@ export function PlanMoment({ mode, bookingId, defaultStylistId, customerName, ca
 
         {geenLink && (
           <div role="status" style={{ fontSize: 14, padding: "10px 12px", borderRadius: 12, background: "var(--rd-lavender)" }}>
-            <strong>{chosen?.name} heeft nog geen videolink.</strong> Zonder link krijgt de klant geen knop om het gesprek te openen. Vul de link eerst in bij <a href="/beheer/agenda">Agenda</a>.
+            <strong>{chosen?.name} heeft nog geen videolink.</strong> Zonder link krijgt de klant geen knop om het gesprek te openen. Vul de link eerst in bij <a href="/dashboard/agenda">Agenda</a>.
           </div>
         )}
 

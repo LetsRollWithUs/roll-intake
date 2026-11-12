@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { PasswordInput } from "./PasswordInput";
 
-// Landingspagina van de resetlink (/beheer/nieuw-wachtwoord): de link logt tijdelijk in,
+// Landingspagina van de resetlink (/dashboard/nieuw-wachtwoord): de link logt tijdelijk in,
 // hier kiest de gebruiker een nieuw wachtwoord.
 export function NewPassword({ session, onDone }: { session: Session | null; onDone: () => void }) {
   const [pw, setPw] = useState("");
@@ -32,7 +32,7 @@ export function NewPassword({ session, onDone }: { session: Session | null; onDo
   const wrap: React.CSSProperties = { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "Figtree, system-ui, sans-serif", color: "var(--rd-aubergine)" };
   const head = (title: string) => (
     <>
-      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Beheer</div>
+      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Dashboard</div>
       <h1 className="rd-h2" style={{ marginBottom: 6 }}>{title}</h1>
     </>
   );

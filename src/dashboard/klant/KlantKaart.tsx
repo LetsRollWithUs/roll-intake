@@ -254,7 +254,7 @@ export function KlantKaart() {
   }, [b, intake, sends, task]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
-  if (!b) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Deze klant is niet gevonden.</p></div>;
+  if (!b) return <div><Link to="/dashboard/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Deze klant is niet gevonden.</p></div>;
 
   const name = b.customer_name || intake?.contact_name || "Klant";
   const email = b.customer_email || intake?.contact_email || null;
@@ -289,7 +289,7 @@ export function KlantKaart() {
         @media (max-width:560px){.kk-row{grid-template-columns:1fr;gap:2px}}
       `}</style>
 
-      <Link to="/beheer/gesprekken" className="rd-textlink" style={{ textDecoration: "none", fontSize: 14 }}>← Adviesgesprekken</Link>
+      <Link to="/dashboard/gesprekken" className="rd-textlink" style={{ textDecoration: "none", fontSize: 14 }}>← Adviesgesprekken</Link>
 
       {/* Klantkop */}
       <header style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -357,7 +357,7 @@ export function KlantKaart() {
                   )}
                 </div>
                 <button className="kk-link" style={{ textAlign: "left" }} onClick={() => archive(!b.archived_at)}>{b.archived_at ? "Terugzetten uit het archief" : "Archiveren"}</button>
-                <Link to={`/beheer/gesprek-oud/${b.id}`} className="kk-link" style={{ textAlign: "left" }}>Oude weergave openen</Link>
+                <Link to={`/dashboard/gesprek-oud/${b.id}`} className="kk-link" style={{ textAlign: "left" }}>Oude weergave openen</Link>
               </div>
             )}
           </div>
@@ -435,11 +435,11 @@ export function KlantKaart() {
             {b.customer_phone && <div><a href={`tel:${b.customer_phone}`} className="rd-textlink">{b.customer_phone}</a></div>}
           </div>
           <div style={{ fontSize: 14 }}><span className="kk-label">Afspraak</span><div>{afspraakLabel(b)} · {b.stylists?.name ?? "nog geen styliste"}</div><div>{pay.t}</div></div>
-          {intake && <Link to={`/beheer/${intake.id}`} className="rd-textlink">Bekijk volledige intake</Link>}
+          {intake && <Link to={`/dashboard/${intake.id}`} className="rd-textlink">Bekijk volledige intake</Link>}
           {orders && <div style={{ fontSize: 14 }}><span className="kk-label">Aankopen</span><div>{orders.order_count} bestelling{orders.order_count === 1 ? "" : "en"} · {euro(orders.total_spent)} · {orders.sample_items} samples</div></div>}
           {others.length > 0 && (
             <div style={{ fontSize: 14 }}><span className="kk-label">Andere gesprekken</span>
-              {others.map((o) => <div key={o.id}><Link to={`/beheer/gesprek/${o.id}`} className="rd-textlink">{formatDate(o.start_at)} · {o.stylists?.name ?? "styliste onbekend"}</Link></div>)}
+              {others.map((o) => <div key={o.id}><Link to={`/dashboard/gesprek/${o.id}`} className="rd-textlink">{formatDate(o.start_at)} · {o.stylists?.name ?? "styliste onbekend"}</Link></div>)}
             </div>
           )}
         </Drawer>

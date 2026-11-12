@@ -142,9 +142,9 @@ export function StylistHome() {
           )}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-          <Link to={`/beheer/gesprek/${r.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 16px" }}>Open gesprek</Link>
+          <Link to={`/dashboard/gesprek/${r.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 16px" }}>Open gesprek</Link>
           {r.intake_id ? (
-            <Link to={`/beheer/${r.intake_id}`} className="rd-btn rd-btn-outline" style={{ textDecoration: "none", padding: "8px 16px" }}>Intake</Link>
+            <Link to={`/dashboard/${r.intake_id}`} className="rd-btn rd-btn-outline" style={{ textDecoration: "none", padding: "8px 16px" }}>Intake</Link>
           ) : (
             <span className="rd-chip" style={{ opacity: 0.7, alignSelf: "center" }}>Intake nog niet ingevuld</span>
           )}
@@ -197,7 +197,7 @@ export function StylistHome() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {actions.slice(0, 6).map((n) => (
-                  <Link key={n.id} to={n.to ?? "/beheer"} className="rd-card-white" style={{ textDecoration: "none", padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                  <Link key={n.id} to={n.to ?? "/dashboard"} className="rd-card-white" style={{ textDecoration: "none", padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{n.title}</div>
                       {n.sub && <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>{n.sub}</div>}
@@ -205,7 +205,7 @@ export function StylistHome() {
                     <span aria-hidden style={{ opacity: 0.4, flex: "none" }}>→</span>
                   </Link>
                 ))}
-                {actions.length > 6 && <Link to="/beheer/notificaties" className="rd-textlink" style={{ alignSelf: "flex-start" }}>Alle {actions.length} acties</Link>}
+                {actions.length > 6 && <Link to="/dashboard/notificaties" className="rd-textlink" style={{ alignSelf: "flex-start" }}>Alle {actions.length} acties</Link>}
               </div>
             )}
           </section>

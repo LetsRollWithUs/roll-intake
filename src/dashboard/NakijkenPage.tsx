@@ -83,7 +83,7 @@ export function NakijkenPage() {
 
   return (
     <div>
-      <Link to="/beheer/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link>
+      <Link to="/dashboard/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>Nakijken</h1>
       <p className="rd-sub" style={{ marginTop: 0, maxWidth: 720 }}>
         Beurten waarin de controle Charlie tegenhield, een vangnet ingreep of er iets misging. De klant zag de verbeterde versie.
@@ -103,7 +103,7 @@ export function NakijkenPage() {
             <div key={r.id} className="rd-card-white" style={{ opacity: r.nagekeken_op ? 0.65 : 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", fontSize: 12, opacity: 0.65 }}>
                 <span>{formatDate(r.created_at)}{r.model ? ` · ${r.model}` : ""}</span>
-                <Link to={`/beheer/schilderplan/${r.sessie}`} className="rd-textlink">Bekijk het gesprek</Link>
+                <Link to={`/dashboard/schilderplan/${r.sessie}`} className="rd-textlink">Bekijk het gesprek</Link>
               </div>
               <div style={{ marginTop: 6, fontSize: 15 }}><strong>Klant:</strong> {r.bericht || "(tikte op een knop of formulier)"}</div>
               {(r.controle ?? []).map((c, i) => (

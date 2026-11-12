@@ -4,6 +4,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const KLAVIYO_KEY = Deno.env.get("KLAVIYO_PRIVATE_KEY") ?? "";
 export const INTAKE_BASE = (Deno.env.get("INTAKE_BASE_URL") ?? "https://intake.roll.nl").replace(/\/$/, "");
+// De werkplek van stylistes en Roll staat op roll.nl/dashboard (was intake.roll.nl/beheer, dat stuurt door).
+export const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/dashboard").replace(/\/$/, "");
 const SB_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const KLAVIYO_REVISION = "2024-10-15";
 const TZ = "Europe/Amsterdam";
@@ -153,9 +155,9 @@ export async function notifyStylist(admin: any, bookingId: string, soort: string
     vorm: row.format === "thuis" ? "thuis" : "online",
     adres_regel: row.format === "thuis" && row.address ? `${row.address.straat ?? ""} ${row.address.huisnummer ?? ""}, ${row.address.postcode ?? ""} ${row.address.plaats ?? ""}` : null,
     voorkeuren: row.format === "thuis" ? voorkeurenTekst(row.preferences) : null,
-    klantkaart_url: `${INTAKE_BASE}/beheer/gesprek/${row.id}`,
-    boekingen_url: `${INTAKE_BASE}/beheer/boekingen`,
-    intake_dashboard_url: row.intake_id ? `${INTAKE_BASE}/beheer/${row.intake_id}` : null,
+    klantkaart_url: `${DASHBOARD_BASE}/gesprek/${row.id}`,
+    boekingen_url: `${DASHBOARD_BASE}/boekingen`,
+    intake_dashboard_url: row.intake_id ? `${DASHBOARD_BASE}/${row.intake_id}` : null,
     ...extra,
   };
   await klaviyoTrack(

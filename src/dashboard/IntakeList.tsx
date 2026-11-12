@@ -88,7 +88,7 @@ export function IntakeList() {
         {filtered.map((r) => (
           <Link
             key={r.id}
-            to={`/beheer/${r.id}`}
+            to={`/dashboard/${r.id}`}
             className="rd-card-white"
             style={{ textDecoration: "none", color: "inherit", display: "block" }}
           >

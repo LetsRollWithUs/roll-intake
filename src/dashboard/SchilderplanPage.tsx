@@ -123,7 +123,7 @@ function Lijst() {
       <h1 className="rd-h2" style={{ margin: "0 0 4px" }}>Verfplan</h1>
       <p className="rd-sub" style={{ marginTop: 0 }}>
         Gesprekken uit de chat op roll.nl. Vraagt een klant om hulp, dan staat hij hier met de code uit zijn WhatsApp of mail.
-        {" "}<Link to="/beheer/nakijken" className="rd-textlink">Nakijken</Link> laat zien waar de controle Charlie tegenhield.
+        {" "}<Link to="/dashboard/nakijken" className="rd-textlink">Nakijken</Link> laat zien waar de controle Charlie tegenhield.
       </p>
       <div style={{ display: "flex", gap: 8, margin: "12px 0", flexWrap: "wrap", alignItems: "center" }}>
         <button className={`rd-plan-chip${scope === "open" && !zoek ? " is-on" : ""}`} onClick={() => { setZoek(""); setScope("open"); }}>Vraagt om hulp ({tel("open")})</button>
@@ -142,7 +142,7 @@ function Lijst() {
           {zichtbaar.map((r) => {
             const rs = risico(r.project);
             return (
-              <button key={r.sessie} className="rd-card-white" onClick={() => navigate(`/beheer/schilderplan/${r.sessie}`)} style={{ textAlign: "left", border: 0, cursor: "pointer", font: "inherit", color: "inherit" }}>
+              <button key={r.sessie} className="rd-card-white" onClick={() => navigate(`/dashboard/schilderplan/${r.sessie}`)} style={{ textAlign: "left", border: 0, cursor: "pointer", font: "inherit", color: "inherit" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -208,13 +208,13 @@ function Detail({ sessie }: { sessie: string }) {
   };
 
   if (loading) return <p className="rd-sub">Laden...</p>;
-  if (!r) return (<div><Link to="/beheer/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link><p className="rd-sub">Dit gesprek bestaat niet (meer).</p></div>);
+  if (!r) return (<div><Link to="/dashboard/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link><p className="rd-sub">Dit gesprek bestaat niet (meer).</p></div>);
   const rs = risico(r.project);
   const f = fase(r);
 
   return (
     <div>
-      <Link to="/beheer/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link>
+      <Link to="/dashboard/schilderplan" className="rd-textlink" style={{ textDecoration: "none" }}>← Verfplan</Link>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "8px 0 4px" }}>
         <h1 className="rd-h2" style={{ margin: 0 }}>{r.code ? <span style={{ fontFamily: "monospace", letterSpacing: ".04em" }}>{r.code}</span> : "Gesprek"}</h1>
         <Pil r={r} />

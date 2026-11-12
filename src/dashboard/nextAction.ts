@@ -39,10 +39,10 @@ export function checkinDate(startAt: string): string {
 export function nextAction(b: NextActionInput): NextAction {
   const past = new Date(b.start_at).getTime() < Date.now();
   const it = b.intake ?? null;
-  const gesprek = `/beheer/gesprek/${b.id}`;
+  const gesprek = `/dashboard/gesprek/${b.id}`;
 
   if (b.status === "paid_unplaced") {
-    return { title: "Afspraak nog inplannen", sub: "De klant heeft betaald maar het moment is niet meer beschikbaar.", owner: "Roll", to: "/beheer/boekingen", phase: "voorbereiding" };
+    return { title: "Afspraak nog inplannen", sub: "De klant heeft betaald maar het moment is niet meer beschikbaar.", owner: "Roll", to: "/dashboard/boekingen", phase: "voorbereiding" };
   }
   if (b.kanban_stage === "verf") return { title: "Traject afgerond: verf gekocht", owner: "Niemand", phase: "klaar" };
   if (b.kanban_stage === "afgehaakt") return { title: "Traject gesloten: afgehaakt of zoekt het zelf uit", owner: "Niemand", phase: "klaar" };

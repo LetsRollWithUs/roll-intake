@@ -223,7 +223,7 @@ export function KanbanPage() {
         draggable
         onDragStart={(e) => { setDragId(c.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.id); }}
         onDragEnd={() => { setDragId(null); setOver(null); }}
-        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/beheer/gesprek/${c.id}`); }}
+        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/dashboard/gesprek/${c.id}`); }}
         className="rd-card-white"
         style={{ padding: "12px 14px", cursor: "grab", opacity: dragging ? 0.45 : 1, boxShadow: "0 1px 2px rgba(47,33,65,.06), 0 6px 18px rgba(47,33,65,.06)", border: overdue ? "1px solid var(--rd-pink-dark)" : "1px solid transparent" }}
         title="Klik voor het klantdossier, sleep om de fase te wijzigen"
@@ -298,7 +298,7 @@ export function KanbanPage() {
         draggable
         onDragStart={(e) => { setDragId(`intake:${l.id}`); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", `intake:${l.id}`); }}
         onDragEnd={() => { setDragId(null); setOver(null); }}
-        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/beheer/${l.id}`); }}
+        onClick={(e) => { if ((e.target as HTMLElement).closest("select,button,input,label,a")) return; navigate(`/dashboard/${l.id}`); }}
         className="rd-card-white"
         style={{ padding: "12px 14px", cursor: "grab", opacity: dragging ? 0.45 : 1, border: "1.5px dashed var(--rd-lavender-mid, #BBB1CB)", boxShadow: "none" }}
         title="Klik voor de intake, sleep naar een fase om de klant in de flow te zetten"
@@ -373,7 +373,7 @@ export function KanbanPage() {
         </div>
       </div>
 
-      {invite && <PlanMoment mode="invite" onClose={() => setInvite(false)} onDone={(id) => { setInvite(false); navigate(`/beheer/gesprek/${id}`); }} />}
+      {invite && <PlanMoment mode="invite" onClose={() => setInvite(false)} onDone={(id) => { setInvite(false); navigate(`/dashboard/gesprek/${id}`); }} />}
 
       {showArchive && (
         <div style={{ marginTop: 14 }}>

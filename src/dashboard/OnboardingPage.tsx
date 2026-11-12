@@ -25,7 +25,7 @@ function EigenKlanten() {
     <Block kicker="Je eigen klanten" title="Zelf een offerte maken">
       <p style={{ margin: 0 }}>
         Heb je een klant uit je eigen netwerk, dus zonder adviesgesprek via Roll? Dan maak je zelf een offerte
-        onder <Link to="/beheer/offertes" style={{ color: "inherit", fontWeight: 700 }}>Offertes</Link>. Je vult de naam
+        onder <Link to="/dashboard/offertes" style={{ color: "inherit", fontWeight: 700 }}>Offertes</Link>. Je vult de naam
         en het e-mailadres van je klant in en bouwt de offerte in dezelfde editor als bij het verfplan: ruimtes, maten,
         kleuren en wat er verder nodig is.
       </p>
@@ -48,7 +48,7 @@ function EigenKlanten() {
         "Roll laten meekijken". Leg kort uit waarom; Roll laat je weten of het kan.
       </p>
       <p style={{ margin: 0 }}>
-        Bestelt je klant, dan staat je commissie bij <Link to="/beheer/commissie" style={{ color: "inherit", fontWeight: 700 }}>Commissie</Link>,
+        Bestelt je klant, dan staat je commissie bij <Link to="/dashboard/commissie" style={{ color: "inherit", fontWeight: 700 }}>Commissie</Link>,
         samen met je andere commissie. Die factureer je periodiek aan Roll.
       </p>
     </Block>
@@ -184,10 +184,10 @@ export function OnboardingPage() {
 
         <div className="rd-card-white" style={{ padding: "16px 20px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Klaar om te beginnen?</span>
-          <Link to="/beheer" className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 16px" }}>
+          <Link to="/dashboard" className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 16px" }}>
             Naar je afspraken
           </Link>
-          <Link to="/beheer/agenda" className="rd-textlink" style={{ minHeight: 32 }}>
+          <Link to="/dashboard/agenda" className="rd-textlink" style={{ minHeight: 32 }}>
             Eerst je agenda instellen
           </Link>
         </div>

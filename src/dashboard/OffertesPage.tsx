@@ -85,7 +85,7 @@ export function OffertesPage() {
     setBezig(true); setFout(null);
     const d = await roep<{ offerte?: StylistOffer }>({ action: "nieuw", naam: form.naam, email: form.email, telefoon: form.telefoon, korting_pct: form.korting, stylist_id: form.stylist || undefined });
     setBezig(false);
-    if (d?.ok && d.offerte) { nav(`/beheer/offertes/${d.offerte.id}`); return; }
+    if (d?.ok && d.offerte) { nav(`/dashboard/offertes/${d.offerte.id}`); return; }
     setFout(d?.error ?? "De offerte kon niet worden aangemaakt.");
   };
 
@@ -170,7 +170,7 @@ export function OffertesPage() {
       {zichtbaar.length === 0 ? <p className="rd-sub">{rows.length === 0 ? "Nog geen offertes. Maak de eerste met de knop hierboven." : "Geen offertes in deze selectie."}</p> : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {zichtbaar.map((o) => (
-            <Link key={o.id} to={`/beheer/offertes/${o.id}`} className="rd-card-white" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", textDecoration: "none", color: "inherit" }}>
+            <Link key={o.id} to={`/dashboard/offertes/${o.id}`} className="rd-card-white" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", textDecoration: "none", color: "inherit" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 800, fontSize: 15 }}>{o.customer_name}{o.nummer ? <span style={{ fontWeight: 500, opacity: 0.6 }}> · {o.nummer}</span> : null}</div>
                 <div style={{ fontSize: 13, opacity: 0.7 }}>
@@ -268,7 +268,7 @@ export function OfferteDetail() {
   }, [o, ververs]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
-  if (!o) return <div><Link to="/beheer/offertes" className="rd-textlink" style={{ textDecoration: "none" }}>← Offertes</Link><p className="rd-sub">Deze offerte bestaat niet of is niet van jou.</p></div>;
+  if (!o) return <div><Link to="/dashboard/offertes" className="rd-textlink" style={{ textDecoration: "none" }}>← Offertes</Link><p className="rd-sub">Deze offerte bestaat niet of is niet van jou.</p></div>;
 
   const vast = o.status === "besteld" || o.status === "vervallen";
   const actie = async (naam: string, body: Record<string, unknown>, goed: string) => {
@@ -301,7 +301,7 @@ export function OfferteDetail() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
-        <Link to="/beheer/offertes" className="rd-textlink" style={{ textDecoration: "none" }}>← Offertes</Link>
+        <Link to="/dashboard/offertes" className="rd-textlink" style={{ textDecoration: "none" }}>← Offertes</Link>
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
           <h1 className="rd-h2" style={{ margin: 0 }}>{o.customer_name}</h1>
           <StatusChip status={o.status} />
@@ -368,7 +368,7 @@ export function OfferteDetail() {
       <div className="rd-card-white" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <strong>{o.status === "besteld" ? "Besteld" : "Naar je klant"}</strong>
         {o.status === "besteld" ? (
-          <p style={{ margin: 0, fontSize: 15 }}>Je klant heeft besteld{o.ordered_at ? ` op ${formatDate(o.ordered_at)}` : ""}{o.woo_order_id ? ` (order ${o.woo_order_id})` : ""}. Je commissie staat bij <Link to="/beheer/commissie" style={{ color: "inherit" }}>Commissie</Link>.</p>
+          <p style={{ margin: 0, fontSize: 15 }}>Je klant heeft besteld{o.ordered_at ? ` op ${formatDate(o.ordered_at)}` : ""}{o.woo_order_id ? ` (order ${o.woo_order_id})` : ""}. Je commissie staat bij <Link to="/dashboard/commissie" style={{ color: "inherit" }}>Commissie</Link>.</p>
         ) : o.status === "vervallen" ? (
           <p style={{ margin: 0, fontSize: 15 }}>Deze offerte is vervallen.</p>
         ) : (
@@ -420,7 +420,7 @@ export function MijnOffertes({ stylistId }: { stylistId: string | null }) {
     <section style={{ marginTop: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 8 }}>
         <div className="rd-kicker rd-kicker-pink">Offertes voor eigen klanten</div>
-        <Link to="/beheer/offertes" className="rd-textlink" style={{ fontSize: 13 }}>{rows.length ? "Alle offertes" : "Offerte maken"}</Link>
+        <Link to="/dashboard/offertes" className="rd-textlink" style={{ fontSize: 13 }}>{rows.length ? "Alle offertes" : "Offerte maken"}</Link>
       </div>
       {rows.length === 0 ? (
         <div className="rd-card-white" style={{ padding: "12px 16px" }}><span style={{ fontSize: 14, opacity: 0.7 }}>Nog geen offertes. Heb je een eigen klant? Maak een offerte en kies zelf de verdeling tussen commissie en korting.</span></div>
@@ -432,7 +432,7 @@ export function MijnOffertes({ stylistId }: { stylistId: string | null }) {
             <span style={{ opacity: 0.7 }}>{besteld.length} besteld</span>
           </div>
           {lopend.slice(0, 4).map((o) => (
-            <Link key={o.id} to={`/beheer/offertes/${o.id}`} className="rd-card-white" style={{ textDecoration: "none", color: "inherit", padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+            <Link key={o.id} to={`/dashboard/offertes/${o.id}`} className="rd-card-white" style={{ textDecoration: "none", color: "inherit", padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{o.customer_name}</div>
                 <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>{o.totaal != null ? eur(o.totaal) : "nog leeg"} · {pct(o.commissie_pct)} commissie, {pct(o.korting_pct)} korting</div>

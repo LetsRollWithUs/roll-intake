@@ -66,7 +66,7 @@ export function KlantDossier() {
   }, [bookingId]);
 
   if (loading) return <p className="rd-sub">Laden...</p>;
-  if (!current) return <div><Link to="/beheer/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Klant niet gevonden.</p></div>;
+  if (!current) return <div><Link to="/dashboard/gesprekken" className="rd-textlink">← Adviesgesprekken</Link><p className="rd-sub">Klant niet gevonden.</p></div>;
 
   const name = current.customer_name || "Klant";
   const email = current.customer_email;
@@ -74,7 +74,7 @@ export function KlantDossier() {
 
   return (
     <div style={{ maxWidth: 880 }}>
-      <Link to={`/beheer/gesprek/${current.id}`} className="rd-textlink" style={{ textDecoration: "none" }}>← Terug naar het gesprek</Link>
+      <Link to={`/dashboard/gesprek/${current.id}`} className="rd-textlink" style={{ textDecoration: "none" }}>← Terug naar het gesprek</Link>
 
       <div className="rd-card-white" style={{ marginTop: 8, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ width: 56, height: 56, borderRadius: 99, background: "var(--rd-lavender)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 19, flex: "none" }}>{initials(name)}</div>
@@ -99,7 +99,7 @@ export function KlantDossier() {
                   <div style={{ fontWeight: 700, fontSize: 14, textTransform: "capitalize" }}>{fmtLong(g.start_at)}{upcoming && <span className="rd-chip" style={{ marginLeft: 8, fontSize: 11, textTransform: "none" }}>komend</span>}</div>
                   <div style={{ fontSize: 12, opacity: 0.65 }}>{g.stylists?.name ?? "—"} · {STAGE[g.kanban_stage] ?? g.kanban_stage}{g.status === "paid_unplaced" ? " · nog inplannen" : ""}{g.intake_id ? "" : " · geen intake"}</div>
                 </div>
-                <Link to={`/beheer/gesprek/${g.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 14px" }}>Open gesprek</Link>
+                <Link to={`/dashboard/gesprek/${g.id}`} className="rd-btn rd-btn-primary" style={{ textDecoration: "none", padding: "8px 14px" }}>Open gesprek</Link>
               </div>
             );
           })}

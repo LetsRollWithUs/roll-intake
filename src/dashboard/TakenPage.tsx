@@ -117,8 +117,8 @@ export function TakenPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, fontSize: 15 }}>{TASK_TYPE[t.type]} · {t.bookings?.customer_name || (t.payload as { klant_naam?: string } | null)?.klant_naam || "Klant"}</div>
                     <div style={{ fontSize: 13, opacity: 0.7 }}>Aangevraagd {formatDate(t.created_at)} door {t.requested_by ?? t.stylists?.name ?? "—"}{t.bookings?.customer_email ? ` · ${t.bookings.customer_email}` : ""}</div>
-                    {t.booking_id && <Link to={`/beheer/gesprek/${t.booking_id}`} className="rd-textlink" style={{ fontSize: 13 }}>Open gesprek</Link>}
-                    {t.offer_id && <Link to={`/beheer/offertes/${t.offer_id}`} className="rd-textlink" style={{ fontSize: 13 }}>Open offerte</Link>}
+                    {t.booking_id && <Link to={`/dashboard/gesprek/${t.booking_id}`} className="rd-textlink" style={{ fontSize: 13 }}>Open gesprek</Link>}
+                    {t.offer_id && <Link to={`/dashboard/offertes/${t.offer_id}`} className="rd-textlink" style={{ fontSize: 13 }}>Open offerte</Link>}
                   </div>
                   <span className="rd-chip" style={{ background: t.status === "afgerond" ? "#C9E6CE" : "var(--rd-aubergine)", color: t.status === "afgerond" ? "#1e4429" : "#fff", fontWeight: 700 }}>{TASK_STATUS[t.status]}{overdue ? " · te laat" : ""}</span>
                 </div>

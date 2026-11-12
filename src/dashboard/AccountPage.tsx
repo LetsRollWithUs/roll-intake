@@ -76,7 +76,7 @@ export function AccountPage() {
             )}
           </div>
           <div style={{ marginTop: 12 }}>
-            <Link to="/beheer/agenda" className="rd-btn rd-btn-outline" style={{ textDecoration: "none", padding: "8px 16px" }}>
+            <Link to="/dashboard/agenda" className="rd-btn rd-btn-outline" style={{ textDecoration: "none", padding: "8px 16px" }}>
               Agenda &amp; videolink beheren
             </Link>
           </div>

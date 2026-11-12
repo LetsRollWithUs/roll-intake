@@ -104,7 +104,7 @@ export function CommissiePage() {
 
   return (
     <div>
-      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>← Terug</Link>
+      <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>← Terug</Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 2px" }}>Commissie</h1>
       <p className="rd-sub" style={{ marginTop: 0 }}>
         Verfcommissie per toegeschreven bestelling (standaard 10%, per styliste in te stellen). {isAdmin ? "Beheer de codes, keur goed en markeer uitbetaald." : "Je eigen toegeschreven verforders en commissie."}
@@ -154,7 +154,7 @@ export function CommissiePage() {
 
       {isAdmin && (
         <p className="rd-sub" style={{ margin: "0 0 14px", fontSize: 13 }}>
-          Commissiepercentages en samenwerkingsafspraken beheer je per medewerker onder <Link to="/beheer/adviseurs" className="rd-textlink">Team</Link>.
+          Commissiepercentages en samenwerkingsafspraken beheer je per medewerker onder <Link to="/dashboard/adviseurs" className="rd-textlink">Team</Link>.
         </p>
       )}
 

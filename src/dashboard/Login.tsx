@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { PasswordInput } from "./PasswordInput";
 
 // Waar de resetlink naartoe leidt: daar kiest de gebruiker een nieuw wachtwoord.
-export const RESET_REDIRECT = () => `${window.location.origin}/beheer/nieuw-wachtwoord`;
+export const RESET_REDIRECT = () => `${window.location.origin}/dashboard/nieuw-wachtwoord`;
 
 export function Login() {
   const [mode, setMode] = useState<"login" | "vergeten">("login");
@@ -40,7 +40,7 @@ export function Login() {
     return (
       <div style={wrap}>
         <form onSubmit={sendReset} style={{ width: "100%", maxWidth: 360 }}>
-          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Beheer</div>
+          <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Dashboard</div>
           <h1 className="rd-h2" style={{ marginBottom: 6 }}>Wachtwoord vergeten</h1>
           {sent ? (
             <>
@@ -66,9 +66,9 @@ export function Login() {
   return (
     <div style={wrap}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360 }}>
-        <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Beheer</div>
+        <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Dashboard</div>
         <h1 className="rd-h2" style={{ marginBottom: 6 }}>Inloggen</h1>
-        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 20 }}>Voor kleuradviseurs. Log in om de intakes te bekijken.</p>
+        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 20 }}>Voor partners van Roll. Log in om je dashboard te openen.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <input className="rd-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mailadres" autoComplete="username" required />
           <PasswordInput value={password} onChange={setPassword} required />

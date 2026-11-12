@@ -162,7 +162,7 @@ export function IntakeDetail() {
   if (notFound || !row)
     return (
       <div>
-        <Link to="/beheer" className="rd-textlink">
+        <Link to="/dashboard" className="rd-textlink">
           ← Terug
         </Link>
         <p className="rd-sub">Intake niet gevonden.</p>
@@ -176,7 +176,7 @@ export function IntakeDetail() {
 
   return (
     <div>
-      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>
+      <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>
         ← Alle intakes
       </Link>
 

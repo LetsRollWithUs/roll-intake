@@ -38,7 +38,7 @@ export function NotificationsPage() {
           <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>{KIND_LABEL[g.kind]}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {g.list.map((n) => (
-              <Link key={n.id} to={n.to ?? "/beheer"} className="rd-card-white" style={{ textDecoration: "none", padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+              <Link key={n.id} to={n.to ?? "/dashboard"} className="rd-card-white" style={{ textDecoration: "none", padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{n.title}</div>
                   {n.sub && <div style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>{n.sub}</div>}
@@ -51,7 +51,7 @@ export function NotificationsPage() {
       ))}
       {isAdmin && (
         <p className="rd-sub" style={{ marginTop: 20 }}>
-          Systeemmeldingen afhandelen doe je onder <Link to="/beheer/meldingen" className="rd-textlink">Meldingen</Link>.
+          Systeemmeldingen afhandelen doe je onder <Link to="/dashboard/meldingen" className="rd-textlink">Meldingen</Link>.
         </p>
       )}
     </div>

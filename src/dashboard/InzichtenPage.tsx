@@ -281,7 +281,7 @@ export function InzichtenPage() {
                   return (
                     <div key={g.sessie} style={{ fontSize: 13, padding: "4px 0 8px" }}>
                       <span style={{ opacity: 0.6 }}>{formatDate(g.updated_at ?? g.created_at)}{g.bron ? ` · ${g.bron}` : ""}: </span>
-                      "{kb[kb.length - 1]?.tekst}" <Link to={`/beheer/schilderplan/${g.sessie}`} className="rd-textlink">Bekijk</Link>
+                      "{kb[kb.length - 1]?.tekst}" <Link to={`/dashboard/schilderplan/${g.sessie}`} className="rd-textlink">Bekijk</Link>
                     </div>
                   );
                 })}
@@ -302,7 +302,7 @@ export function InzichtenPage() {
                   </button>
                   {openOnderwerp === k && lijst.slice(0, 20).map((b) => (
                     <div key={b.id} style={{ fontSize: 13, padding: "4px 0 8px" }}>
-                      "{b.bericht}" <Link to={`/beheer/schilderplan/${b.sessie}`} className="rd-textlink">Bekijk</Link>
+                      "{b.bericht}" <Link to={`/dashboard/schilderplan/${b.sessie}`} className="rd-textlink">Bekijk</Link>
                     </div>
                   ))}
                 </div>
@@ -328,7 +328,7 @@ export function InzichtenPage() {
                     <span style={{ opacity: 0.6 }}>{formatDate(g.created_at)} · {g.bron}{g.utm?.utm_content ? ` · ${g.utm.utm_content}` : ""}: </span>
                     {cijfers.betaaldOp.has(g.sessie) ? "besteld" : g.mand_op ? "klikte op bestellen" : heeftKleur(g) ? "kleur gekozen" : klantBerichten(g).length ? "gestart" : "alleen geopend"}
                     {(g.project?.samplekleuren ?? []).length > 0 && <span style={{ opacity: 0.6 }}> · samples: {(g.project?.samplekleuren ?? []).slice(0, 5).join(", ")}</span>}
-                    {" "}<Link to={`/beheer/schilderplan/${g.sessie}`} className="rd-textlink">Bekijk</Link>
+                    {" "}<Link to={`/dashboard/schilderplan/${g.sessie}`} className="rd-textlink">Bekijk</Link>
                   </div>
                 ))}
               </div>
@@ -338,7 +338,7 @@ export function InzichtenPage() {
           <section className="rd-card-white">
             <div className="rd-card-title" style={{ marginBottom: 8 }}>Geen antwoord van Charlie ({cijfers.open.length})</div>
             <p className="rd-sub" style={{ marginTop: 0 }}>
-              Zet het antwoord in de <Link to="/beheer/kennisbank" className="rd-textlink">kennisbank</Link> en markeer de vraag als opgelost.
+              Zet het antwoord in de <Link to="/dashboard/kennisbank" className="rd-textlink">kennisbank</Link> en markeer de vraag als opgelost.
             </p>
             {0 === cijfers.open.length && <p className="rd-sub">Geen open vragen.</p>}
             {cijfers.open.slice(0, 50).map((b) => (
@@ -346,7 +346,7 @@ export function InzichtenPage() {
                 <div style={{ flex: "1 1 220px", minWidth: 0 }}>
                   <div style={{ fontSize: 15 }}>"{b.bericht}"</div>
                   <div style={{ fontSize: 12, opacity: 0.65, marginTop: 2 }}>
-                    {ONDERWERP[b.onderwerp ?? ""] ?? b.onderwerp} · {formatDate(b.created_at)} · <Link to={`/beheer/schilderplan/${b.sessie}`} className="rd-textlink">Bekijk het gesprek</Link>
+                    {ONDERWERP[b.onderwerp ?? ""] ?? b.onderwerp} · {formatDate(b.created_at)} · <Link to={`/dashboard/schilderplan/${b.sessie}`} className="rd-textlink">Bekijk het gesprek</Link>
                   </div>
                 </div>
                 <button className="rd-plan-chip" onClick={() => opgelost(b)}>Opgelost</button>

@@ -303,7 +303,7 @@ export function AgendaPage() {
 
   return (
     <div>
-      <Link to="/beheer" className="rd-textlink" style={{ textDecoration: "none" }}>
+      <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>
         ← Terug
       </Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 4px" }}>
@@ -357,7 +357,7 @@ export function AgendaPage() {
             </button>
           </div>
           <p className="rd-sub" style={{ marginTop: 8 }}>
-            Let op: geef een stylist ook dashboard-toegang via <Link to="/beheer/adviseurs" className="rd-textlink">Team</Link> zodat ze kan inloggen.
+            Let op: geef een stylist ook dashboard-toegang via <Link to="/dashboard/adviseurs" className="rd-textlink">Team</Link> zodat ze kan inloggen.
           </p>
         </div>
       )}

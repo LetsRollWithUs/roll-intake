@@ -57,7 +57,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
     const past = new Date(r.start_at).getTime() < nowMs;
     const open = r.kanban_stage !== "verf" && r.kanban_stage !== "afgehaakt";
     const it = r.intake_id ? intakeById.get(r.intake_id) : null;
-    const gesprek = `/beheer/gesprek/${r.id}`;
+    const gesprek = `/dashboard/gesprek/${r.id}`;
 
     if (r.status === "requested") {
       // Afspraak: binnen 2 werkdagen contact en een afspraak vastgelegd.
@@ -71,7 +71,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
       continue;
     }
     if (r.status === "paid_unplaced") {
-      out.push({ id: `plan-${r.id}`, kind: "plan", title: `${name} heeft betaald maar staat nog niet ingepland`, sub: "Plaats de afspraak via Boekingen" + who(r), to: "/beheer/boekingen" });
+      out.push({ id: `plan-${r.id}`, kind: "plan", title: `${name} heeft betaald maar staat nog niet ingepland`, sub: "Plaats de afspraak via Boekingen" + who(r), to: "/dashboard/boekingen" });
       continue;
     }
     if (r.status !== "manual" && dayKey(r.start_at) === today && new Date(r.start_at).getTime() > nowMs - 3600e3) {
@@ -110,7 +110,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
         id: `taak-${t.id}`, kind: "taak",
         title: `${t.action} · ${t.bookings?.customer_name || "klant"}`,
         sub: (late ? `Was gepland op ${t.due_date}` : "Gepland voor vandaag") + (t.owner === "roll" ? " · Roll" : ""),
-        to: `/beheer/gesprek/${t.booking_id}`,
+        to: `/dashboard/gesprek/${t.booking_id}`,
       });
     }
   }
@@ -125,7 +125,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
       out.push({
         id: `roll-${t.id}`, kind: "roll",
         title: `${({ offerte: "Verfplan", contact: "Contact", maatwerk: "Maatwerk", nazorg: "Nazorg" } as Record<string, string>)[t.type] ?? "Taak"} voor ${t.bookings?.customer_name || "klant"}${late ? " (te laat)" : ""}`,
-        sub: t.owner ? `Eigenaar ${t.owner} · ${t.status}` : "Nog geen eigenaar", to: "/beheer/taken",
+        sub: t.owner ? `Eigenaar ${t.owner} · ${t.status}` : "Nog geen eigenaar", to: "/dashboard/taken",
       });
     }
     // Intakes zonder afspraak (organische route): de klant verwacht dat Roll contact opneemt om in te plannen.
@@ -143,7 +143,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
           id: `intake-${i.id}`, kind: "plan",
           title: `Intake zonder afspraak: plan het gesprek in met ${i.contact_name || i.contact_email || "de klant"}`,
           sub: `Ingevuld op ${fmtD(i.created_at)}${i.contact_email ? ` · ${i.contact_email}` : ""}`,
-          to: `/beheer/${i.id}`,
+          to: `/dashboard/${i.id}`,
         });
       }
     }
@@ -156,7 +156,7 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
         id: `schilderplan-${c.sessie}`, kind: "schilderplan",
         title: `Verfplan ${c.code}: klant vraagt om hulp${werkdagenSinds(c.overdracht_op) >= 1 ? " (al een werkdag)" : ""}`,
         sub: `Via ${c.overdracht_kanaal === "mail" ? "mail" : "WhatsApp"} op ${fmtD(c.overdracht_op)}${c.email ? ` · ${c.email}` : ""}`,
-        to: `/beheer/schilderplan/${c.sessie}`,
+        to: `/dashboard/schilderplan/${c.sessie}`,
       });
     }
     // Overgenomen gesprekken: de klant typte na de overname nog iets in de chat (Charlie antwoordt dan niet meer).
@@ -168,11 +168,11 @@ export async function loadNotifications(opts: { isAdmin: boolean; stylistId: str
         id: `schilderplan-nieuw-${c.sessie}-${c.updated_at}`, kind: "schilderplan",
         title: `Verfplan${c.code ? ` ${c.code}` : ""}: nieuw bericht van de klant`,
         sub: `In de chat op ${fmtD(c.updated_at)}, na de overname`,
-        to: `/beheer/schilderplan/${c.sessie}`,
+        to: `/dashboard/schilderplan/${c.sessie}`,
       });
     }
     const { data: al } = await supabase.from("system_alerts").select("id,message").is("acknowledged_at", null).order("created_at", { ascending: false }).limit(20);
-    for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/beheer/meldingen" });
+    for (const a of (al as any[]) ?? []) out.push({ id: `melding-${a.id}`, kind: "melding", title: a.message, sub: "Systeemmelding", to: "/dashboard/meldingen" });
   }
   return out;
 }
