@@ -12,6 +12,7 @@ const SOORTEN: { k: Soort; een: string; meer: string }[] = [
   { k: "makelaar", een: "Makelaar", meer: "Makelaars" },
   { k: "creator", een: "Creator", meer: "Creators" },
   { k: "merk", een: "Merk", meer: "Merken" },
+  { k: "schilder", een: "Schilder", meer: "Schilders" },
 ];
 const soortLabel = (s: string) => SOORTEN.find((x) => x.k === s)?.een ?? (s === "schilder" ? "Schilder" : "Partner");
 export const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(n || 0);
@@ -50,6 +51,8 @@ export interface WpPartner {
     voornamen: string; utmSource: string; oudeCodes: string[]; tarieven: { vanaf: string; commissie: number }[];
     letters?: string; thuisPrijs?: number; thuisVan?: number; geldigMnd?: number; koppelingMnd?: number;
     beelden?: { logo: string; foto: string; blik: string } | null;
+    // Schilder: inkoopcode met korting op verf voor zijn eigen bestellingen.
+    inkoopcode?: string; inkoopKorting?: number; bestelEmails?: string[]; inkoopVoor?: string[]; oudeInkoopcodes?: string[];
   };
   funnel?: { kaarten: number; geactiveerd: number; geboekt: number; thuis: number; klanten: number } | null;
   totaal?: { omzet: number; commissie: number; definitief: number };
@@ -159,9 +162,9 @@ export function PartnersPage() {
     for (const p of wp ?? []) {
       const mails = [...(p.mensen ?? []), ...(p.leden ?? [])].map((m) => `${m.naam ?? ""} ${m.email}`).join(" ");
       uit.push({
-        sleutel: `p:${p.slug}`, soort: p.soort, naam: p.naam, sub: [p.plaats, p.afspraken.kortingscode ? `code ${p.afspraken.kortingscode}` : ""].filter(Boolean).join(" · "),
+        sleutel: `p:${p.slug}`, soort: p.soort, naam: p.naam, sub: [p.plaats, p.afspraken.kortingscode ? `code ${p.afspraken.kortingscode}` : "", p.config?.inkoopcode ? `inkoopcode ${p.config.inkoopcode}` : ""].filter(Boolean).join(" · "),
         actief: p.actief && (p.status ?? "actief") === "actief", omzet: p.kort.omzet, open: p.kort.commissieOpen, laatst: p.kort.laatsteOrder,
-        zoek: `${p.naam} ${p.plaats} ${p.slug} ${p.afspraken.kortingscode} ${p.afspraken.thuisCode} ${mails}`.toLowerCase(), naar: `/dashboard/partners/${p.slug}`,
+        zoek: `${p.naam} ${p.plaats} ${p.slug} ${p.afspraken.kortingscode} ${p.afspraken.thuisCode} ${p.config?.inkoopcode ?? ""} ${(p.config?.bestelEmails ?? []).join(" ")} ${mails}`.toLowerCase(), naar: `/dashboard/partners/${p.slug}`,
         meekijken: `/dashboard/partner/${p.slug}`,
       });
     }
@@ -254,6 +257,9 @@ export function PartnerDetail() {
   if (!p) return <div>{terug}<p className="rd-sub">Laden...</p></div>;
 
   const creator = p.type === "creator";
+  const schilder = p.type === "schilder";
+  // Een schilder zonder code voor klanten heeft geen commissie; de blokken daarvoor laten we dan weg.
+  const metCommissie = !schilder || !!p.afspraken.kortingscode;
   const orders = p.orders ?? [];
 
   return (
@@ -272,15 +278,15 @@ export function PartnerDetail() {
         {p.beheerbaar && <Link className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} to={`/dashboard/partners/${p.slug}/wijzig`}>Wijzigen</Link>}
         {p.links.voorbeeld && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.voorbeeld} target="_blank" rel="noreferrer">Voorbeeld met verzonnen cijfers</a>}
         {p.links.beheer && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.beheer} target="_blank" rel="noreferrer">Beheer in WordPress</a>}
-        <Link className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} to="/dashboard/commissie">Commissie en uitbetalen</Link>
+        {metCommissie && <Link className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} to="/dashboard/commissie">Commissie en uitbetalen</Link>}
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+      {metCommissie && <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <Tegel label={`Omzet ${p.kort.kwartaal}`} waarde={euro(p.kort.omzet)} sub={`${getal(p.kort.orders)} bestelling${p.kort.orders === 1 ? "" : "en"}`} />
         <Tegel label={`Commissie ${p.kort.kwartaal}`} waarde={euro(p.kort.commissie)} sub={`${p.afspraken.commissiePct}% over de omzet`} />
         <Tegel label="Commissie nog open" waarde={euro(p.kort.commissieOpen)} sub="Alle kwartalen samen" />
         <Tegel label="Omzet totaal" waarde={euro(p.totaal?.omzet ?? p.kort.omzetTotaal)} sub={p.totaal ? `${euro(p.totaal.commissie)} commissie` : undefined} />
-      </div>
+      </div>}
 
       {p.funnel && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
@@ -300,18 +306,33 @@ export function PartnerDetail() {
 
       <div className="rd-card-white" style={{ marginBottom: 10 }}>
         {blokKop("Afspraken")}
-        <div style={{ ...rij, borderTop: 0, paddingTop: 0 }}><span>Kortingscode</span><strong>{p.afspraken.kortingscode || "geen"}</strong></div>
+        {schilder && <>
+          <div style={{ ...rij, borderTop: 0, paddingTop: 0 }}><span>Inkoopcode</span><strong>{p.config?.inkoopcode || "geen"}</strong></div>
+          <div style={rij}><span>Korting op eigen inkoop</span><span>{p.config?.inkoopKorting ?? 0}% op verf <span style={{ opacity: 0.6, fontSize: 13 }}>· geen samples, gereedschap, voorstrijk of kleuradvies</span></span></div>
+          <div style={rij}>
+            <span>Werkt alleen voor</span>
+            <span style={{ textAlign: "right", overflowWrap: "anywhere" }}>
+              {(p.config?.inkoopVoor ?? []).length
+                ? (p.config?.inkoopVoor ?? []).join(", ")
+                : <strong style={{ color: "var(--rd-pink-dark)" }}>nog geen e-mailadres: de code staat uit</strong>}
+            </span>
+          </div>
+          {(p.config?.oudeInkoopcodes ?? []).length > 0 && <div style={rij}><span>Eerdere inkoopcodes</span><span>{(p.config?.oudeInkoopcodes ?? []).join(", ")} <span style={{ opacity: 0.6, fontSize: 13 }}>· staan uit</span></span></div>}
+        </>}
+        {metCommissie && <>
+        <div style={schilder ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}><span>{schilder ? "Code voor zijn klanten" : "Kortingscode"}</span><strong>{p.afspraken.kortingscode || "geen"}</strong></div>
         <div style={rij}><span>Korting voor de klant</span><span>{p.afspraken.korting}</span></div>
         <div style={rij}><span>Commissie voor de partner</span><span>{p.afspraken.commissiePct}%</span></div>
+        </>}
         {p.afspraken.thuisCode && <div style={rij}><span>Code voor advies aan huis</span><strong>{p.afspraken.thuisCode}</strong></div>}
         {p.afspraken.thuisCode && !!p.config?.thuisVan && <div style={rij}><span>Kleuradvies aan huis</span><span>{euro(p.config.thuisPrijs ?? 0)} in plaats van {euro(p.config.thuisVan)}</span></div>}
-        {!creator && !!p.config?.geldigMnd && <div style={rij}><span>Cadeaukaart en koppeling</span><span style={{ textAlign: "right" }}>kaart {p.config.geldigMnd} maanden geldig · klant {p.config.koppelingMnd} maanden gekoppeld</span></div>}
+        {p.type === "makelaar" && !!p.config?.geldigMnd && <div style={rij}><span>Cadeaukaart en koppeling</span><span style={{ textAlign: "right" }}>kaart {p.config.geldigMnd} maanden geldig · klant {p.config.koppelingMnd} maanden gekoppeld</span></div>}
         {(p.config?.tarieven ?? []).length > 1 && <div style={rij}><span>Commissie door de tijd</span><span style={{ textAlign: "right" }}>{(p.config?.tarieven ?? []).map((t) => `${t.commissie}% vanaf ${formatDate(t.vanaf)}`).join(" · ")}</span></div>}
         {(p.config?.oudeCodes ?? []).length > 0 && <div style={rij}><span>Eerdere codes</span><span style={{ textAlign: "right" }}>{(p.config?.oudeCodes ?? []).join(", ")} <span style={{ opacity: 0.6, fontSize: 13 }}>· staan uit, tellen nog mee</span></span></div>}
         {creator && p.config?.utmSource && <div style={rij}><span>Link om te delen</span><span style={{ textAlign: "right", overflowWrap: "anywhere" }}>roll.nl/?utm_source={p.config.utmSource} <span style={{ opacity: 0.6, fontSize: 13 }}>· zet er &amp;utm_content=naam-van-de-post achter om per post te meten</span></span></div>}
       </div>
 
-      <div className="rd-card-white" style={{ marginBottom: 10 }}>
+      {metCommissie && <div className="rd-card-white" style={{ marginBottom: 10 }}>
         {blokKop("Commissie per kwartaal")}
         {(p.kwartalen ?? []).map((k, i) => (
           <div key={k.kwartaal} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
@@ -323,9 +344,9 @@ export function PartnerDetail() {
             </span>
           </div>
         ))}
-      </div>
+      </div>}
 
-      <div className="rd-card-white" style={{ marginBottom: 10 }}>
+      {metCommissie && <div className="rd-card-white" style={{ marginBottom: 10 }}>
         {blokKop(`Bestellingen (${getal(orders.length)})`)}
         {orders.length === 0 ? <p className="rd-sub" style={{ margin: 0 }}>Nog geen bestellingen via deze partner.</p> : orders.slice(0, 30).map((o, i) => (
           <div key={o.nr + i} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
@@ -338,7 +359,7 @@ export function PartnerDetail() {
           </div>
         ))}
         {orders.length > 30 && <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 13 }}>De laatste 30 van {getal(orders.length)}.</p>}
-      </div>
+      </div>}
 
       {creator && ((p.kleuren ?? []).length > 0 || (p.producten ?? []).length > 0) && (
         <div className="rd-card-white" style={{ marginBottom: 10 }}>
@@ -540,7 +561,10 @@ export function PartnerForm() {
   const navigate = useNavigate();
   const [oud, setOud] = useState<WpPartner | null>(null);
   const [laadFout, setLaadFout] = useState<string | null>(null);
-  const [soort, setSoort] = useState<"makelaar" | "creator" | "merk">("creator");
+  const [soort, setSoort] = useState<"makelaar" | "creator" | "merk" | "schilder">("creator");
+  const [inkoopcode, setInkoopcode] = useState("");
+  const [inkoopKorting, setInkoopKorting] = useState("10");
+  const [bestelEmails, setBestelEmails] = useState("");
   const [plaats, setPlaats] = useState("");
   const [adres, setAdres] = useState("");
   const [adresZelf, setAdresZelf] = useState(false);
@@ -566,7 +590,8 @@ export function PartnerForm() {
       const p = (data as { partner?: WpPartner } | null)?.partner;
       if (error || !p) { setLaadFout("Deze partner kon niet worden opgehaald."); return; }
       setOud(p);
-      setSoort(p.type === "makelaar" ? "makelaar" : p.soort === "merk" ? "merk" : "creator");
+      setSoort(p.type === "makelaar" ? "makelaar" : p.type === "schilder" ? "schilder" : p.soort === "merk" ? "merk" : "creator");
+      setInkoopcode(p.config?.inkoopcode ?? ""); setInkoopKorting(String(p.config?.inkoopKorting || 10)); setBestelEmails((p.config?.bestelEmails ?? []).join("\n"));
       setPlaats(p.plaats ?? ""); setThuisPrijs(String(p.config?.thuisPrijs ?? 100));
       setNaam(p.naam); setVoornamen(p.config?.voornamen ?? ""); setCode(p.afspraken.kortingscode);
       setKorting(String(p.afspraken.kortingPct)); setCommissie(String(p.afspraken.commissiePct));
@@ -585,12 +610,25 @@ export function PartnerForm() {
   const commissieAnders = !!oud && Math.abs(c - oud.afspraken.commissiePct) > 0.001;
   const tagNu = tagZelf || !nieuw ? tag : alleenCode(naam);
   const makelaar = soort === "makelaar";
+  const schilder = soort === "schilder";
+  const inkoopAnders = !!oud && alleenCode(inkoopcode) !== (oud.config?.inkoopcode ?? "").toLowerCase();
   const adresNu = adresZelf ? adres : alleenAdres(naam);
   const lettersNu = lettersZelf ? letters : adresNu.replace(/[^a-z]/g, "").slice(0, 2).toUpperCase();
 
   const bewaar = async (e: React.FormEvent) => {
     e.preventDefault();
     setBezig(true); setFout(null);
+    if (schilder) {
+      const { data, fout } = await roep<{ slug: string }>("partners-beheer", {
+        action: "partner_opslaan", slug: slug ?? "", soort, naam: naam.trim(), voornamen: voornamen.trim(), plaats: plaats.trim(),
+        inkoopcode: alleenCode(inkoopcode), inkoopKorting: Number(inkoopKorting.replace(",", ".")) || 0, bestelEmails: bestelEmails.trim(),
+        start: nieuw ? start : "", status,
+      });
+      setBezig(false);
+      if (fout || !data?.slug) { setFout(fout ?? "Opslaan lukte niet."); return; }
+      navigate(`/dashboard/partners/${data.slug}`);
+      return;
+    }
     const { data, fout } = await roep<{ slug: string }>("partners-beheer", {
       action: "partner_opslaan", slug: slug ?? "", soort, naam: naam.trim(), voornamen: voornamen.trim(), kortingscode: alleenCode(code),
       korting: k, commissie: c, commissieVanaf: commissieAnders ? vanaf : "", start: nieuw ? start : "", status, utmSource: nieuw && !makelaar ? tagNu : "",
@@ -612,8 +650,8 @@ export function PartnerForm() {
         <div>
           <span style={veldKop}>Soort</span>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} role="radiogroup" aria-label="Soort partner">
-            {(nieuw ? (["makelaar", "creator", "merk"] as const) : makelaar ? (["makelaar"] as const) : (["creator", "merk"] as const)).map((x) => (
-              <button type="button" key={x} role="radio" aria-checked={soort === x} className={`rd-plan-chip${soort === x ? " is-on" : ""}`} onClick={() => { setSoort(x); if (nieuw && (x === "makelaar") !== (soort === "makelaar")) { setKorting(x === "makelaar" ? "5" : "10"); setCommissie(x === "makelaar" ? "5" : "10"); } }}>{x === "makelaar" ? "Makelaar" : x === "creator" ? "Creator" : "Merk"}</button>
+            {(nieuw ? (["makelaar", "creator", "merk", "schilder"] as const) : makelaar ? (["makelaar"] as const) : schilder ? (["schilder"] as const) : (["creator", "merk"] as const)).map((x) => (
+              <button type="button" key={x} role="radio" aria-checked={soort === x} className={`rd-plan-chip${soort === x ? " is-on" : ""}`} onClick={() => { setSoort(x); if (nieuw && (x === "makelaar") !== (soort === "makelaar")) { setKorting(x === "makelaar" ? "5" : "10"); setCommissie(x === "makelaar" ? "5" : "10"); } }}>{x === "makelaar" ? "Makelaar" : x === "creator" ? "Creator" : x === "schilder" ? "Schilder" : "Merk"}</button>
             ))}
           </div>
         </div>
@@ -656,6 +694,45 @@ export function PartnerForm() {
         </div>
       )}
 
+      {schilder && (
+        <div className="rd-card-white" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={veldKop} htmlFor="pf-inkoop">Inkoopcode</label>
+            <input id="pf-inkoop" className="rd-input" style={{ ...veld, textTransform: "uppercase", fontFamily: "monospace" }} value={inkoopcode} onChange={(e) => setInkoopcode(alleenCode(e.target.value))} minLength={4} maxLength={30} required autoComplete="off" spellCheck={false} />
+            <p style={veldUitleg}>{inkoopAnders
+              ? `De oude code ${(oud?.config?.inkoopcode ?? "").toUpperCase()} gaat uit.`
+              : "Voor zijn eigen bestellingen in de webshop. Persoonlijk: de code werkt alleen met de e-mailadressen hieronder en die van de mensen met toegang. Niet te combineren met andere codes."}</p>
+          </div>
+          <div>
+            <label style={veldKop} htmlFor="pf-inkoopkorting">Korting op verf (%)</label>
+            <input id="pf-inkoopkorting" className="rd-input" style={{ ...veld, maxWidth: 160 }} inputMode="decimal" value={inkoopKorting} onChange={(e) => setInkoopKorting(e.target.value)} required />
+            <p style={veldUitleg}>Op verf, niet op samples, gereedschap, voorstrijk en kleuradvies. Over zijn eigen inkoop krijgt hij geen commissie.</p>
+          </div>
+          <div>
+            <label style={veldKop} htmlFor="pf-bestelmail">E-mailadressen waarmee hij bestelt</label>
+            <textarea id="pf-bestelmail" className="rd-input" style={{ ...veld, height: "auto", minHeight: 76, padding: 12 }} rows={3} value={bestelEmails} onChange={(e) => setBestelEmails(e.target.value)} placeholder={"bijvoorbeeld info@schildersbedrijf.nl"} autoComplete="off" spellCheck={false} />
+            <p style={veldUitleg}>Een per regel. Mag leeg als hij bestelt met het adres waarmee hij inlogt. Zonder enig e-mailadres staat de code uit.</p>
+          </div>
+          {nieuw ? (
+            <div>
+              <label style={veldKop} htmlFor="pf-start">Startdatum</label>
+              <input id="pf-start" className="rd-input" style={{ ...veld, maxWidth: 220 }} type="date" value={start} onChange={(e) => setStart(e.target.value)} required />
+            </div>
+          ) : (
+            <div>
+              <label style={veldKop} htmlFor="pf-status">Stand</label>
+              <select id="pf-status" className="rd-input" style={{ ...veld, maxWidth: 320 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="actief">Actief: de code werkt</option>
+                <option value="gepauzeerd">Gepauzeerd: de code staat tijdelijk uit</option>
+                <option value="gestopt">Gestopt: de code staat uit</option>
+              </select>
+            </div>
+          )}
+          <p style={{ ...veldUitleg, margin: 0 }}>Een code voor zijn klanten, met commissie voor de schilder, volgt in een volgende stap.</p>
+        </div>
+      )}
+
+      {!schilder && <>
       <div className="rd-card-white" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
           <label style={veldKop} htmlFor="pf-code">Kortingscode</label>
@@ -719,6 +796,8 @@ export function PartnerForm() {
         )}
       </div>
 
+      </>}
+
       {fout && <p style={{ margin: "12px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600 }} role="alert">{fout}</p>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
         <button type="submit" className="rd-btn rd-btn-primary" style={{ width: "auto", padding: "0 24px" }} disabled={bezig}>{bezig ? "Bezig..." : nieuw ? "Maak de partner aan" : "Sla op"}</button>
@@ -779,6 +858,7 @@ function Toegang({ p, herlaad }: { p: WpPartner; herlaad: () => void }) {
         <button type="submit" className="rd-btn rd-btn-primary" style={{ width: "auto", minHeight: 50, padding: "0 18px", fontSize: 15 }} disabled={bezig}>{bezig ? "Bezig..." : "Geef toegang en mail de uitnodiging"}</button>
       </form>
       {bericht && <p style={{ margin: "10px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="status">{bericht}</p>}
+      {p.type === "schilder" && <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Iedereen met toegang kan ook met de inkoopcode bestellen.</p>}
       <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Wie toegang krijgt, ontvangt een mail met een link om een wachtwoord te kiezen en logt daarna in op roll.nl/dashboard. De link werkt een uur; daarna kan diegene zelf een nieuwe aanvragen via "Wachtwoord vergeten?".</p>
     </div>
   );

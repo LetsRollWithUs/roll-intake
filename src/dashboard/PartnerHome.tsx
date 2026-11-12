@@ -67,6 +67,39 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
   if (fout) return <p className="rd-sub">{fout}</p>;
   if (!p) return <p className="rd-sub">Je cijfers laden...</p>;
 
+  // Een schilder koopt zelf in met zijn persoonlijke inkoopcode. Zijn overzicht van bestellingen volgt (stap 5b).
+  if (p.type === "schilder") {
+    const ic = (p.config?.inkoopcode ?? "").toUpperCase();
+    return (
+      <div>
+        {meekijken && (
+          <div style={melding}>
+            Je kijkt mee als beheerder: zo ziet {p.naam} het dashboard.{" "}
+            <Link to={`/dashboard/partners/${p.slug}`} style={{ color: "inherit" }}>Terug naar het beheer</Link>
+          </div>
+        )}
+        <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Schildersdashboard · {p.naam}</div>
+        <h1 className="rd-h2" style={{ margin: "0 0 2px" }}>Hoi {p.voornamen || p.naam}</h1>
+        <p className="rd-sub" style={{ marginTop: 0 }}>Jouw inkoop bij Roll.</p>
+        <div className="rd-card-white" style={{ marginTop: 12 }}>
+          {blokKop("Jouw inkoopcode")}
+          <div style={{ fontFamily: "monospace", fontSize: 26, fontWeight: 800, letterSpacing: ".04em" }}>{ic || "Nog niet ingesteld"}</div>
+          <p style={{ fontSize: 15, margin: "8px 0 0" }}>{p.config?.inkoopKorting ?? 0}% korting op verf bij elke bestelling op roll.nl. Vul de code in bij het afrekenen.</p>
+          <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 14 }}>
+            De code is persoonlijk en werkt alleen met {(p.config?.inkoopVoor ?? []).length > 1 ? "deze e-mailadressen" : "dit e-mailadres"}: {(p.config?.inkoopVoor ?? []).join(", ") || "nog geen"}.
+            Niet op samples, gereedschap, voorstrijk en kleuradvies, en niet te combineren met andere codes.
+          </p>
+          {p.status && p.status !== "actief" && <p style={{ margin: "8px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600 }}>De code staat op dit moment uit. Vragen? Mail naar hello@roll.nl.</p>}
+        </div>
+        <div className="rd-card-white" style={{ marginTop: 10 }}>
+          {blokKop("Bestellen")}
+          <p style={{ fontSize: 15, margin: 0 }}>Bestel in de webshop van Roll, met de gewone levertijden. Een overzicht van je bestellingen, met opnieuw bestellen, komt hier binnenkort bij.</p>
+          <a className="rd-btn rd-btn-primary" style={{ ...knop, marginTop: 12 }} href="https://roll.nl/product-category/verf/" target="_blank" rel="noreferrer">Naar de webshop</a>
+        </div>
+      </div>
+    );
+  }
+
   const creator = p.type === "creator";
   const code = (p.afspraken.kortingscode || "").toUpperCase();
   const orders = p.orders ?? [];

@@ -131,20 +131,22 @@ Deno.serve(async (req) => {
         if (!w.ok || !Array.isArray(w.uit?.codes)) return json({ error: w.melding ?? "Codes maken lukte niet. Probeer het opnieuw." }, w.melding ? w.status : 502);
         return json({ ok: true, codes: w.uit.codes });
       }
-      const soort = ["makelaar", "merk"].includes(body?.soort) ? body.soort : "creator";
+      const soort = ["makelaar", "merk", "schilder"].includes(body?.soort) ? body.soort : "creator";
       const tekst = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
       const w = await naarWinkel("partner", {
-        slug, type: "makelaar" === soort ? "makelaar" : "creator", naam: tekst(body?.naam, 60), voornamen: tekst(body?.voornamen, 60), plaats: tekst(body?.plaats, 60),
+        slug, type: "makelaar" === soort || "schilder" === soort ? soort : "creator", naam: tekst(body?.naam, 60), voornamen: tekst(body?.voornamen, 60), plaats: tekst(body?.plaats, 60),
         kortingscode: tekst(body?.kortingscode, 40), korting: Number(body?.korting) || 0, commissie: Number(body?.commissie) || 0,
         commissieVanaf: tekst(body?.commissieVanaf, 10), start: tekst(body?.start, 10), status: tekst(body?.status, 12), utmSource: tekst(body?.utmSource, 40),
         // Alleen voor makelaars: het adres van de cadeaupagina, de letters voor de kaartcodes en kleuradvies aan huis.
         adres: tekst(body?.adres, 40), prefix: tekst(body?.letters, 3), thuisCode: tekst(body?.thuisCode, 30), thuisPrijs: tekst(body?.thuisPrijs, 8),
         geldigMnd: Number(body?.geldigMnd) || 0, koppelingMnd: Number(body?.koppelingMnd) || 0,
+        // Alleen voor schilders: de inkoopcode, de korting op verf en de e-mailadressen waarmee hij bestelt.
+        inkoopcode: tekst(body?.inkoopcode, 30), inkoopKorting: Number(body?.inkoopKorting) || 0, bestelEmails: tekst(body?.bestelEmails, 1200),
       });
       if (!w.ok || !w.uit?.partner) return json({ error: w.melding ?? "Opslaan lukte niet. Probeer het over een minuut opnieuw." }, w.melding ? w.status : 502);
       const p = w.uit.partner;
       // De soort volgt de webshop: een makelaar blijft een makelaar, een creator kan ook een merk heten.
-      const { error: fout } = await admin.from("partners").upsert({ slug: p.slug, soort: "makelaar" === p.type ? "makelaar" : "merk" === soort ? "merk" : "creator", naam: p.naam, actief: true }, { onConflict: "slug" });
+      const { error: fout } = await admin.from("partners").upsert({ slug: p.slug, soort: "makelaar" === p.type || "schilder" === p.type ? p.type : "merk" === soort ? "merk" : "creator", naam: p.naam, actief: true }, { onConflict: "slug" });
       if (fout) console.error("partners-beheer: partner bijwerken in het dashboard", fout.message);
       return json({ ok: true, slug: p.slug });
     }
@@ -198,7 +200,7 @@ Deno.serve(async (req) => {
     if ("detail" === body.action) {
       // Staat de partner wel in de webshop maar nog niet bij ons (opslaan halverwege misgegaan), dan vullen we dat aan.
       if (!per.has(uit.partner.slug)) {
-        const { data: nieuw } = await admin.from("partners").insert({ slug: uit.partner.slug, soort: uit.partner.type === "makelaar" ? "makelaar" : "creator", naam: uit.partner.naam }).select("id, slug, soort, actief").maybeSingle();
+        const { data: nieuw } = await admin.from("partners").insert({ slug: uit.partner.slug, soort: ["makelaar", "schilder"].includes(uit.partner.type) ? uit.partner.type : "creator", naam: uit.partner.naam }).select("id, slug, soort, actief").maybeSingle();
         if (nieuw) per.set((nieuw as any).slug, { ...(nieuw as any), partner_members: [] });
       }
       const p = verrijk(uit.partner);
