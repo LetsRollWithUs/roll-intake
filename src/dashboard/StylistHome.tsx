@@ -60,7 +60,9 @@ export function StylistHome() {
         const { data: list } = await supabase.from("stylists").select("id,name,email,meet_url").eq("active", true).order("name");
         const arr = (list as Stylist[]) ?? [];
         setStylists(arr);
-        setSelId(mine?.id ?? arr[0]?.id ?? null);
+        // Vanuit het partneroverzicht: /dashboard?als=<styliste> opent meteen haar overzicht.
+        const als = new URLSearchParams(window.location.search).get("als");
+        setSelId((als && arr.some((s) => s.id === als) ? als : null) ?? mine?.id ?? arr[0]?.id ?? null);
       } else {
         setSelId(mine?.id ?? null);
       }

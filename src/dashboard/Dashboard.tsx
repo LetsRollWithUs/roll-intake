@@ -28,6 +28,7 @@ import { NakijkenPage } from "./NakijkenPage";
 import { InzichtenPage } from "./InzichtenPage";
 import { loadNotifications } from "./notifications";
 import { PartnerHome, type Partner } from "./PartnerHome";
+import { PartnersPage, PartnerDetail, StylisteDetail } from "./PartnersPage";
 
 // Menubalk in roll.nl-stijl: paarse afgeronde balk, wit menu, roze Roll-logo in het midden.
 const BAR_CSS = `
@@ -142,6 +143,7 @@ export function Dashboard() {
               <NavLink to="/dashboard/gesprekken" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Adviesgesprekken</NavLink>
               <NavLink to="/dashboard/offertes" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Offertes</NavLink>
               <NavLink to="/dashboard/commissie" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Commissie</NavLink>
+              {isAdmin && <NavLink to="/dashboard/partners" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Partners</NavLink>}
             </nav>
             <Link to="/dashboard" className="rd-logo" aria-label="Roll dashboard">
               <img src={`${import.meta.env.BASE_URL}roll-advies-logo.png`} alt="Roll" style={{ height: 40, width: "auto", display: "block" }} />
@@ -217,6 +219,9 @@ export function Dashboard() {
       <Route path="offertes" element={<OffertesPage />} />
       <Route path="offertes/:id" element={<OfferteDetail />} />
       <Route path="commissie" element={<CommissiePage />} />
+      <Route path="partners" element={<PartnersPage />} />
+      <Route path="partners/styliste/:id" element={<StylisteDetail />} />
+      <Route path="partners/:slug" element={<PartnerDetail />} />
       <Route path="notificaties" element={<NotificationsPage />} />
       <Route path="account" element={<AccountPage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
