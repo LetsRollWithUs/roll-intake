@@ -1,4 +1,18 @@
 {
+  "redirects": [
+    {
+      "source": "/beheer/:pad*",
+      "has": [{ "type": "host", "value": "intake.roll.nl" }],
+      "destination": "https://roll.nl/dashboard/:pad*",
+      "permanent": false
+    },
+    {
+      "source": "/dashboard/:pad*",
+      "has": [{ "type": "host", "value": "intake.roll.nl" }],
+      "destination": "https://roll.nl/dashboard/:pad*",
+      "permanent": false
+    }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     {
