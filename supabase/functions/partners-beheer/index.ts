@@ -19,9 +19,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const WP = new URL(Deno.env.get("OFFERTE_API_URL") || "https://roll.nl/wp-json/roll-advies/v1/offerte").origin;
 const KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/dashboard").replace(/\/$/, "");
-const LEES = ["lijst", "detail"];
+const LEES = ["lijst", "detail", "commissie"];
 const LEDEN = ["lid_toevoegen", "lid_uitnodigen", "lid_verwijderen"];
-const BEHEER = ["partner_opslaan", "partner_verwijderen", "partner_beeld", "partner_codes"];
+const BEHEER = ["partner_opslaan", "partner_verwijderen", "partner_beeld", "partner_codes", "uitbetaling_afhandelen", "code_blokkeren"];
 
 /** Vraag aan roll.nl; een nette melding van daar (naam bestaat al, code bezet) geven we door. */
 async function naarWinkel(pad: string, invoer: unknown): Promise<{ ok: boolean; status: number; uit: any; melding: string | null }> {
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { /* leeg */ }
     const slug = String(body?.slug ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60);
-    if (![...LEES, ...LEDEN, ...BEHEER].includes(body?.action) || (!["lijst", "partner_opslaan"].includes(body.action) && !slug)) return json({ error: "Onbekende actie." }, 400);
+    if (![...LEES, ...LEDEN, ...BEHEER].includes(body?.action) || (!["lijst", "commissie", "partner_opslaan"].includes(body.action) && !slug)) return json({ error: "Onbekende actie." }, 400);
 
     // Een partner aanmaken, wijzigen of weghalen. De afspraken (code, korting, commissie) staan in de webshop, want
     // daar worden ze bij elke bestelling toegepast; wij houden bij wie het is, voor het inloggen.
@@ -104,6 +104,18 @@ Deno.serve(async (req) => {
         if (!w.ok) return json({ error: w.melding ?? "Verwijderen lukte niet. Probeer het over een minuut opnieuw." }, w.melding ? w.status : 502);
         await admin.from("partners").delete().eq("slug", slug);
         return json({ ok: true });
+      }
+      // Roll handelt de keuze van een partner voor een kwartaal af: betaald, of het verftegoed aanmaken.
+      if ("uitbetaling_afhandelen" === body.action) {
+        const w = await naarWinkel("partner-uitbetaling", { slug, kwartaal: String(body?.kwartaal ?? "").slice(0, 7) });
+        if (!w.ok) return json({ error: w.melding ?? "Afhandelen lukte niet. Probeer het over een minuut opnieuw." }, w.melding ? w.status : 502);
+        return json({ ok: true, keuze: w.uit?.keuze ?? "", tegoedcode: w.uit?.tegoedcode ?? "", bedragIncl: w.uit?.bedragIncl ?? 0 });
+      }
+      // Een cadeaukaartcode blokkeren, bijvoorbeeld bij een zoekgeraakte kaart.
+      if ("code_blokkeren" === body.action) {
+        const w = await naarWinkel("partner-code-blokkeer", { slug, code: String(body?.code ?? "").trim().slice(0, 20) });
+        if (!w.ok) return json({ error: w.melding ?? "Blokkeren lukte niet. Probeer het opnieuw." }, w.melding ? w.status : 502);
+        return json({ ok: true, al: true === w.uit?.al });
       }
       // Een beeld voor de cadeaupagina van een makelaar (logo, foto van het team, foto van het cadeaublik).
       if ("partner_beeld" === body.action) {
@@ -168,7 +180,8 @@ Deno.serve(async (req) => {
       return json({ ok: true, verstuurd });
     }
 
-    const r = await fetch(`${WP}/wp-json/roll-partners/v1/partners${"detail" === body.action ? `?slug=${slug}` : ""}`, {
+    // "commissie" vraagt van alle partners ook de kwartalen en de bestellingen, voor het commissie-overzicht.
+    const r = await fetch(`${WP}/wp-json/roll-partners/v1/partners${"detail" === body.action ? `?slug=${slug}` : "commissie" === body.action ? "?alles=1" : ""}`, {
       headers: { "X-Roll-Advies-Key": KEY }, signal: AbortSignal.timeout(25000),
     });
     const uit = await r.json().catch(() => null);

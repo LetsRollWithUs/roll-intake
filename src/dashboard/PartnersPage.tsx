@@ -65,7 +65,7 @@ export interface WpPartner {
 }
 export interface Kwartaal {
   kwartaal: string; label: string; orders: number; omzet: number; commissie: number; open: number; afrekenbaar: string; klaar: boolean;
-  uitbetaling: string; keuze: string; kenmerk: string; bedrag: number; bedragIncl: number; tegoedcode: string; factuurNr: string; afgehandeldOp: string; factuurMailto: string;
+  uitbetaling: string; keuze: string; gekozenOp?: string; kenmerk: string; bedrag: number; bedragIncl: number; tegoedcode: string; factuurNr: string; afgehandeldOp: string; factuurMailto: string;
 }
 interface Styliste { id: string; name: string; email: string; active: boolean }
 interface Commissie { stylist_id: string | null; verf_excl: number; amount: number; status: string; created_at: string }
@@ -245,7 +245,8 @@ export function PartnerDetail() {
         {p.links.pagina && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.pagina} target="_blank" rel="noreferrer">Pagina voor klanten</a>}
         {p.beheerbaar && <Link className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} to={`/dashboard/partners/${p.slug}/wijzig`}>Wijzigen</Link>}
         {p.links.voorbeeld && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.voorbeeld} target="_blank" rel="noreferrer">Voorbeeld met verzonnen cijfers</a>}
-        {p.links.beheer && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.beheer} target="_blank" rel="noreferrer">Codes en uitbetalingen</a>}
+        {p.links.beheer && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.beheer} target="_blank" rel="noreferrer">Beheer in WordPress</a>}
+        <Link className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} to="/dashboard/commissie">Commissie en uitbetalen</Link>
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
@@ -413,6 +414,18 @@ function Kaartcodes({ p, herlaad }: { p: WpPartner; herlaad: () => void }) {
   const [bezig, setBezig] = useState(false);
   const [codes, setCodes] = useState<{ code: string; link: string }[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
+  const [blok, setBlok] = useState("");
+  const [blokBericht, setBlokBericht] = useState<string | null>(null);
+  const blokkeer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = blok.trim().toUpperCase();
+    if (!code || !window.confirm(`Kaartcode ${code} blokkeren? De kaart is daarna niet meer te activeren.`)) return;
+    setBezig(true); setBlokBericht(null);
+    const { data, fout } = await roep<{ al?: boolean }>("partners-beheer", { action: "code_blokkeren", slug: p.slug, code });
+    setBezig(false);
+    setBlokBericht(fout ?? (data?.al ? `${code} was al geblokkeerd.` : `${code} is geblokkeerd.`));
+    if (!fout) setBlok("");
+  };
   const maak = async () => {
     setBezig(true); setFout(null);
     const { data, fout } = await roep<{ codes: { code: string; link: string }[] }>("partners-beheer", { action: "partner_codes", slug: p.slug, aantal, test });
@@ -456,7 +469,13 @@ function Kaartcodes({ p, herlaad }: { p: WpPartner; herlaad: () => void }) {
         </div>
       )}
       {fout && <p style={{ margin: "10px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="alert">{fout}</p>}
-      <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Het bestand bevat per kaart de code en de link voor de QR-code. Een code blokkeren doe je voorlopig via "Codes en uitbetalingen".</p>
+      <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Het bestand bevat per kaart de code en de link voor de QR-code.</p>
+      <form onSubmit={blokkeer} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--rd-line)" }}>
+        <label style={{ fontSize: 14 }} htmlFor="kc-blok">Kaart zoekgeraakt?</label>
+        <input id="kc-blok" className="rd-input" style={{ width: 190, background: "#fff", textTransform: "uppercase", fontFamily: "monospace" }} value={blok} onChange={(e) => setBlok(e.target.value)} placeholder={`${p.config?.letters ?? "AB"}-XXXX-XXXX`} maxLength={14} autoComplete="off" spellCheck={false} />
+        <button type="submit" className="rd-btn rd-btn-outline" style={klein} disabled={bezig || !blok.trim()}>Blokkeer deze code</button>
+      </form>
+      {blokBericht && <p style={{ margin: "8px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="status">{blokBericht}</p>}
     </div>
   );
 }

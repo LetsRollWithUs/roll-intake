@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "./ui";
+import { CommissieBeheer } from "./CommissieOverzicht";
 
 interface Row {
   id: string;
@@ -40,6 +41,8 @@ export function CommissiePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("open");
+  // Beheer ziet drie weergaven: alles bij elkaar, de stylistes (per bestelling) en de partners (per kwartaal).
+  const [tab, setTab] = useState<"alles" | "stylistes" | "partners">("alles");
   const load = async () => {
     const { data } = await supabase
       .from("commissions")
@@ -107,8 +110,20 @@ export function CommissiePage() {
       <Link to="/dashboard" className="rd-textlink" style={{ textDecoration: "none" }}>← Terug</Link>
       <h1 className="rd-h2" style={{ margin: "8px 0 2px" }}>Commissie</h1>
       <p className="rd-sub" style={{ marginTop: 0 }}>
-        Verfcommissie per toegeschreven bestelling (standaard 10%, per styliste in te stellen). {isAdmin ? "Beheer de codes, keur goed en markeer uitbetaald." : "Je eigen toegeschreven verforders en commissie."}
+        {isAdmin
+          ? "Alle commissie op één plek: stylistes per bestelling, makelaars, creators en merken per kwartaal."
+          : "Verfcommissie per toegeschreven bestelling (standaard 10%, per styliste in te stellen). Je eigen toegeschreven verforders en commissie."}
       </p>
+      {isAdmin && (
+        <div style={{ display: "flex", gap: 8, margin: "10px 0 14px", flexWrap: "wrap" }} role="tablist" aria-label="Weergave">
+          {([["alles", "Alles"], ["stylistes", "Stylistes"], ["partners", "Partners"]] as const).map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={tab === k} className={`rd-plan-chip${tab === k ? " is-on" : ""}`} onClick={() => setTab(k)}>{l}</button>
+          ))}
+        </div>
+      )}
+      {isAdmin && tab !== "stylistes" && <CommissieBeheer rows={rows} tab={tab} naarStylistes={() => setTab("stylistes")} />}
+      {(!isAdmin || tab === "stylistes") && <>
+      {isAdmin && <p className="rd-sub" style={{ marginTop: 0 }}>Verfcommissie per toegeschreven bestelling (standaard 10%, per styliste in te stellen). Keur goed en markeer uitbetaald.</p>}
       <MaandOverzicht />
 
       {/* Totalen */}
@@ -205,6 +220,7 @@ export function CommissiePage() {
           })}
         </div>
       )}
+      </>}
     </div>
   );
 }
