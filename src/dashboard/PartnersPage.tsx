@@ -65,7 +65,14 @@ export interface WpPartner {
   voornamen?: string; koppelingMnd?: number; kortingMin?: number;
   aanvraag?: { aantal: number; datum: string } | null;
   roll?: { naam: string; adres: string; kvk: string; btw: string; mail: string; factuurmail: string; btwPct: number };
+  // Schilder: zijn eigen bestellingen en wat hij met zijn inkoopcode bespaarde.
+  inkoop?: Inkoop | null;
 }
+export interface InkoopOrder {
+  id: number; nr: string; datum: string; status: string; geldig: boolean; totaal: number; bespaard: number; metCode: boolean; opnieuw: string;
+  regels: { naam: string; hoeveelheid: string; aantal: number; totaal: number; opnieuw: boolean }[];
+}
+export interface Inkoop { orders: InkoopOrder[]; aantal: number; besteed: number; bespaard: number; ditJaar: number }
 export interface Kwartaal {
   kwartaal: string; label: string; orders: number; omzet: number; commissie: number; open: number; afrekenbaar: string; klaar: boolean;
   uitbetaling: string; keuze: string; gekozenOp?: string; kenmerk: string; bedrag: number; bedragIncl: number; tegoedcode: string; factuurNr: string; afgehandeldOp: string; factuurMailto: string;
@@ -331,6 +338,23 @@ export function PartnerDetail() {
         {(p.config?.oudeCodes ?? []).length > 0 && <div style={rij}><span>Eerdere codes</span><span style={{ textAlign: "right" }}>{(p.config?.oudeCodes ?? []).join(", ")} <span style={{ opacity: 0.6, fontSize: 13 }}>· staan uit, tellen nog mee</span></span></div>}
         {creator && p.config?.utmSource && <div style={rij}><span>Link om te delen</span><span style={{ textAlign: "right", overflowWrap: "anywhere" }}>roll.nl/?utm_source={p.config.utmSource} <span style={{ opacity: 0.6, fontSize: 13 }}>· zet er &amp;utm_content=naam-van-de-post achter om per post te meten</span></span></div>}
       </div>
+
+      {schilder && p.inkoop && (
+        <div className="rd-card-white" style={{ marginBottom: 10 }}>
+          {blokKop("Inkoop")}
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 6, fontVariantNumeric: "tabular-nums" }}>
+            <span><span style={{ opacity: 0.6, fontSize: 13 }}>Bestellingen</span> <strong>{getal(p.inkoop.aantal)}</strong></span>
+            <span><span style={{ opacity: 0.6, fontSize: 13 }}>Besteed</span> <strong>{euro(p.inkoop.besteed)}</strong></span>
+            <span><span style={{ opacity: 0.6, fontSize: 13 }}>Bespaard met de inkoopcode</span> <strong>{euro(p.inkoop.bespaard)}</strong></span>
+          </div>
+          {p.inkoop.orders.length === 0 ? <p className="rd-sub" style={{ margin: 0 }}>Nog geen bestellingen op zijn e-mailadressen.</p> : p.inkoop.orders.slice(0, 10).map((o) => (
+            <div key={o.id} style={rij}>
+              <span>#{o.nr} <span style={{ opacity: 0.6, fontSize: 13 }}>· {formatDate(o.datum)} · {o.status}{o.metCode ? "" : " · zonder inkoopcode"}</span></span>
+              <span style={{ display: "flex", gap: 12, fontVariantNumeric: "tabular-nums" }}><strong>{euro(o.totaal)}</strong>{o.bespaard > 0 && <span style={{ opacity: 0.7 }}>bespaard {euro(o.bespaard)}</span>}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {metCommissie && <div className="rd-card-white" style={{ marginBottom: 10 }}>
         {blokKop("Commissie per kwartaal")}

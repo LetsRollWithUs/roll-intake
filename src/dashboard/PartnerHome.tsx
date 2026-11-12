@@ -67,38 +67,8 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
   if (fout) return <p className="rd-sub">{fout}</p>;
   if (!p) return <p className="rd-sub">Je cijfers laden...</p>;
 
-  // Een schilder koopt zelf in met zijn persoonlijke inkoopcode. Zijn overzicht van bestellingen volgt (stap 5b).
-  if (p.type === "schilder") {
-    const ic = (p.config?.inkoopcode ?? "").toUpperCase();
-    return (
-      <div>
-        {meekijken && (
-          <div style={melding}>
-            Je kijkt mee als beheerder: zo ziet {p.naam} het dashboard.{" "}
-            <Link to={`/dashboard/partners/${p.slug}`} style={{ color: "inherit" }}>Terug naar het beheer</Link>
-          </div>
-        )}
-        <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Schildersdashboard · {p.naam}</div>
-        <h1 className="rd-h2" style={{ margin: "0 0 2px" }}>Hoi {p.voornamen || p.naam}</h1>
-        <p className="rd-sub" style={{ marginTop: 0 }}>Jouw inkoop bij Roll.</p>
-        <div className="rd-card-white" style={{ marginTop: 12 }}>
-          {blokKop("Jouw inkoopcode")}
-          <div style={{ fontFamily: "monospace", fontSize: 26, fontWeight: 800, letterSpacing: ".04em" }}>{ic || "Nog niet ingesteld"}</div>
-          <p style={{ fontSize: 15, margin: "8px 0 0" }}>{p.config?.inkoopKorting ?? 0}% korting op verf bij elke bestelling op roll.nl. Vul de code in bij het afrekenen.</p>
-          <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 14 }}>
-            De code is persoonlijk en werkt alleen met {(p.config?.inkoopVoor ?? []).length > 1 ? "deze e-mailadressen" : "dit e-mailadres"}: {(p.config?.inkoopVoor ?? []).join(", ") || "nog geen"}.
-            Niet op samples, gereedschap, voorstrijk en kleuradvies, en niet te combineren met andere codes.
-          </p>
-          {p.status && p.status !== "actief" && <p style={{ margin: "8px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600 }}>De code staat op dit moment uit. Vragen? Mail naar hello@roll.nl.</p>}
-        </div>
-        <div className="rd-card-white" style={{ marginTop: 10 }}>
-          {blokKop("Bestellen")}
-          <p style={{ fontSize: 15, margin: 0 }}>Bestel in de webshop van Roll, met de gewone levertijden. Een overzicht van je bestellingen, met opnieuw bestellen, komt hier binnenkort bij.</p>
-          <a className="rd-btn rd-btn-primary" style={{ ...knop, marginTop: 12 }} href="https://roll.nl/product-category/verf/" target="_blank" rel="noreferrer">Naar de webshop</a>
-        </div>
-      </div>
-    );
-  }
+  // Een schilder koopt zelf in met zijn persoonlijke inkoopcode: zijn bestellingen, wat hij bespaarde en opnieuw bestellen.
+  if (p.type === "schilder") return <SchilderDashboard p={p} meekijken={meekijken} />;
 
   const creator = p.type === "creator";
   const code = (p.afspraken.kortingscode || "").toUpperCase();
@@ -327,6 +297,78 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
           <p style={{ marginBottom: 0 }}>Per afgesloten kwartaal kiezen jullie: <strong>uitbetalen</strong>, of <strong>omzetten in verf</strong> als tegoed bij Roll. Daarna mailen jullie een factuur op basis van de afrekening, met {p.roll?.btwPct ?? 21}% btw, naar {factuurmail}. Bij uitbetalen betalen wij binnen 14 dagen; bij verf krijgen jullie een tegoedcode ter waarde van het bedrag inclusief btw.</p>
         </div>
       </details>
+    </div>
+  );
+}
+
+/** Het dashboard van een schilder: zijn inkoopcode, wat hij bespaarde, zijn bestellingen en opnieuw bestellen. */
+function SchilderDashboard({ p, meekijken }: { p: WpPartner; meekijken: boolean }) {
+  const [open, setOpen] = useState<number | null>(null);
+  const ic = (p.config?.inkoopcode ?? "").toUpperCase();
+  const inkoop = p.inkoop;
+  const voor = p.config?.inkoopVoor ?? [];
+  const orders = inkoop?.orders ?? [];
+  return (
+    <div>
+      {meekijken && (
+        <div style={melding}>
+          Je kijkt mee als beheerder: zo ziet {p.naam} het dashboard. Opnieuw bestellen kan alleen de schilder zelf.{" "}
+          <Link to={`/dashboard/partners/${p.slug}`} style={{ color: "inherit" }}>Terug naar het beheer</Link>
+        </div>
+      )}
+      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Schildersdashboard · {p.naam}</div>
+      <h1 className="rd-h2" style={{ margin: "0 0 2px" }}>Hoi {p.voornamen || p.naam}</h1>
+      <p className="rd-sub" style={{ marginTop: 0 }}>Jouw inkoop bij Roll.</p>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "12px 0 10px" }}>
+        <Tegel label="Bespaard met je inkoopcode" waarde={euro(inkoop?.bespaard ?? 0)} sub="Sinds de start, inclusief btw" />
+        <Tegel label="Bestellingen" waarde={getal(inkoop?.aantal ?? 0)} sub={`Samen ${euro(inkoop?.besteed ?? 0)}`} />
+        <Tegel label={`Besteld in ${new Date().getFullYear()}`} waarde={euro(inkoop?.ditJaar ?? 0)} sub="Inclusief btw" />
+      </div>
+
+      <div className="rd-card-white" style={{ marginBottom: 10 }}>
+        {blokKop("Jouw inkoopcode")}
+        <div style={{ fontFamily: "monospace", fontSize: 26, fontWeight: 800, letterSpacing: ".04em" }}>{ic || "Nog niet ingesteld"}</div>
+        <p style={{ fontSize: 15, margin: "8px 0 0" }}>{p.config?.inkoopKorting ?? 0}% korting op verf bij elke bestelling op roll.nl. Vul de code in bij het afrekenen; bij "Bestel opnieuw" staat hij er al op.</p>
+        <p className="rd-sub" style={{ margin: "8px 0 0", fontSize: 14 }}>
+          De code is persoonlijk en werkt alleen met {voor.length > 1 ? "deze e-mailadressen" : "dit e-mailadres"}: {voor.join(", ") || "nog geen"}.
+          Niet op samples, gereedschap, voorstrijk en kleuradvies, en niet te combineren met andere codes.
+        </p>
+        {p.status && p.status !== "actief" && <p style={{ margin: "8px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600 }}>De code staat op dit moment uit. Vragen? Mail naar hello@roll.nl.</p>}
+        <a className="rd-btn rd-btn-outline" style={{ ...knop, marginTop: 12 }} href="https://roll.nl/product-category/verf/" target="_blank" rel="noreferrer">Naar de webshop</a>
+      </div>
+
+      <div className="rd-card-white">
+        {blokKop("Je bestellingen")}
+        {orders.length === 0 ? (
+          <p className="rd-sub" style={{ margin: 0 }}>Zodra je bestelt met {voor.length > 1 ? "een van je e-mailadressen" : "je e-mailadres"}, staat de bestelling hier. Met "Bestel opnieuw" zet je dezelfde verf in een keer weer in je mandje.</p>
+        ) : orders.map((o, i) => (
+          <div key={o.id} style={{ borderTop: i ? "1px solid var(--rd-line)" : 0, padding: i ? "12px 0" : "0 0 12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+              <button className="rd-textlink" style={{ minHeight: 0, opacity: 1, textDecoration: "none", fontSize: 15, textAlign: "left" }} onClick={() => setOpen(open === o.id ? null : o.id)} aria-expanded={open === o.id}>
+                <strong>#{o.nr}</strong> <span style={{ opacity: 0.6, fontSize: 13 }}>· {formatDate(o.datum)} · {o.regels.length} {o.regels.length === 1 ? "product" : "producten"}</span>
+              </button>
+              <span style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
+                <strong>{euro(o.totaal)}</strong>
+                {o.bespaard > 0 && <span style={{ fontSize: 13, opacity: 0.7 }}>bespaard {euro(o.bespaard)}</span>}
+                <span className="rd-chip" style={{ padding: "3px 9px", fontSize: 11, ...(o.geldig ? {} : { opacity: 0.6 }) }}>{o.status}</span>
+                {o.opnieuw && !meekijken && <a className="rd-btn rd-btn-primary" style={{ ...knop, minHeight: 36, fontSize: 14 }} href={o.opnieuw} target="_blank" rel="noreferrer">Bestel opnieuw</a>}
+              </span>
+            </div>
+            {open === o.id && (
+              <div style={{ marginTop: 8 }}>
+                {o.regels.map((r, j) => (
+                  <div key={j} style={{ ...rij, fontSize: 13 }}>
+                    <span>{r.aantal > 1 ? `${r.aantal} × ` : ""}{r.naam}{r.hoeveelheid ? ` · ${r.hoeveelheid}` : ""}{!r.opnieuw && <span style={{ opacity: 0.6 }}> · niet opnieuw te bestellen</span>}</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{euro(r.totaal)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {orders.length > 0 && <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Bedragen inclusief btw. "Bestel opnieuw" zet dezelfde producten in je mandje, met je gegevens en je inkoopcode. Daar kun je nog aanpassen voordat je afrekent.</p>}
+      </div>
     </div>
   );
 }
