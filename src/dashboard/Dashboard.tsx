@@ -84,14 +84,22 @@ export function Dashboard() {
   const [notifCount, setNotifCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  // Wie er het laatst ingelogd was (undefined = nog niet bekend), om een echte wissel te herkennen.
+  const wie = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
+    supabase.auth.getSession().then(({ data }) => { wie.current = data.session?.user.id ?? null; setSession(data.session); setReady(true); });
     const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
+      if (e === "PASSWORD_RECOVERY") setRecovery(true);
       setSession(s);
+      // De login meldt zich ook als je terugkomt op het tabblad en bij het verversen van de sessie. Alleen als er
+      // iemand anders is (in- of uitgelogd) bepalen we de toegang opnieuw; anders zou het hele scherm opnieuw
+      // opbouwen en raakt wat je aan het invullen was verloren (gezien op 12 nov 2026).
+      const id = s?.user.id ?? null;
+      if (wie.current === id) return;
+      wie.current = id;
       setIsAdvisor(null);
       setPartners(null);
-      if (e === "PASSWORD_RECOVERY") setRecovery(true);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
