@@ -51,7 +51,7 @@ export function Login() {
           {sent ? (
             <>
               <p className="rd-sub" style={{ marginTop: 0 }}>
-                Als <strong>{email.trim()}</strong> bij ons bekend is, staat er binnen een paar minuten een mail met een link in je inbox. Via die link kies je een nieuw wachtwoord. Kijk ook even in je spam.
+                Als <strong>{email.trim()}</strong> bij ons bekend is, staat er binnen een paar minuten een mail met een link in je inbox. Via die link kies je een nieuw wachtwoord. Kijk ook even in je spam. Vraag je er meer dan een aan, dan werkt alleen de link in de nieuwste mail.
               </p>
               <button type="button" className="rd-btn rd-btn-outline rd-btn-lg" style={{ marginTop: 12 }} onClick={() => { setMode("login"); setSent(false); }}>Terug naar inloggen</button>
             </>

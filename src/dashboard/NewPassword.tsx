@@ -64,7 +64,7 @@ export function NewPassword({ session, onDone }: { session: Session | null; onDo
         {head(verlopen || linkError || waited ? "Link verlopen" : "Link controleren...")}
         {(verlopen || linkError || waited) && (
           <>
-            <p className="rd-sub" style={{ marginTop: 0 }}>Deze link is verlopen of al gebruikt. Vraag een nieuwe aan via "Wachtwoord vergeten?" op het inlogscherm.</p>
+            <p className="rd-sub" style={{ marginTop: 0 }}>Deze link is verlopen of al gebruikt. Heb je meerdere mails aangevraagd? Alleen de link in de nieuwste mail werkt. Anders vraag je een nieuwe aan via "Wachtwoord vergeten?" op het inlogscherm.</p>
             <button className="rd-btn rd-btn-outline rd-btn-lg" style={{ marginTop: 12 }} onClick={onDone}>Naar inloggen</button>
           </>
         )}

@@ -44,6 +44,11 @@ Deno.serve(async (req) => {
     console.warn("dashboard-toegang: begrensd", { perAdres, totaal });
     return klaar;
   }
+  // Net al een mail gestuurd naar dit adres? Dan geen nieuwe: een nieuwe link maakt de vorige ongeldig, en wie twee
+  // keer klikt opent dan vaak de eerste mail en ziet "link verlopen" (gezien op 12 nov 2026).
+  const { count: net } = await admin.from("dashboard_mail_log").select("id", { count: "exact", head: true })
+    .eq("email", mail).eq("verstuurd", true).gte("created_at", new Date(Date.now() - 120_000).toISOString());
+  if ((net ?? 0) > 0) return klaar;
   // Het logboek is alleen voor de begrenzing: na een week gaan de regels weg.
   await admin.from("dashboard_mail_log").delete().lt("created_at", new Date(Date.now() - 7 * 86400_000).toISOString());
   const { data: log } = await admin.from("dashboard_mail_log").insert({ email: mail, soort: "wachtwoord" }).select("id").single();
