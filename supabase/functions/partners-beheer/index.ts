@@ -3,6 +3,9 @@
 // De afspraken en de cijfers van makelaars, creators en merken komen van roll.nl (plugin Roll Partners), waar ze ook
 // voor het partnerdashboard worden berekend. Wij voegen er de soort en de mensen uit onze eigen tabellen aan toe.
 // Stylistes staan in onze eigen database; die leest het dashboard zelf.
+//
+// Ook hier: wie er bij een partner in mag (partner_members). Toegang geven stuurt een uitnodiging in Roll-stijl met
+// een link om een wachtwoord te kiezen; intrekken haalt het adres van de lijst.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors = {
@@ -15,6 +18,32 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 // Zelfde site en sleutel als de offertekoppeling (X-Roll-Advies-Key).
 const WP = new URL(Deno.env.get("OFFERTE_API_URL") || "https://roll.nl/wp-json/roll-advies/v1/offerte").origin;
 const KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
+const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/dashboard").replace(/\/$/, "");
+const LEES = ["lijst", "detail"];
+const LEDEN = ["lid_toevoegen", "lid_uitnodigen", "lid_verwijderen"];
+
+/** Stuurt de uitnodiging: een eenmalige link om een wachtwoord te kiezen. Maakt het account aan als het er nog niet is. */
+async function nodigUit(admin: any, mail: string, naam: string, partner: string): Promise<boolean> {
+  let link = await admin.auth.admin.generateLink({ type: "recovery", email: mail });
+  if (link.error) {
+    const nieuw = await admin.auth.admin.createUser({ email: mail, email_confirm: true, password: crypto.randomUUID() + crypto.randomUUID() });
+    if (!nieuw.error) link = await admin.auth.admin.generateLink({ type: "recovery", email: mail });
+  }
+  const code = link.data?.properties?.hashed_token;
+  if (link.error || !code) { console.error("partners-beheer: geen link voor de uitnodiging"); return false; }
+  const { data: log } = await admin.from("dashboard_mail_log").insert({ email: mail, soort: "uitnodiging" }).select("id").single();
+  const r = await fetch(`${WP}/wp-json/roll-partners/v1/dashboard-mail`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-Roll-Advies-Key": KEY },
+    body: JSON.stringify({ soort: "uitnodiging", email: mail, voornaam: naam.trim().split(/\s+/)[0] ?? "", partner, link: `${DASHBOARD_BASE}/nieuw-wachtwoord?token_hash=${encodeURIComponent(code)}&type=recovery` }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const uit = await r.json().catch(() => null);
+  const verstuurd = r.ok && true === uit?.ok;
+  if (!verstuurd) console.error("partners-beheer: uitnodiging versturen mislukt", r.status, uit?.code ?? "");
+  if (log?.id) await admin.from("dashboard_mail_log").update({ verstuurd }).eq("id", log.id);
+  return verstuurd;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -32,7 +61,36 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { /* leeg */ }
     const slug = String(body?.slug ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60);
-    if (!["lijst", "detail"].includes(body?.action) || ("detail" === body.action && !slug)) return json({ error: "Onbekende actie." }, 400);
+    if (![...LEES, ...LEDEN].includes(body?.action) || ("lijst" !== body.action && !slug)) return json({ error: "Onbekende actie." }, 400);
+
+    if (LEDEN.includes(body.action)) {
+      const mail = String(body?.email ?? "").trim().toLowerCase();
+      const naam = String(body?.naam ?? "").trim().slice(0, 80);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail) || mail.length > 200) return json({ error: "Vul een geldig e-mailadres in." }, 400);
+      const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+      const { data: partner } = await admin.from("partners").select("id, naam, actief").eq("slug", slug).maybeSingle();
+      if (!partner) return json({ error: "Deze partner staat nog niet in het dashboard." }, 404);
+      const { data: alle } = await admin.from("partner_members").select("id, email, naam").eq("partner_id", (partner as any).id);
+      const lid = ((alle as any[]) ?? []).find((m) => String(m.email).toLowerCase() === mail) ?? null;
+
+      if ("lid_verwijderen" === body.action) {
+        if (lid) await admin.from("partner_members").delete().eq("id", lid.id);
+        return json({ ok: true });
+      }
+      if ("lid_toevoegen" === body.action) {
+        if (lid) await admin.from("partner_members").update({ naam: naam || lid.naam }).eq("id", lid.id);
+        else {
+          const { error: fout } = await admin.from("partner_members").insert({ partner_id: (partner as any).id, email: mail, naam: naam || null });
+          if (fout) { console.error("partners-beheer: lid toevoegen", fout.message); return json({ error: "Toegang geven lukte niet." }, 500); }
+        }
+      } else if (!lid) return json({ error: "Dit adres heeft nog geen toegang." }, 404);
+      // Net al een mail naar dit adres? Een nieuwe link maakt de vorige ongeldig, dus dan sturen we er geen tweede achteraan.
+      const { count: net } = await admin.from("dashboard_mail_log").select("id", { count: "exact", head: true })
+        .eq("email", mail).eq("verstuurd", true).gte("created_at", new Date(Date.now() - 120_000).toISOString());
+      if ((net ?? 0) > 0) return json({ ok: true, verstuurd: true, net: true });
+      const verstuurd = await nodigUit(admin, mail, naam || lid?.naam || "", (partner as any).naam);
+      return json({ ok: true, verstuurd });
+    }
 
     const r = await fetch(`${WP}/wp-json/roll-partners/v1/partners${"detail" === body.action ? `?slug=${slug}` : ""}`, {
       headers: { "X-Roll-Advies-Key": KEY }, signal: AbortSignal.timeout(25000),

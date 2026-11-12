@@ -18,6 +18,8 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Wie van een oud partnerdashboard komt (roll.nl/makelaar/.../dashboard) krijgt uitleg over de eerste keer inloggen.
+  const [vanPartner] = useState(() => new URLSearchParams(window.location.search).get("van") === "partner");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +76,11 @@ export function Login() {
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360 }}>
         <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 8 }}>Roll · Dashboard</div>
         <h1 className="rd-h2" style={{ marginBottom: 6 }}>Inloggen</h1>
-        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 20 }}>Voor partners van Roll. Log in om je dashboard te openen.</p>
+        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 20 }}>
+          {vanPartner
+            ? <>Het partnerdashboard staat nu hier. Log in met je e-mailadres. Eerste keer op deze plek? Kies eerst een wachtwoord via "Wachtwoord vergeten?".</>
+            : "Voor partners van Roll. Log in om je dashboard te openen."}
+        </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <input className="rd-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mailadres" autoComplete="username" required />
           <PasswordInput value={password} onChange={setPassword} required />

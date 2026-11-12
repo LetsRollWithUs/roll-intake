@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
@@ -14,10 +14,10 @@ const SOORTEN: { k: Soort; een: string; meer: string }[] = [
   { k: "merk", een: "Merk", meer: "Merken" },
 ];
 const soortLabel = (s: string) => SOORTEN.find((x) => x.k === s)?.een ?? (s === "schilder" ? "Schilder" : "Partner");
-const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(n || 0);
-const getal = (n: number) => new Intl.NumberFormat("nl-NL").format(n || 0);
+export const euro = (n: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(n || 0);
+export const getal = (n: number) => new Intl.NumberFormat("nl-NL").format(n || 0);
 /** Alleen de dag: "8 nov", met het jaar erbij als dat niet dit jaar is. */
-const formatDate = (iso: string | null) => {
+export const formatDate = (iso: string | null) => {
   if (!iso) return "";
   const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
   if (isNaN(d.getTime())) return "";
@@ -29,15 +29,23 @@ interface Persoon { naam: string | null; email: string }
 export interface WpPartner {
   id: string | null; slug: string; soort: Soort; type: string; naam: string; plaats: string; start: string; actief: boolean;
   afspraken: { kortingscode: string; korting: string; kortingPct: number; commissiePct: number; thuisCode: string };
-  links: { dashboard: string; pagina: string; beheer: string };
-  mensen: Persoon[]; leden: Persoon[]; kort: Kort;
+  links: { voorbeeld?: string; pagina: string; beheer?: string };
+  mensen?: Persoon[]; leden?: Persoon[]; kort: Kort;
   funnel?: { kaarten: number; geactiveerd: number; geboekt: number; thuis: number; klanten: number } | null;
   totaal?: { omzet: number; commissie: number; definitief: number };
-  kwartalen?: { kwartaal: string; label: string; orders: number; omzet: number; commissie: number; open: number; afrekenbaar: string; uitbetaling: string; keuze: string }[];
-  orders?: { nr: string; datum: string; kwartaal: string; bron: string; advies: string; omzet: number; commissie: number; status: string }[];
+  kwartalen?: Kwartaal[];
+  orders?: { nr: string; datum: string; kwartaal: string; kw: string; bron: string; advies: string; omzet: number; commissie: number; status: string }[];
   kleuren?: { naam: string; omzet: number; orders: number; liter: number; aantal: number }[];
   producten?: { naam: string; omzet: number; orders: number; liter: number; aantal: number }[];
-  bezoek?: { totaal: number; dagen30: number; per_link: Record<string, number> } | null;
+  bezoek?: { totaal: number; dagen30: number; links: { naam: string; aantal: number }[]; orders: number; metCode: number } | null;
+  // Voor het eigen dashboard van de partner.
+  voornamen?: string; koppelingMnd?: number; kortingMin?: number;
+  aanvraag?: { aantal: number; datum: string } | null;
+  roll?: { naam: string; adres: string; kvk: string; btw: string; mail: string; factuurmail: string; btwPct: number };
+}
+export interface Kwartaal {
+  kwartaal: string; label: string; orders: number; omzet: number; commissie: number; open: number; afrekenbaar: string; klaar: boolean;
+  uitbetaling: string; keuze: string; kenmerk: string; bedrag: number; bedragIncl: number; tegoedcode: string; factuurNr: string; afgehandeldOp: string; factuurMailto: string;
 }
 interface Styliste { id: string; name: string; email: string; active: boolean }
 interface Commissie { stylist_id: string | null; verf_excl: number; amount: number; status: string; created_at: string }
@@ -48,7 +56,7 @@ interface Regel { sleutel: string; soort: Soort; naam: string; sub: string; acti
 const kwartaalStart = () => { const d = new Date(); return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1); };
 const kwartaalNaam = () => { const d = new Date(); return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`; };
 
-function Tegel({ label, waarde, sub }: { label: string; waarde: string; sub?: string }) {
+export function Tegel({ label, waarde, sub }: { label: string; waarde: string; sub?: string }) {
   return (
     <div className="rd-card-white" style={{ flex: "1 1 150px", minWidth: 0 }}>
       <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.6 }}>{label}</div>
@@ -58,7 +66,7 @@ function Tegel({ label, waarde, sub }: { label: string; waarde: string; sub?: st
   );
 }
 
-function SoortChip({ soort }: { soort: string }) {
+export function SoortChip({ soort }: { soort: string }) {
   return <span className="rd-chip" style={{ padding: "3px 9px", fontSize: 11 }}>{soortLabel(soort)}</span>;
 }
 
@@ -109,7 +117,7 @@ export function PartnersPage() {
       uit.push({ sleutel: `s:${s.id}`, soort: "styliste", naam: s.name, sub: s.email, actief: s.active, omzet: c.omzet, open: c.open, laatst: c.laatst, zoek: `${s.name} ${s.email}`.toLowerCase(), naar: `/dashboard/partners/styliste/${s.id}` });
     }
     for (const p of wp ?? []) {
-      const mails = [...p.mensen, ...p.leden].map((m) => `${m.naam ?? ""} ${m.email}`).join(" ");
+      const mails = [...(p.mensen ?? []), ...(p.leden ?? [])].map((m) => `${m.naam ?? ""} ${m.email}`).join(" ");
       uit.push({
         sleutel: `p:${p.slug}`, soort: p.soort, naam: p.naam, sub: [p.plaats, p.afspraken.kortingscode ? `code ${p.afspraken.kortingscode}` : ""].filter(Boolean).join(" · "),
         actief: p.actief, omzet: p.kort.omzet, open: p.kort.commissieOpen, laatst: p.kort.laatsteOrder,
@@ -172,8 +180,8 @@ export function PartnersPage() {
   );
 }
 
-const rij: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", borderTop: "1px solid var(--rd-line)", padding: "8px 0", flexWrap: "wrap", fontSize: 14 };
-const blokKop = (t: string) => <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>{t}</div>;
+export const rij: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", borderTop: "1px solid var(--rd-line)", padding: "8px 0", flexWrap: "wrap", fontSize: 14 };
+export const blokKop = (t: string) => <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 6 }}>{t}</div>;
 
 /** Eén makelaar, creator of merk: afspraken, cijfers, commissie per kwartaal, bestellingen en mensen. */
 export function PartnerDetail() {
@@ -181,21 +189,20 @@ export function PartnerDetail() {
   const [p, setP] = useState<WpPartner | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
-  useEffect(() => {
-    setP(null); setFout(null);
+  const laad = useCallback(() => {
     supabase.functions.invoke("partners-beheer", { body: { action: "detail", slug } }).then(({ data, error }) => {
       const partner = (data as { partner?: WpPartner } | null)?.partner;
       if (error || !partner) setFout("Deze partner kon niet worden opgehaald. Alleen beheerders zien deze pagina.");
       else setP(partner);
     });
   }, [slug]);
+  useEffect(() => { setP(null); setFout(null); laad(); }, [laad]);
 
   const terug = <Link to="/dashboard/partners" className="rd-textlink" style={{ textDecoration: "none" }}>← Partners</Link>;
   if (fout) return <div>{terug}<p className="rd-sub">{fout}</p></div>;
   if (!p) return <div>{terug}<p className="rd-sub">Laden...</p></div>;
 
   const creator = p.type === "creator";
-  const mensen = [...p.leden.map((m) => ({ ...m, via: "dashboard" })), ...p.mensen.map((m) => ({ ...m, via: "roll.nl" }))];
   const orders = p.orders ?? [];
 
   return (
@@ -208,9 +215,10 @@ export function PartnerDetail() {
       <p className="rd-sub" style={{ marginTop: 0 }}>{[p.plaats, p.start ? `Partner sinds ${formatDate(p.start)}` : ""].filter(Boolean).join(" · ")}</p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 16px" }}>
-        <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.dashboard} target="_blank" rel="noreferrer">Bekijk als partner</a>
+        <Link className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} to={`/dashboard/partner/${p.slug}`}>Bekijk als partner</Link>
         {p.links.pagina && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.pagina} target="_blank" rel="noreferrer">Pagina voor klanten</a>}
-        <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.beheer} target="_blank" rel="noreferrer">Beheren</a>
+        {p.links.voorbeeld && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.voorbeeld} target="_blank" rel="noreferrer">Voorbeeld met verzonnen cijfers</a>}
+        {p.links.beheer && <a className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={p.links.beheer} target="_blank" rel="noreferrer">Codes en uitbetalingen</a>}
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
@@ -232,6 +240,7 @@ export function PartnerDetail() {
       {p.bezoek && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <Tegel label="Bezoek via de links" waarde={getal(p.bezoek.totaal)} sub={`${getal(p.bezoek.dagen30)} in de laatste 30 dagen`} />
+          <Tegel label="Bestellingen via een link" waarde={getal(p.bezoek.orders ?? 0)} sub={`${getal(p.bezoek.metCode ?? 0)} daarvan met de code`} />
         </div>
       )}
 
@@ -284,16 +293,71 @@ export function PartnerDetail() {
         </div>
       )}
 
-      <div className="rd-card-white">
-        {blokKop("Mensen met toegang")}
-        {mensen.length === 0 ? <p className="rd-sub" style={{ margin: 0 }}>Nog niemand.</p> : mensen.map((m, i) => (
-          <div key={m.email + m.via} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
-            <span>{m.naam || m.email} {m.naam && m.naam.toLowerCase() !== m.email.toLowerCase() && <span style={{ opacity: 0.6, fontSize: 13 }}>· {m.email}</span>}</span>
-            <span style={{ opacity: 0.6, fontSize: 13 }}>{m.via === "dashboard" ? "Dit dashboard" : "Account op roll.nl"}</span>
-          </div>
-        ))}
-        <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Toegang geven of intrekken doe je voorlopig via Beheren.</p>
-      </div>
+      {(p.bezoek?.links ?? []).length > 0 && (
+        <div className="rd-card-white" style={{ marginBottom: 10 }}>
+          {blokKop("Bezoek per link")}
+          {(p.bezoek?.links ?? []).map((l, i) => (
+            <div key={l.naam} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}><span>{l.naam}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{getal(l.aantal)}</span></div>
+          ))}
+        </div>
+      )}
+
+      <Toegang p={p} herlaad={laad} />
+    </div>
+  );
+}
+
+/** Wie er bij deze partner in het dashboard mag: toegang geven (met een uitnodiging per mail), opnieuw uitnodigen en intrekken. */
+function Toegang({ p, herlaad }: { p: WpPartner; herlaad: () => void }) {
+  const [naam, setNaam] = useState("");
+  const [email, setEmail] = useState("");
+  const [bezig, setBezig] = useState(false);
+  const [bericht, setBericht] = useState<string | null>(null);
+  const leden = p.leden ?? [];
+  // Accounts op roll.nl van voor de verhuizing, die nog niet in het dashboard staan.
+  const oud = (p.mensen ?? []).filter((m) => !leden.some((l) => l.email.toLowerCase() === m.email.toLowerCase()));
+
+  const doe = async (action: string, adres: string, voornaam: string, klaar: (verstuurd: boolean) => string) => {
+    setBezig(true); setBericht(null);
+    const { data, error } = await supabase.functions.invoke("partners-beheer", { body: { action, slug: p.slug, email: adres, naam: voornaam } });
+    setBezig(false);
+    if (error || !(data as { ok?: boolean } | null)?.ok) { setBericht("Dat lukte niet. Controleer het e-mailadres en probeer het opnieuw."); return; }
+    setBericht(klaar((data as { verstuurd?: boolean }).verstuurd !== false));
+    herlaad();
+  };
+  const uitnodiging = (adres: string) => (verstuurd: boolean) => verstuurd ? `De uitnodiging is gemaild naar ${adres}.` : `${adres} heeft toegang, maar de mail versturen lukte niet. Probeer "Stuur uitnodiging opnieuw".`;
+  const klein: React.CSSProperties = { minHeight: 36, padding: "0 12px", fontSize: 13 };
+
+  return (
+    <div className="rd-card-white">
+      {blokKop("Mensen met toegang")}
+      {leden.length === 0 && <p className="rd-sub" style={{ margin: "0 0 4px" }}>Nog niemand. Geef hieronder iemand van {p.naam} toegang.</p>}
+      {leden.map((m, i) => (
+        <div key={m.email} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
+          <span>{m.naam || m.email} {m.naam && m.naam.toLowerCase() !== m.email.toLowerCase() && <span style={{ opacity: 0.6, fontSize: 13 }}>· {m.email}</span>}</span>
+          <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button className="rd-plan-chip" style={klein} disabled={bezig} onClick={() => doe("lid_uitnodigen", m.email, m.naam ?? "", uitnodiging(m.email))}>Stuur uitnodiging opnieuw</button>
+            <button className="rd-plan-chip" style={klein} disabled={bezig} onClick={() => { if (window.confirm(`Toegang van ${m.email} intrekken?`)) doe("lid_verwijderen", m.email, "", () => `De toegang van ${m.email} is ingetrokken.`); }}>Intrekken</button>
+          </span>
+        </div>
+      ))}
+      {oud.map((m) => (
+        <div key={"oud" + m.email} style={rij}>
+          <span>{m.naam && m.naam.toLowerCase() !== m.email.toLowerCase() ? `${m.naam} · ` : ""}{m.email} <span style={{ opacity: 0.6, fontSize: 13 }}>· had een account op roll.nl, nog niet uitgenodigd</span></span>
+          <button className="rd-plan-chip" style={klein} disabled={bezig} onClick={() => { setEmail(m.email); setNaam(m.naam && m.naam.toLowerCase() !== m.email.toLowerCase() ? m.naam.split(" ")[0] : ""); }}>Vul in</button>
+        </div>
+      ))}
+
+      <form
+        onSubmit={(e) => { e.preventDefault(); const adres = email.trim().toLowerCase(); doe("lid_toevoegen", adres, naam.trim(), uitnodiging(adres)).then(() => { setEmail(""); setNaam(""); }); }}
+        style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 14 }}
+      >
+        <input className="rd-input" style={{ flex: "1 1 130px", minWidth: 0, background: "#fff" }} value={naam} onChange={(e) => setNaam(e.target.value)} placeholder="Voornaam" aria-label="Voornaam" autoComplete="off" />
+        <input className="rd-input" style={{ flex: "2 1 200px", minWidth: 0, background: "#fff" }} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mailadres" aria-label="E-mailadres" autoComplete="off" required />
+        <button type="submit" className="rd-btn rd-btn-primary" style={{ width: "auto", minHeight: 50, padding: "0 18px", fontSize: 15 }} disabled={bezig}>{bezig ? "Bezig..." : "Geef toegang en mail de uitnodiging"}</button>
+      </form>
+      {bericht && <p style={{ margin: "10px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="status">{bericht}</p>}
+      <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Wie toegang krijgt, ontvangt een mail met een link om een wachtwoord te kiezen en logt daarna in op roll.nl/dashboard. De link werkt een uur; daarna kan diegene zelf een nieuwe aanvragen via "Wachtwoord vergeten?".</p>
     </div>
   );
 }

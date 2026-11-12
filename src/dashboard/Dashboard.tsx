@@ -27,7 +27,7 @@ import { KennisbankPage } from "./KennisbankPage";
 import { NakijkenPage } from "./NakijkenPage";
 import { InzichtenPage } from "./InzichtenPage";
 import { loadNotifications } from "./notifications";
-import { PartnerHome, type Partner } from "./PartnerHome";
+import { PartnerHome, PartnerDashboard, PartnerAfrekening, type Partner } from "./PartnerHome";
 import { PartnersPage, PartnerDetail, StylisteDetail } from "./PartnersPage";
 
 // Menubalk in roll.nl-stijl: paarse afgeronde balk, wit menu, roze Roll-logo in het midden.
@@ -132,10 +132,40 @@ export function Dashboard() {
     return ((p[0]?.[0] ?? "?") + (p.length > 1 && stylistName ? p[p.length - 1][0] : "")).toUpperCase();
   })();
 
-  const shell = (children: React.ReactNode, chrome = true) => (
+  // Menubalk voor wie alleen bij een partner hoort: het eigen dashboard, het account en uitloggen.
+  const partnerBalk = session && (
+    <header style={{ position: "sticky", top: 0, zIndex: 20, padding: "12px 12px 0", background: "var(--rd-offwhite)" }}>
+      <div className="rd-topbar">
+        <nav>
+          {(partners ?? []).length > 1
+            ? (partners ?? []).map((p, i) => <NavLink key={p.id} to={i === 0 ? "/dashboard" : `/dashboard/partner/${p.slug}`} end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>{p.naam}</NavLink>)
+            : <NavLink to="/dashboard" end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Overzicht</NavLink>}
+        </nav>
+        <Link to="/dashboard" className="rd-logo" aria-label="Roll dashboard">
+          <img src={`${import.meta.env.BASE_URL}roll-advies-logo.png`} alt="Roll" style={{ height: 40, width: "auto", display: "block" }} />
+        </Link>
+        <div className="rd-right">
+          <div ref={menuRef} style={{ position: "relative" }}>
+            <button className="rd-avatar" onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen} title="Account">{initials}</button>
+            {menuOpen && (
+              <div className="rd-menu" role="menu" onClick={() => setMenuOpen(false)}>
+                <div style={{ padding: "6px 12px 8px", fontSize: 12, opacity: 0.6 }}>{session.user.email}</div>
+                <Link to="/dashboard/account">Account</Link>
+                <div className="rd-sep" />
+                <button onClick={() => supabase.auth.signOut()}>Uitloggen</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+
+  const shell = (children: React.ReactNode, chrome: boolean | "partner" = true) => (
     <div style={{ minHeight: "100dvh", background: "var(--rd-offwhite)", color: "var(--rd-aubergine)", fontFamily: "Figtree, system-ui, sans-serif" }}>
       <style>{BAR_CSS}</style>
-      {chrome && session && (
+      {chrome === "partner" && partnerBalk}
+      {chrome === true && session && (
         <header style={{ position: "sticky", top: 0, zIndex: 20, padding: "12px 12px 0", background: "var(--rd-offwhite)" }}>
           <div className="rd-topbar">
             <nav>
@@ -162,6 +192,7 @@ export function Dashboard() {
                     <div style={{ padding: "6px 12px 8px", fontSize: 12, opacity: 0.6 }}>{session.user.email}</div>
                     <Link to="/dashboard/account">Mijn profiel</Link>
                     <Link to="/dashboard/agenda">Agenda &amp; beschikbaarheid</Link>
+                    {(partners ?? []).map((p) => <Link key={p.id} to={`/dashboard/partner/${p.slug}`}>Dashboard {p.naam}</Link>)}
                     {isAdmin && (
                       <>
                         <div className="rd-sep" />
@@ -194,7 +225,7 @@ export function Dashboard() {
   if (recovery) return <NewPassword session={session} onDone={() => { setRecovery(false); navigate("/dashboard", { replace: true }); }} />;
   if (!session) return <Login />;
   if (isAdvisor === null || (!isAdvisor && partners === null)) return shell(<p className="rd-sub">Toegang controleren...</p>, false);
-  if (!isAdvisor && partners && partners.length > 0) return shell(<PartnerHome partners={partners} email={session.user.email ?? ""} />, false);
+  if (!isAdvisor && partners && partners.length > 0) return shell(<PartnerHome partners={partners} email={session.user.email ?? ""} />, "partner");
   if (!isAdvisor)
     return shell(
       <div className="rd-card-white" style={{ maxWidth: 520, margin: "40px auto 0" }}>
@@ -222,6 +253,8 @@ export function Dashboard() {
       <Route path="partners" element={<PartnersPage />} />
       <Route path="partners/styliste/:id" element={<StylisteDetail />} />
       <Route path="partners/:slug" element={<PartnerDetail />} />
+      <Route path="partner/:slug" element={<PartnerDashboard />} />
+      <Route path="afrekening/:slug/:kw" element={<PartnerAfrekening />} />
       <Route path="notificaties" element={<NotificationsPage />} />
       <Route path="account" element={<AccountPage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
