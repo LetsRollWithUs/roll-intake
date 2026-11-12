@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useParams } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
 import { vraagWachtwoordMail } from "./Login";
-import { Tegel, blokKop, euro, formatDate, getal, rij, type Kwartaal, type WpPartner } from "./PartnersPage";
+import { Tegel, blokKop, euro, formatDate, getal, rij, roep, type Kwartaal, type WpPartner } from "./PartnersPage";
 
 // Een partner zoals het dashboard hem kent (public.partners via mijn_toegang()).
 export type Partner = { id: string; slug: string; soort: "makelaar" | "creator" | "merk" | "schilder" | "overig"; naam: string };
@@ -14,17 +13,6 @@ export const SOORT_LABEL: Record<Partner["soort"], string> = {
   schilder: "Schilder",
   overig: "Partner",
 };
-
-/** Roept een functie aan en geeft de melding van de server terug als het misgaat. */
-async function roep<T>(fn: string, body: Record<string, unknown>): Promise<{ data: T | null; fout: string | null }> {
-  const { data, error } = await supabase.functions.invoke(fn, { body });
-  if (error) {
-    let tekst = "";
-    try { tekst = (await (error as { context?: Response }).context?.json())?.error ?? ""; } catch { /* geen leesbare melding */ }
-    return { data: null, fout: tekst || "Dat lukte niet. Probeer het over een minuut opnieuw." };
-  }
-  return { data: data as T, fout: null };
-}
 
 /** Voluit: "31 januari 2027". */
 const datumLang = (iso: string | null | undefined) => {

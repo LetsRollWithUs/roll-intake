@@ -28,7 +28,7 @@ import { NakijkenPage } from "./NakijkenPage";
 import { InzichtenPage } from "./InzichtenPage";
 import { loadNotifications } from "./notifications";
 import { PartnerHome, PartnerDashboard, PartnerAfrekening, type Partner } from "./PartnerHome";
-import { PartnersPage, PartnerDetail, StylisteDetail } from "./PartnersPage";
+import { PartnersPage, PartnerDetail, PartnerForm, StylisteDetail } from "./PartnersPage";
 
 // Menubalk in roll.nl-stijl: paarse afgeronde balk, roze Roll-logo links, het menu ernaast op één regel.
 const BAR_CSS = `
@@ -254,7 +254,9 @@ export function Dashboard() {
       <Route path="commissie" element={<CommissiePage />} />
       <Route path="partners" element={<PartnersPage />} />
       <Route path="partners/styliste/:id" element={<StylisteDetail />} />
+      <Route path="partners/nieuw" element={<PartnerForm />} />
       <Route path="partners/:slug" element={<PartnerDetail />} />
+      <Route path="partners/:slug/wijzig" element={<PartnerForm />} />
       <Route path="partner/:slug" element={<PartnerDashboard />} />
       <Route path="afrekening/:slug/:kw" element={<PartnerAfrekening />} />
       <Route path="notificaties" element={<NotificationsPage />} />

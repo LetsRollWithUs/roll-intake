@@ -21,6 +21,18 @@ const KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/dashboard").replace(/\/$/, "");
 const LEES = ["lijst", "detail"];
 const LEDEN = ["lid_toevoegen", "lid_uitnodigen", "lid_verwijderen"];
+const BEHEER = ["partner_opslaan", "partner_verwijderen"];
+
+/** Vraag aan roll.nl; een nette melding van daar (naam bestaat al, code bezet) geven we door. */
+async function naarWinkel(pad: string, invoer: unknown): Promise<{ ok: boolean; status: number; uit: any; melding: string | null }> {
+  const r = await fetch(`${WP}/wp-json/roll-partners/v1/${pad}`, {
+    method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": KEY }, body: JSON.stringify(invoer), signal: AbortSignal.timeout(25000),
+  });
+  const uit = await r.json().catch(() => null);
+  const melding = !r.ok && [400, 404, 409].includes(r.status) && typeof uit?.message === "string" ? uit.message : null;
+  if (!r.ok && !melding) console.error("partners-beheer:", pad, r.status, uit?.code ?? "");
+  return { ok: r.ok, status: r.status, uit, melding };
+}
 
 /**
  * Geeft de webshop de lijst van wie er bij een partner hoort. Die is daar nodig omdat bestellingen van de partner
@@ -81,7 +93,31 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { /* leeg */ }
     const slug = String(body?.slug ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60);
-    if (![...LEES, ...LEDEN].includes(body?.action) || ("lijst" !== body.action && !slug)) return json({ error: "Onbekende actie." }, 400);
+    if (![...LEES, ...LEDEN, ...BEHEER].includes(body?.action) || (!["lijst", "partner_opslaan"].includes(body.action) && !slug)) return json({ error: "Onbekende actie." }, 400);
+
+    // Een partner aanmaken, wijzigen of weghalen. De afspraken (code, korting, commissie) staan in de webshop, want
+    // daar worden ze bij elke bestelling toegepast; wij houden bij wie het is, voor het inloggen.
+    if (BEHEER.includes(body.action)) {
+      const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+      if ("partner_verwijderen" === body.action) {
+        const w = await naarWinkel("partner-verwijder", { slug });
+        if (!w.ok) return json({ error: w.melding ?? "Verwijderen lukte niet. Probeer het over een minuut opnieuw." }, w.melding ? w.status : 502);
+        await admin.from("partners").delete().eq("slug", slug);
+        return json({ ok: true });
+      }
+      const soort = "merk" === body?.soort ? "merk" : "creator";
+      const tekst = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+      const w = await naarWinkel("partner", {
+        slug, naam: tekst(body?.naam, 60), voornamen: tekst(body?.voornamen, 60), plaats: tekst(body?.plaats, 60),
+        kortingscode: tekst(body?.kortingscode, 40), korting: Number(body?.korting) || 0, commissie: Number(body?.commissie) || 0,
+        commissieVanaf: tekst(body?.commissieVanaf, 10), start: tekst(body?.start, 10), status: tekst(body?.status, 12), utmSource: tekst(body?.utmSource, 40),
+      });
+      if (!w.ok || !w.uit?.partner) return json({ error: w.melding ?? "Opslaan lukte niet. Probeer het over een minuut opnieuw." }, w.melding ? w.status : 502);
+      const p = w.uit.partner;
+      const { error: fout } = await admin.from("partners").upsert({ slug: p.slug, soort, naam: p.naam, actief: true }, { onConflict: "slug" });
+      if (fout) console.error("partners-beheer: partner bijwerken in het dashboard", fout.message);
+      return json({ ok: true, slug: p.slug });
+    }
 
     if (LEDEN.includes(body.action)) {
       const mail = String(body?.email ?? "").trim().toLowerCase();
@@ -129,6 +165,11 @@ Deno.serve(async (req) => {
       return { ...p, id: e?.id ?? null, soort: e?.soort ?? p.type ?? "overig", actief: e ? !!e.actief : true, leden: e?.partner_members ?? [] };
     };
     if ("detail" === body.action) {
+      // Staat de partner wel in de webshop maar nog niet bij ons (opslaan halverwege misgegaan), dan vullen we dat aan.
+      if (!per.has(uit.partner.slug)) {
+        const { data: nieuw } = await admin.from("partners").insert({ slug: uit.partner.slug, soort: uit.partner.type === "makelaar" ? "makelaar" : "creator", naam: uit.partner.naam }).select("id, slug, soort, actief").maybeSingle();
+        if (nieuw) per.set((nieuw as any).slug, { ...(nieuw as any), partner_members: [] });
+      }
       const p = verrijk(uit.partner);
       // Loopt de lijst bij de webshop achter (bijvoorbeeld na een storing), dan zetten we hem hier alsnog door.
       if (p.id && Array.isArray(uit.partner.ledenMails)) {
