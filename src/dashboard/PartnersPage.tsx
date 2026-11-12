@@ -288,7 +288,7 @@ export function PartnerDetail() {
         {blokKop("Mensen met toegang")}
         {mensen.length === 0 ? <p className="rd-sub" style={{ margin: 0 }}>Nog niemand.</p> : mensen.map((m, i) => (
           <div key={m.email + m.via} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
-            <span>{m.naam || m.email} {m.naam && <span style={{ opacity: 0.6, fontSize: 13 }}>· {m.email}</span>}</span>
+            <span>{m.naam || m.email} {m.naam && m.naam.toLowerCase() !== m.email.toLowerCase() && <span style={{ opacity: 0.6, fontSize: 13 }}>· {m.email}</span>}</span>
             <span style={{ opacity: 0.6, fontSize: 13 }}>{m.via === "dashboard" ? "Dit dashboard" : "Account op roll.nl"}</span>
           </div>
         ))}
