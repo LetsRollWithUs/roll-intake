@@ -930,6 +930,84 @@ export function StylisteDetail() {
         <Tegel label="Commissie nog open" waarde={euro(c.open)} />
         <Tegel label="Commissie uitbetaald" waarde={euro(c.betaald)} sub={c.laatst ? `Laatste bestelling ${formatDate(c.laatst)}` : "Nog geen bestelling"} />
       </div>
+
+      <StylisteCodes stylistId={s.id} naam={s.name} />
+    </div>
+  );
+}
+
+interface StylisteCode { id: string; code: string; korting_pct: number; commissie_pct: number; gekoppeld: boolean; actief: boolean; created_at: string }
+
+/**
+ * Kortingscodes van een styliste voor haar eigen klanten (zoals afgesproken met Rachel, 12 nov 2026). Elke code heeft
+ * een eigen verdeling tussen korting voor de klant en commissie voor de styliste. Een nieuwe code maakt de webshop
+ * aan (korting op verf); een bestaande kortingsbon kan ook worden gekoppeld, dan blijft die in de webshop zoals hij is.
+ */
+function StylisteCodes({ stylistId, naam }: { stylistId: string; naam: string }) {
+  const [codes, setCodes] = useState<StylisteCode[] | null>(null);
+  const [verdelingen, setVerdelingen] = useState<[number, number][]>([[10, 10], [15, 5]]);
+  const [code, setCode] = useState("");
+  const [paar, setPaar] = useState("0");
+  const [koppel, setKoppel] = useState(false);
+  const [bezig, setBezig] = useState(false);
+  const [bericht, setBericht] = useState<string | null>(null);
+
+  const laad = useCallback(async () => {
+    const { data } = await supabase.from("stylist_codes").select("id,code,korting_pct,commissie_pct,gekoppeld,actief,created_at").eq("stylist_id", stylistId).order("created_at");
+    setCodes((data as StylisteCode[]) ?? []);
+  }, [stylistId]);
+  useEffect(() => {
+    laad();
+    supabase.from("stylist_offer_settings").select("verdelingen").eq("id", true).maybeSingle().then(({ data }) => {
+      const v = (data as { verdelingen?: unknown } | null)?.verdelingen;
+      if (Array.isArray(v) && v.length) setVerdelingen((v as unknown[]).filter((p): p is [number, number] => Array.isArray(p) && p.length === 2).map((p) => [Number(p[0]), Number(p[1])]));
+    });
+  }, [laad]);
+
+  const [commissie, korting] = verdelingen[Number(paar)] ?? [10, 10];
+  const maak = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBezig(true); setBericht(null);
+    const schoon = code.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const { data, fout } = await roep<{ bon?: { soort: string; bedrag: number; alleenVerf: boolean; verloopt: string } | null }>("partners-beheer", { action: "styliste_code_maak", stylist_id: stylistId, code: schoon, korting, commissie, koppel });
+    setBezig(false);
+    if (fout) { setBericht(fout); return; }
+    const bon = data?.bon;
+    setBericht(koppel && bon
+      ? `${schoon.toUpperCase()} is gekoppeld. Let op: deze bon geeft in de webshop ${bon.soort === "percent" ? `${bon.bedrag}%` : euro(bon.bedrag)} korting${bon.alleenVerf ? " op verf" : " op alles"}${bon.verloopt ? ` en verloopt op ${formatDate(bon.verloopt)}` : ""}.`
+      : `${schoon.toUpperCase()} staat in de webshop: ${korting}% korting op verf voor de klant, ${commissie}% commissie voor ${naam.split(" ")[0]}.`);
+    setCode(""); setKoppel(false); laad();
+  };
+  const zet = async (c: StylisteCode, aan: boolean) => {
+    setBezig(true); setBericht(null);
+    const { fout } = await roep("partners-beheer", { action: "styliste_code_aan", id: c.id, aan });
+    setBezig(false);
+    setBericht(fout ?? `${c.code.toUpperCase()} staat ${aan ? "weer aan" : "uit"}.`);
+    laad();
+  };
+
+  return (
+    <div className="rd-card-white" style={{ marginTop: 10 }}>
+      {blokKop("Codes voor eigen klanten")}
+      <p className="rd-sub" style={{ margin: "0 0 8px", fontSize: 13 }}>Haar klant vult de code in de webshop in en krijgt korting op verf; zij krijgt commissie volgens de verdeling van die code. Korting en commissie zijn samen hooguit 20%.</p>
+      {codes === null ? <p className="rd-sub" style={{ margin: 0 }}>Laden...</p> : codes.length === 0 ? <p className="rd-sub" style={{ margin: 0 }}>Nog geen codes.</p> : codes.map((c, i) => (
+        <div key={c.id} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
+          <span>
+            <strong style={{ fontFamily: "monospace", opacity: c.actief ? 1 : 0.5 }}>{c.code.toUpperCase()}</strong>{" "}
+            <span style={{ opacity: 0.7, fontSize: 13 }}>· {c.korting_pct}% korting voor de klant, {c.commissie_pct}% commissie{c.gekoppeld ? " · bestaande bon gekoppeld" : ""}{c.actief ? "" : " · staat uit"}</span>
+          </span>
+          <button className="rd-plan-chip" style={{ minHeight: 34, padding: "0 12px", fontSize: 13 }} disabled={bezig} onClick={() => zet(c, !c.actief)}>{c.actief ? "Zet uit" : "Zet aan"}</button>
+        </div>
+      ))}
+      <form onSubmit={maak} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--rd-line)" }}>
+        <input className="rd-input" style={{ width: 200, background: "#fff", textTransform: "uppercase", fontFamily: "monospace" }} value={code} onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 30))} placeholder="Nieuwe code" aria-label="Nieuwe code" minLength={4} required autoComplete="off" spellCheck={false} />
+        <select className="rd-input" style={{ width: "auto", background: "#fff" }} value={paar} onChange={(e) => setPaar(e.target.value)} aria-label="Verdeling">
+          {verdelingen.map(([c, k], i) => <option key={i} value={String(i)}>{k}% korting, {c}% commissie</option>)}
+        </select>
+        <label style={{ fontSize: 13, display: "inline-flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={koppel} onChange={(e) => setKoppel(e.target.checked)} /> Bestaande code in de webshop koppelen</label>
+        <button type="submit" className="rd-btn rd-btn-primary" style={{ width: "auto", minHeight: 44, padding: "0 18px", fontSize: 15 }} disabled={bezig || code.length < 4}>{bezig ? "Bezig..." : koppel ? "Koppel de code" : "Maak de code"}</button>
+      </form>
+      {bericht && <p style={{ margin: "10px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="status">{bericht}</p>}
     </div>
   );
 }

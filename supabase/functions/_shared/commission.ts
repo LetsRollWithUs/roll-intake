@@ -39,13 +39,25 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
   const wooId = String(order.id);
   const email = String(order.billing?.email ?? "").trim().toLowerCase();
 
-  // Route 'code': persoonlijke kortingscode van een styliste op de order.
+  // Route 'code': een kortingscode van een styliste op de order. Eerst de codes met een eigen verdeling
+  // (stylist_codes: de code bepaalt het commissiepercentage), dan de oude losse code op de styliste.
   let codeStylist: string | null = null;
+  let codeRij: { commissie_pct: number; korting_pct: number } | null = null;
   const codes = (order.coupon_lines ?? []).map((c: any) => String(c.code ?? "").trim().toLowerCase()).filter(Boolean);
   if (codes.length) {
-    const { data } = await admin.from("stylists").select("id,discount_code").not("discount_code", "is", null);
-    for (const s of (data ?? []) as any[]) {
-      if (codes.includes(String(s.discount_code).trim().toLowerCase())) { codeStylist = s.id; break; }
+    const { data: sc } = await admin.from("stylist_codes").select("stylist_id,code,commissie_pct,korting_pct").eq("actief", true);
+    for (const c of (sc ?? []) as any[]) {
+      if (codes.includes(String(c.code).trim().toLowerCase())) {
+        codeStylist = c.stylist_id;
+        codeRij = { commissie_pct: Number(c.commissie_pct), korting_pct: Number(c.korting_pct) };
+        break;
+      }
+    }
+    if (!codeStylist) {
+      const { data } = await admin.from("stylists").select("id,discount_code").not("discount_code", "is", null);
+      for (const s of (data ?? []) as any[]) {
+        if (codes.includes(String(s.discount_code).trim().toLowerCase())) { codeStylist = s.id; break; }
+      }
     }
   }
 
@@ -99,7 +111,11 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
   // Percentage uit de samenwerkingsafspraken van de styliste (ingesteld door beheer), anders de standaard.
   const { data: sr } = await admin.from("stylist_agreements").select("commission_rate").eq("stylist_id", stylist).maybeSingle();
   // Bij een offerte voor een eigen klant geldt de verdeling van die offerte.
-  const rate = offerte && Number.isFinite(offerte.commissie_pct) ? offerte.commissie_pct / 100 : sr?.commission_rate != null ? Number(sr.commission_rate) : RATE;
+  // Bij een code met een eigen verdeling geldt die verdeling (alleen als de bestelling via die code loopt).
+  const metCode = route === "code" && codeRij && Number.isFinite(codeRij.commissie_pct);
+  const rate = offerte && Number.isFinite(offerte.commissie_pct) ? offerte.commissie_pct / 100
+    : metCode ? codeRij!.commissie_pct / 100
+    : sr?.commission_rate != null ? Number(sr.commission_rate) : RATE;
   const amount = Math.round(verf * rate * 100) / 100;
 
   // Bestaat er al een regel voor deze order? Niet overschrijven zodra 'ie verder is dan te_controleren.
@@ -109,7 +125,7 @@ export async function attributeCommission(admin: any, order: any): Promise<{ ok?
     verf_excl: Math.round(verf * 100) / 100, rate, amount,
     order_total: Number(order.total ?? 0), currency: order.currency ?? "EUR",
     conflict, updated_at: new Date().toISOString(),
-    offer_id: offerte?.id ?? null, klant_korting_pct: offerte ? offerte.korting_pct : null,
+    offer_id: offerte?.id ?? null, klant_korting_pct: offerte ? offerte.korting_pct : metCode ? codeRij!.korting_pct : null,
   };
   if (!existing) {
     await admin.from("commissions").insert({ ...row, status: "te_controleren" });

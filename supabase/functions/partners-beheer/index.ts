@@ -21,6 +21,7 @@ const KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/dashboard").replace(/\/$/, "");
 const LEES = ["lijst", "detail", "commissie"];
 const LEDEN = ["lid_toevoegen", "lid_uitnodigen", "lid_verwijderen"];
+const CODES = ["styliste_code_maak", "styliste_code_aan"];
 const BEHEER = ["partner_opslaan", "partner_verwijderen", "partner_beeld", "partner_codes", "uitbetaling_afhandelen", "code_blokkeren"];
 
 /** Vraag aan roll.nl; een nette melding van daar (naam bestaat al, code bezet) geven we door. */
@@ -93,6 +94,38 @@ Deno.serve(async (req) => {
     let body: any = {};
     try { body = await req.json(); } catch { /* leeg */ }
     const slug = String(body?.slug ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60);
+    // Kortingscodes van stylistes voor hun eigen klanten: de bon staat in de webshop, de verdeling hier.
+    if (CODES.includes(body?.action)) {
+      const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+      if ("styliste_code_aan" === body.action) {
+        const { data: rij } = await admin.from("stylist_codes").select("id,code,gekoppeld").eq("id", String(body?.id ?? "")).maybeSingle();
+        if (!rij) return json({ error: "Deze code staat niet in het dashboard." }, 404);
+        const aan = true === body?.aan;
+        // Een gekoppelde bon laten we in de webshop zoals hij is; dan telt alleen de commissie niet meer mee.
+        if (!(rij as any).gekoppeld) {
+          const w = await naarWinkel("styliste-code", { actie: "aan", code: (rij as any).code, aan });
+          if (!w.ok) return json({ error: w.melding ?? "Aan- of uitzetten lukte niet." }, w.melding ? w.status : 502);
+        }
+        await admin.from("stylist_codes").update({ actief: aan }).eq("id", (rij as any).id);
+        return json({ ok: true });
+      }
+      const code = String(body?.code ?? "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
+      const korting = Number(body?.korting), commissie = Number(body?.commissie);
+      if (code.length < 4) return json({ error: "Kies een code van 4 tot 30 letters en cijfers." }, 400);
+      if (!(korting >= 0 && commissie >= 0 && korting + commissie <= 20)) return json({ error: "Korting en commissie zijn samen hooguit 20%." }, 400);
+      const { data: st } = await admin.from("stylists").select("id,name").eq("id", String(body?.stylist_id ?? "")).maybeSingle();
+      if (!st) return json({ error: "Deze styliste bestaat niet." }, 404);
+      const { data: bezet } = await admin.from("stylist_codes").select("id").ilike("code", code).maybeSingle();
+      if (bezet) return json({ error: "Deze code staat al in het dashboard." }, 409);
+      const koppel = true === body?.koppel;
+      const w = await naarWinkel("styliste-code", koppel ? { actie: "info", code } : { actie: "maak", code, korting, commissie, styliste: (st as any).name });
+      if (!w.ok) return json({ error: w.melding ?? "De code in de webshop zetten lukte niet." }, w.melding ? w.status : 502);
+      const { data: u } = await caller.auth.getUser();
+      const { error: fout } = await admin.from("stylist_codes").insert({ stylist_id: (st as any).id, code, korting_pct: korting, commissie_pct: commissie, gekoppeld: koppel, created_by: u?.user?.email ?? null });
+      if (fout) { console.error("partners-beheer: styliste-code", fout.message); return json({ error: "De code staat in de webshop, maar opslaan in het dashboard lukte niet. Probeer het opnieuw met Koppel bestaande code." }, 500); }
+      return json({ ok: true, bon: w.uit?.bon ?? null });
+    }
+
     if (![...LEES, ...LEDEN, ...BEHEER].includes(body?.action) || (!["lijst", "commissie", "partner_opslaan"].includes(body.action) && !slug)) return json({ error: "Onbekende actie." }, 400);
 
     // Een partner aanmaken, wijzigen of weghalen. De afspraken (code, korting, commissie) staan in de webshop, want

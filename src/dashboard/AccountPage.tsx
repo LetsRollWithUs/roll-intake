@@ -9,6 +9,8 @@ export function AccountPage() {
   const [email, setEmail] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [stylist, setStylist] = useState<Me | null>(null);
+  // Kortingscodes voor eigen klanten, elk met een eigen verdeling.
+  const [codes, setCodes] = useState<{ code: string; korting_pct: number; commissie_pct: number; actief: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -27,6 +29,10 @@ export function AccountPage() {
         mine.discount_code = (s as { discount_code: string | null } | null)?.discount_code ?? null;
       }
       setStylist(mine);
+      if (mine) {
+        const { data: sc } = await supabase.from("stylist_codes").select("code,korting_pct,commissie_pct,actief").eq("stylist_id", mine.id).eq("actief", true).order("created_at");
+        setCodes((sc as { code: string; korting_pct: number; commissie_pct: number; actief: boolean }[]) ?? []);
+      }
       setLoading(false);
     })();
   }, []);
@@ -68,6 +74,12 @@ export function AccountPage() {
               <span style={{ opacity: 0.7 }}>Videolink</span>
               <span>{stylist.meet_url ? "Ingesteld ✓" : <span style={{ opacity: 0.6 }}>Nog niet ingesteld</span>}</span>
             </div>
+            {codes.map((c) => (
+              <div key={c.code} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ opacity: 0.7 }}>Code voor je klanten: {c.korting_pct}% korting, {c.commissie_pct}% commissie voor jou</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{c.code.toUpperCase()}</span>
+              </div>
+            ))}
             {stylist.discount_code && (
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <span style={{ opacity: 0.7 }}>Persoonlijke kortingscode</span>
