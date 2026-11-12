@@ -71,7 +71,7 @@ interface Styliste { id: string; name: string; email: string; active: boolean }
 interface Commissie { stylist_id: string | null; verf_excl: number; amount: number; status: string; created_at: string }
 
 /** Eén regel in het overzicht, voor elke soort hetzelfde. */
-interface Regel { sleutel: string; soort: Soort; naam: string; sub: string; actief: boolean; omzet: number; open: number; laatst: string; zoek: string; naar: string }
+interface Regel { sleutel: string; soort: Soort; naam: string; sub: string; actief: boolean; omzet: number; open: number; laatst: string; zoek: string; naar: string; meekijken: string }
 
 const kwartaalStart = () => { const d = new Date(); return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1); };
 const kwartaalNaam = () => { const d = new Date(); return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`; };
@@ -86,8 +86,28 @@ export function Tegel({ label, waarde, sub }: { label: string; waarde: string; s
   );
 }
 
+// Elke soort een eigen kleur en een eigen icoon, zodat je in een lange lijst meteen ziet wie wat is.
+const SOORT_STIJL: Record<string, { achtergrond: string; kleur: string; pad: React.ReactNode }> = {
+  // kwast
+  styliste: { achtergrond: "var(--rd-pink)", kleur: "var(--rd-aubergine)", pad: <><path d="M18.4 2.6a2 2 0 0 1 3 3L11 16l-4 1 1-4z" /><path d="M7 17c-2 0-3.5 1.5-3.5 3.5 0 .5-.5 1-1.5 1 1.5 1 6 1.5 6-2.5" /></> },
+  // huis
+  makelaar: { achtergrond: "var(--rd-lime)", kleur: "var(--rd-aubergine)", pad: <><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></> },
+  // ster
+  creator: { achtergrond: "var(--rd-aubergine)", kleur: "#fff", pad: <path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.500l1.2-6L3.300 9.300l6.100-.7z" /> },
+  // label
+  merk: { achtergrond: "var(--rd-lavender-mid)", kleur: "var(--rd-aubergine)", pad: <><path d="M20.6 13.4l-7.200 7.200a2 2 0 0 1-2.800 0L3 13V3h10l7.600 7.600a2 2 0 0 1 0 2.800z" /><circle cx="7.500" cy="7.500" r="1.300" /></> },
+  // verfroller
+  schilder: { achtergrond: "var(--rd-beige-result)", kleur: "var(--rd-aubergine)", pad: <><rect x="3" y="3" width="15" height="6" rx="1.500" /><path d="M18 6h3v6h-9v3" /><rect x="10.500" y="15" width="3" height="6" rx="1" /></> },
+};
+
 export function SoortChip({ soort }: { soort: string }) {
-  return <span className="rd-chip" style={{ padding: "3px 9px", fontSize: 11 }}>{soortLabel(soort)}</span>;
+  const st = SOORT_STIJL[soort] ?? { achtergrond: "var(--rd-lavender)", kleur: "var(--rd-aubergine)", pad: <circle cx="12" cy="12" r="4" /> };
+  return (
+    <span className="rd-chip" style={{ padding: "3px 9px 3px 7px", fontSize: 11, background: st.achtergrond, color: st.kleur, display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.200" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{st.pad}</svg>
+      {soortLabel(soort)}
+    </span>
+  );
 }
 
 async function laadStylistes(): Promise<{ stylistes: Styliste[]; commissies: Commissie[] }> {
@@ -134,7 +154,7 @@ export function PartnersPage() {
     const uit: Regel[] = [];
     for (const s of st?.stylistes ?? []) {
       const c = stylisteCijfers(s.id, st?.commissies ?? []);
-      uit.push({ sleutel: `s:${s.id}`, soort: "styliste", naam: s.name, sub: s.email, actief: s.active, omzet: c.omzet, open: c.open, laatst: c.laatst, zoek: `${s.name} ${s.email}`.toLowerCase(), naar: `/dashboard/partners/styliste/${s.id}` });
+      uit.push({ sleutel: `s:${s.id}`, soort: "styliste", naam: s.name, sub: s.email, actief: s.active, omzet: c.omzet, open: c.open, laatst: c.laatst, zoek: `${s.name} ${s.email}`.toLowerCase(), naar: `/dashboard/partners/styliste/${s.id}`, meekijken: `/dashboard?als=${s.id}` });
     }
     for (const p of wp ?? []) {
       const mails = [...(p.mensen ?? []), ...(p.leden ?? [])].map((m) => `${m.naam ?? ""} ${m.email}`).join(" ");
@@ -142,6 +162,7 @@ export function PartnersPage() {
         sleutel: `p:${p.slug}`, soort: p.soort, naam: p.naam, sub: [p.plaats, p.afspraken.kortingscode ? `code ${p.afspraken.kortingscode}` : ""].filter(Boolean).join(" · "),
         actief: p.actief && (p.status ?? "actief") === "actief", omzet: p.kort.omzet, open: p.kort.commissieOpen, laatst: p.kort.laatsteOrder,
         zoek: `${p.naam} ${p.plaats} ${p.slug} ${p.afspraken.kortingscode} ${p.afspraken.thuisCode} ${mails}`.toLowerCase(), naar: `/dashboard/partners/${p.slug}`,
+        meekijken: `/dashboard/partner/${p.slug}`,
       });
     }
     return uit.sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
@@ -160,7 +181,7 @@ export function PartnersPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 className="rd-h2" style={{ margin: "0 0 2px" }}>Partners</h1>
-          <p className="rd-sub" style={{ margin: 0 }}>Iedereen waar Roll mee samenwerkt. Zoek op naam, plaats, kortingscode of e-mailadres.</p>
+          <p className="rd-sub" style={{ margin: 0 }}>Iedereen waar Roll mee samenwerkt. Zoek op naam, plaats, kortingscode of e-mailadres. Met "Kijk mee" zie je het dashboard zoals de partner het zelf ziet.</p>
         </div>
         <Link to="/dashboard/partners/nieuw" className="rd-btn rd-btn-primary" style={{ width: "auto", minHeight: 44, padding: "0 18px", fontSize: 15, textDecoration: "none" }}>Nieuwe partner</Link>
       </div>
@@ -184,21 +205,26 @@ export function PartnersPage() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {zichtbaar.map((r) => (
-          <Link key={r.sleutel} to={r.naar} className="rd-card-white" style={{ textDecoration: "none", color: "inherit", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", opacity: r.actief ? 1 : 0.55 }}>
-            <div style={{ minWidth: 0 }}>
+          <div key={r.sleutel} className="rd-card-white" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            {/* De naam opent de beheerpagina; "Kijk mee" opent het dashboard zoals deze partner het zelf ziet. */}
+            <Link to={r.naar} style={{ textDecoration: "none", color: "inherit", minWidth: 0, flex: "1 1 240px", opacity: r.actief ? 1 : 0.55 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{r.naam}</span>
                 <SoortChip soort={r.soort} />
-                {!r.actief && <span style={{ fontSize: 12, opacity: 0.7 }}>Code staat uit</span>}
+                {!r.actief && <span style={{ fontSize: 12, opacity: 0.7 }}>{r.soort === "styliste" ? "Niet actief" : "Code staat uit"}</span>}
               </div>
               {r.sub && <div style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>{r.sub}</div>}
-            </div>
-            <div style={{ display: "flex", gap: 18, fontSize: 13, fontVariantNumeric: "tabular-nums", flexWrap: "wrap", alignItems: "baseline" }}>
+            </Link>
+            <div style={{ display: "flex", gap: 18, fontSize: 13, fontVariantNumeric: "tabular-nums", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
               <span><span style={{ opacity: 0.6 }}>Omzet {kwartaalNaam()}</span> <strong>{euro(r.omzet)}</strong></span>
               <span><span style={{ opacity: 0.6 }}>Commissie open</span> <strong>{euro(r.open)}</strong></span>
               <span style={{ opacity: 0.6 }}>{r.laatst ? `Laatste bestelling ${formatDate(r.laatst)}` : "Nog geen bestelling"}</span>
+              <Link to={r.meekijken} className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36, padding: "0 12px", fontSize: 13, textDecoration: "none" }} title={`Het dashboard zoals ${r.naam} het ziet`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 12s3.600-7 10-7 10 7 10 7-3.600 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></svg>
+                Kijk mee
+              </Link>
             </div>
-          </Link>
+          </div>
         ))}
       </div>
     </div>

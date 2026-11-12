@@ -18,11 +18,11 @@ export interface StylistOffer {
   created_at: string; updated_at: string; stylists?: { name: string } | null;
 }
 export const OFFER_COLS = "id,stylist_id,customer_name,customer_email,customer_phone,offerte_id,nummer,versie,status,commissie_pct,korting_pct,roll_klant,korting_aanvraag,korting_reden,totaal,commissie_basis,klant_url,mand_url,sent_at,sent_via,ordered_at,woo_order_id,created_at,updated_at";
-type Paar = [number, number];
-const STANDAARD: Paar[] = [[10, 10], [15, 5], [20, 0]];
+export type Paar = [number, number];
+export const STANDAARD: Paar[] = [[10, 10], [15, 5], [20, 0]];
 
 const eur = (v?: number | null) => (v == null ? "" : new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(v));
-const pct = (n: number) => `${String(Number(n)).replace(".", ",")}%`;
+export const pct = (n: number) => `${String(Number(n)).replace(".", ",")}%`;
 export const verwachteCommissie = (o: Pick<StylistOffer, "commissie_basis" | "commissie_pct">) => (o.commissie_basis == null ? null : Math.round(o.commissie_basis * Number(o.commissie_pct)) / 100);
 export const OFFER_STATUS: Record<StylistOffer["status"], string> = { concept: "Concept", verstuurd: "Verstuurd", besteld: "Besteld", vervallen: "Vervallen" };
 const paarLabel = ([c, k]: Paar) => (k > 0 ? `${pct(c)} commissie voor jou, ${pct(k)} korting voor je klant` : `${pct(c)} commissie voor jou, geen korting voor je klant`);
@@ -87,14 +87,6 @@ export function OffertesPage() {
     setBezig(false);
     if (d?.ok && d.offerte) { nav(`/dashboard/offertes/${d.offerte.id}`); return; }
     setFout(d?.error ?? "De offerte kon niet worden aangemaakt.");
-  };
-
-  const zetVerdelingen = async (paar: Paar, aan: boolean) => {
-    const volgende = aan ? [...verdelingen, paar].sort((a, b) => a[0] - b[0]) : verdelingen.filter((p) => !(p[0] === paar[0] && p[1] === paar[1]));
-    if (!volgende.length) return;
-    setVerdelingen(volgende);
-    const { data: u } = await supabase.auth.getUser();
-    await supabase.from("stylist_offer_settings").update({ verdelingen: volgende, updated_at: new Date().toISOString(), updated_by: u?.user?.email ?? null }).eq("id", true);
   };
 
   const zichtbaar = useMemo(() => rows.filter((o) => (filter === "alles" ? true : filter === "besteld" ? o.status === "besteld" : o.status === "concept" || o.status === "verstuurd") && (!stylistFilter || o.stylist_id === stylistFilter)), [rows, filter, stylistFilter]);
@@ -188,16 +180,7 @@ export function OffertesPage() {
         </div>
       )}
 
-      {isAdmin && (
-        <div className="rd-card-white" style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 8 }}>
-          <strong>Welke verdelingen mogen stylistes kiezen?</strong>
-          <p className="rd-sub" style={{ margin: 0, fontSize: 13 }}>Een klant krijgt nooit meer dan 10% korting. Geldt voor nieuwe keuzes; bestaande offertes houden hun verdeling.</p>
-          {STANDAARD.map((p) => {
-            const aan = verdelingen.some((v) => v[0] === p[0] && v[1] === p[1]);
-            return <label key={p.join("-")} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 15 }}><input type="checkbox" checked={aan} disabled={aan && verdelingen.length === 1} onChange={(e) => zetVerdelingen(p, e.target.checked)} />{pct(p[0])} commissie, {pct(p[1])} korting</label>;
-          })}
-        </div>
-      )}
+      {isAdmin && <p className="rd-sub" style={{ marginTop: 18, fontSize: 13 }}>Welke verdelingen stylistes mogen kiezen stel je in onder <Link to="/dashboard/instellingen" className="rd-textlink">Instellingen</Link>.</p>}
     </div>
   );
 }

@@ -15,11 +15,11 @@ import { StylistHome } from "./StylistHome";
 import { OnboardingPage } from "./OnboardingPage";
 import { CommissiePage } from "./CommissiePage";
 import { AccountPage } from "./AccountPage";
-import { KanbanPage } from "./KanbanPage";
 import { KlantDossier } from "./KlantDossier";
 import { GesprekPage } from "./GesprekPage";
 import { TakenPage } from "./TakenPage";
-import { OffertesPage, OfferteDetail } from "./OffertesPage";
+import { OfferteDetail } from "./OffertesPage";
+import { OffertesBeheer } from "./AlleOffertes";
 import { KlantKaart } from "./klant/KlantKaart";
 import { NotificationsPage } from "./NotificationsPage";
 import { SchilderplanPage } from "./SchilderplanPage";
@@ -29,6 +29,8 @@ import { InzichtenPage } from "./InzichtenPage";
 import { loadNotifications } from "./notifications";
 import { PartnerHome, PartnerDashboard, PartnerAfrekening, type Partner } from "./PartnerHome";
 import { PartnersPage, PartnerDetail, PartnerForm, StylisteDetail } from "./PartnersPage";
+import { InstellingenPage } from "./InstellingenPage";
+import { GesprekkenPage } from "./GesprekkenOverzicht";
 
 // Menubalk in roll.nl-stijl: paarse afgeronde balk, roze Roll-logo links, het menu ernaast op één regel.
 const BAR_CSS = `
@@ -46,10 +48,11 @@ const BAR_CSS = `
 .rd-topbar .rd-ico:hover,.rd-topbar .rd-ico.active{background:rgba(255,255,255,.12)}
 .rd-topbar .rd-badge{position:absolute;top:3px;right:3px;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--rd-pink);color:var(--rd-aubergine);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .rd-topbar .rd-avatar{width:36px;height:36px;border-radius:99px;background:var(--rd-pink);color:var(--rd-aubergine);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;border:0;cursor:pointer;margin-left:4px}
-.rd-menu{position:absolute;right:0;top:46px;background:#fff;color:var(--rd-aubergine);border-radius:14px;box-shadow:0 10px 30px rgba(47,33,65,.18);min-width:210px;padding:6px;z-index:30;display:flex;flex-direction:column}
+.rd-menu{position:absolute;right:0;top:46px;background:#fff;color:var(--rd-aubergine);border-radius:14px;box-shadow:0 10px 30px rgba(47,33,65,.18);min-width:220px;padding:6px;z-index:30;display:flex;flex-direction:column;max-height:calc(100dvh - 90px);overflow-y:auto}
 .rd-menu a,.rd-menu button{text-align:left;background:none;border:0;font:inherit;font-weight:600;font-size:14px;color:var(--rd-aubergine);text-decoration:none;padding:9px 12px;border-radius:10px;cursor:pointer}
 .rd-menu a:hover,.rd-menu button:hover{background:var(--rd-grey-light)}
 .rd-menu .rd-sep{height:1px;background:var(--rd-line);margin:4px 6px}
+.rd-menu .rd-kop{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.55;padding:8px 12px 2px}
 @media (max-width:860px){
   .rd-topbar{grid-template-columns:1fr auto;grid-template-areas:"logo right" "nav nav";padding:8px 12px 6px;row-gap:2px}
   .rd-topbar>nav{flex-wrap:wrap;overflow:visible;justify-content:flex-start;margin:0 -6px}
@@ -189,32 +192,39 @@ export function Dashboard() {
               <img src={`${import.meta.env.BASE_URL}roll-logo.png`} alt="Roll" style={{ height: 30, width: "auto", display: "block" }} />
             </Link>
             <div className="rd-right">
-              <NavLink to="/dashboard/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
+              {/* Uitleg en agenda zijn er voor stylistes; beheerders vinden ze in het menu onder Stylistes. */}
+              {!isAdmin && <NavLink to="/dashboard/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>}
               <NavLink to="/dashboard/notificaties" title="Notificaties" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}>
                 <BellIcon />
                 {notifCount > 0 && <span className="rd-badge">{notifCount > 99 ? "99+" : notifCount}</span>}
               </NavLink>
-              <NavLink to="/dashboard/agenda" title="Agenda" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}><CalendarIcon /></NavLink>
+              {!isAdmin && <NavLink to="/dashboard/agenda" title="Agenda" className={({ isActive }) => `rd-ico${isActive ? " active" : ""}`}><CalendarIcon /></NavLink>}
               <div ref={menuRef} style={{ position: "relative" }}>
                 <button className="rd-avatar" onClick={() => setMenuOpen((o) => !o)} aria-haspopup="menu" aria-expanded={menuOpen} title="Profiel">{initials}</button>
                 {menuOpen && (
                   <div className="rd-menu" role="menu" onClick={() => setMenuOpen(false)}>
                     <div style={{ padding: "6px 12px 8px", fontSize: 12, opacity: 0.6 }}>{session.user.email}</div>
                     <Link to="/dashboard/account">Mijn profiel</Link>
-                    <Link to="/dashboard/agenda">Agenda &amp; beschikbaarheid</Link>
+                    {!isAdmin && <Link to="/dashboard/agenda">Agenda &amp; beschikbaarheid</Link>}
                     {(partners ?? []).map((p) => <Link key={p.id} to={`/dashboard/partner/${p.slug}`}>Dashboard {p.naam}</Link>)}
                     {isAdmin && (
                       <>
                         <div className="rd-sep" />
-                        <Link to="/dashboard/taken">Roll-taken</Link>
+                        <div className="rd-kop">Stylistes</div>
+                        <Link to="/dashboard/adviseurs">Team &amp; afspraken</Link>
+                        <Link to="/dashboard/agenda">Agenda &amp; beschikbaarheid</Link>
+                        <Link to="/dashboard/boekingen">Boekingen</Link>
+                        <Link to="/dashboard/intakes">Alle intakes</Link>
+                        <Link to="/dashboard/cadeaucodes">Cadeaucodes</Link>
+                        <Link to="/dashboard/onboarding">Uitleg voor stylistes</Link>
+                        <div className="rd-kop">Verfplan en Charlie</div>
                         <Link to="/dashboard/schilderplan">Verfplan</Link>
                         <Link to="/dashboard/kennisbank">Kennisbank chat</Link>
                         <Link to="/dashboard/nakijken">Nakijken chat</Link>
                         <Link to="/dashboard/inzichten">Inzichten chat</Link>
-                        <Link to="/dashboard/intakes">Alle intakes</Link>
-                        <Link to="/dashboard/boekingen">Boekingen</Link>
-                        <Link to="/dashboard/cadeaucodes">Cadeaucodes</Link>
-                        <Link to="/dashboard/adviseurs">Team &amp; afspraken</Link>
+                        <div className="rd-kop">Roll</div>
+                        <Link to="/dashboard/taken">Roll-taken</Link>
+                        <Link to="/dashboard/instellingen">Instellingen</Link>
                         <Link to="/dashboard/meldingen">Systeemmeldingen</Link>
                       </>
                     )}
@@ -252,12 +262,12 @@ export function Dashboard() {
     <Routes>
       <Route index element={<StylistHome />} />
       <Route path="start" element={<StylistHome />} />
-      <Route path="gesprekken" element={<KanbanPage />} />
+      <Route path="gesprekken" element={<GesprekkenPage />} />
       <Route path="klant/:bookingId" element={<KlantDossier />} />
       <Route path="gesprek/:bookingId" element={<KlantKaart />} />
       <Route path="gesprek-oud/:bookingId" element={<GesprekPage />} />
       <Route path="taken" element={<TakenPage />} />
-      <Route path="offertes" element={<OffertesPage />} />
+      <Route path="offertes" element={<OffertesBeheer />} />
       <Route path="offertes/:id" element={<OfferteDetail />} />
       <Route path="commissie" element={<CommissiePage />} />
       <Route path="partners" element={<PartnersPage />} />
@@ -269,6 +279,7 @@ export function Dashboard() {
       <Route path="afrekening/:slug/:kw" element={<PartnerAfrekening />} />
       <Route path="notificaties" element={<NotificationsPage />} />
       <Route path="account" element={<AccountPage />} />
+      <Route path="instellingen" element={<InstellingenPage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="agenda" element={<AgendaPage />} />
       <Route path="intakes" element={<IntakeList />} />
