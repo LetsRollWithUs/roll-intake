@@ -3,8 +3,9 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { PasswordInput } from "./PasswordInput";
 
-// Landingspagina van de resetlink (/dashboard/nieuw-wachtwoord): de link logt tijdelijk in,
-// hier kiest de gebruiker een nieuw wachtwoord.
+// Landingspagina van de wachtwoordlink (/dashboard/nieuw-wachtwoord): hier kiest de gebruiker een nieuw wachtwoord.
+// De link uit onze eigen mail draagt een eenmalige code (?token_hash=...). Die verbruiken we pas bij het opslaan,
+// zodat een mailscanner die de link vooraf opent hem niet ongeldig maakt. Oudere links loggen direct tijdelijk in.
 export function NewPassword({ session, onDone }: { session: Session | null; onDone: () => void }) {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -12,6 +13,10 @@ export function NewPassword({ session, onDone }: { session: Session | null; onDo
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [waited, setWaited] = useState(false);
+  // De eenmalige code uit de link, eenmalig uitgelezen (na het inwisselen verandert de sessie, niet de link).
+  const [code] = useState(() => new URLSearchParams(window.location.search).get("token_hash") ?? "");
+  const [ingewisseld, setIngewisseld] = useState(false);
+  const [verlopen, setVerlopen] = useState(false);
   // Verlopen of al gebruikte link: Supabase zet een foutcode in de URL.
   const linkError = /error_code=|error=access_denied/.test(window.location.hash + window.location.search);
 
@@ -23,6 +28,12 @@ export function NewPassword({ session, onDone }: { session: Session | null; onDo
     if (pw.length < 8) { setErr("Kies een wachtwoord van minstens 8 tekens."); return; }
     if (pw !== pw2) { setErr("De twee wachtwoorden zijn niet hetzelfde."); return; }
     setBusy(true);
+    // Eerst de eenmalige code inwisselen: dat logt in als de eigenaar van de link, ook als er al iemand anders ingelogd was.
+    if (code && !ingewisseld) {
+      const { error: ve } = await supabase.auth.verifyOtp({ token_hash: code, type: "recovery" });
+      if (ve) { setBusy(false); setVerlopen(true); return; }
+      setIngewisseld(true);
+    }
     const { error } = await supabase.auth.updateUser({ password: pw });
     setBusy(false);
     if (error) { setErr(/same|different/i.test(error.message) ? "Kies een ander wachtwoord dan je huidige." : "Opslaan lukte niet. Vraag eventueel een nieuwe link aan."); return; }
@@ -41,17 +52,17 @@ export function NewPassword({ session, onDone }: { session: Session | null; onDo
     return (
       <div style={wrap}><div style={{ width: "100%", maxWidth: 360 }}>
         {head("Wachtwoord gewijzigd")}
-        <p className="rd-sub" style={{ marginTop: 0 }}>Je nieuwe wachtwoord is opgeslagen. Het werkt ook voor het Quiz-dashboard.</p>
+        <p className="rd-sub" style={{ marginTop: 0 }}>Je nieuwe wachtwoord is opgeslagen.</p>
         <button className="rd-btn rd-btn-primary rd-btn-lg" style={{ marginTop: 12 }} onClick={onDone}>Naar het dashboard</button>
       </div></div>
     );
   }
 
-  if (!session) {
+  if (verlopen || (!session && !code)) {
     return (
       <div style={wrap}><div style={{ width: "100%", maxWidth: 360 }}>
-        {head(linkError || waited ? "Link verlopen" : "Link controleren...")}
-        {(linkError || waited) && (
+        {head(verlopen || linkError || waited ? "Link verlopen" : "Link controleren...")}
+        {(verlopen || linkError || waited) && (
           <>
             <p className="rd-sub" style={{ marginTop: 0 }}>Deze link is verlopen of al gebruikt. Vraag een nieuwe aan via "Wachtwoord vergeten?" op het inlogscherm.</p>
             <button className="rd-btn rd-btn-outline rd-btn-lg" style={{ marginTop: 12 }} onClick={onDone}>Naar inloggen</button>
@@ -65,7 +76,7 @@ export function NewPassword({ session, onDone }: { session: Session | null; onDo
     <div style={wrap}>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360 }}>
         {head("Nieuw wachtwoord")}
-        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 20 }}>Voor {session.user.email}. Kies een wachtwoord van minstens 8 tekens.</p>
+        <p className="rd-sub" style={{ marginTop: 0, marginBottom: 20 }}>{code && !ingewisseld ? "" : session ? `Voor ${session.user.email}. ` : ""}Kies een wachtwoord van minstens 8 tekens.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <PasswordInput value={pw} onChange={setPw} placeholder="Nieuw wachtwoord" autoComplete="new-password" required minLength={8} autoFocus />
           <PasswordInput value={pw2} onChange={setPw2} placeholder="Herhaal het wachtwoord" autoComplete="new-password" required minLength={8} />

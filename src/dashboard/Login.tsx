@@ -2,8 +2,14 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { PasswordInput } from "./PasswordInput";
 
-// Waar de resetlink naartoe leidt: daar kiest de gebruiker een nieuw wachtwoord.
-export const RESET_REDIRECT = () => `${window.location.origin}/dashboard/nieuw-wachtwoord`;
+/**
+ * Vraagt de wachtwoordmail aan: een mail in Roll-stijl met een eenmalige link naar /dashboard/nieuw-wachtwoord.
+ * Het antwoord is altijd hetzelfde, of het adres nu bekend is of niet. Geeft false als versturen niet lukte.
+ */
+export async function vraagWachtwoordMail(email: string): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke("dashboard-toegang", { body: { action: "wachtwoord", email: email.trim() } });
+  return !error && true === (data as { ok?: boolean } | null)?.ok;
+}
 
 export function Login() {
   const [mode, setMode] = useState<"login" | "vergeten">("login");
@@ -26,10 +32,10 @@ export function Login() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: RESET_REDIRECT() });
+    const ok = await vraagWachtwoordMail(email);
     setBusy(false);
     // Bewust dezelfde melding of het adres nu wel of niet bekend is (geen accounts prijsgeven).
-    if (error && /rate|limit|seconds/i.test(error.message)) { setError("Er is net al een link verstuurd. Wacht een minuut en probeer het opnieuw."); return; }
+    if (!ok) { setError("Versturen lukte niet. Probeer het over een minuut opnieuw."); return; }
     setSent(true);
   };
 
