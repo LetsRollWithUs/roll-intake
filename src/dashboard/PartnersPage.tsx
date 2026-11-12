@@ -46,7 +46,11 @@ export interface WpPartner {
   mensen?: Persoon[]; leden?: Persoon[]; kort: Kort;
   // Beheer: de stand van de code, wat er te wijzigen valt en de geschiedenis van de afspraken.
   status?: string; beheerbaar?: boolean; verwijderbaar?: boolean;
-  config?: { voornamen: string; utmSource: string; oudeCodes: string[]; tarieven: { vanaf: string; commissie: number }[] };
+  config?: {
+    voornamen: string; utmSource: string; oudeCodes: string[]; tarieven: { vanaf: string; commissie: number }[];
+    letters?: string; thuisPrijs?: number; thuisVan?: number; geldigMnd?: number; koppelingMnd?: number;
+    beelden?: { logo: string; foto: string; blik: string } | null;
+  };
   funnel?: { kaarten: number; geactiveerd: number; geboekt: number; thuis: number; klanten: number } | null;
   totaal?: { omzet: number; commissie: number; definitief: number };
   kwartalen?: Kwartaal[];
@@ -273,6 +277,8 @@ export function PartnerDetail() {
         <div style={rij}><span>Korting voor de klant</span><span>{p.afspraken.korting}</span></div>
         <div style={rij}><span>Commissie voor de partner</span><span>{p.afspraken.commissiePct}%</span></div>
         {p.afspraken.thuisCode && <div style={rij}><span>Code voor advies aan huis</span><strong>{p.afspraken.thuisCode}</strong></div>}
+        {p.afspraken.thuisCode && !!p.config?.thuisVan && <div style={rij}><span>Kleuradvies aan huis</span><span>{euro(p.config.thuisPrijs ?? 0)} in plaats van {euro(p.config.thuisVan)}</span></div>}
+        {!creator && !!p.config?.geldigMnd && <div style={rij}><span>Cadeaukaart en koppeling</span><span style={{ textAlign: "right" }}>kaart {p.config.geldigMnd} maanden geldig · klant {p.config.koppelingMnd} maanden gekoppeld</span></div>}
         {(p.config?.tarieven ?? []).length > 1 && <div style={rij}><span>Commissie door de tijd</span><span style={{ textAlign: "right" }}>{(p.config?.tarieven ?? []).map((t) => `${t.commissie}% vanaf ${formatDate(t.vanaf)}`).join(" · ")}</span></div>}
         {(p.config?.oudeCodes ?? []).length > 0 && <div style={rij}><span>Eerdere codes</span><span style={{ textAlign: "right" }}>{(p.config?.oudeCodes ?? []).join(", ")} <span style={{ opacity: 0.6, fontSize: 13 }}>· staan uit, tellen nog mee</span></span></div>}
         {creator && p.config?.utmSource && <div style={rij}><span>Link om te delen</span><span style={{ textAlign: "right", overflowWrap: "anywhere" }}>roll.nl/?utm_source={p.config.utmSource} <span style={{ opacity: 0.6, fontSize: 13 }}>· zet er &amp;utm_content=naam-van-de-post achter om per post te meten</span></span></div>}
@@ -328,9 +334,129 @@ export function PartnerDetail() {
         </div>
       )}
 
+      {!creator && p.config?.beelden && <Beelden p={p} herlaad={laad} />}
+      {!creator && p.config?.letters && <Kaartcodes p={p} herlaad={laad} />}
+
       <Toegang p={p} herlaad={laad} />
 
       {p.verwijderbaar && <Verwijder p={p} />}
+    </div>
+  );
+}
+
+/** Maakt van een gekozen foto een compact bestand: hooguit `max` pixels breed of hoog. Een png blijft png (doorzichtig logo). */
+async function verklein(bestand: File, max: number): Promise<string> {
+  const png = bestand.type === "image/png";
+  const beeld = await createImageBitmap(bestand);
+  const schaal = Math.min(1, max / Math.max(beeld.width, beeld.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(beeld.width * schaal);
+  canvas.height = Math.round(beeld.height * schaal);
+  canvas.getContext("2d")!.drawImage(beeld, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL(png ? "image/png" : "image/jpeg", 0.86).split(",")[1] ?? "";
+}
+
+const BEELDEN: { k: "logo" | "foto" | "blik"; naam: string; uitleg: string; max: number }[] = [
+  { k: "logo", naam: "Logo", uitleg: "Onder de naam bij \"Van wie je cadeau komt\". Het liefst een png met doorzichtige achtergrond.", max: 600 },
+  { k: "foto", naam: "Foto van het team", uitleg: "Liggend. Staat groot bij \"Van wie je cadeau komt\" en klein bovenaan, in zwart-wit.", max: 1600 },
+  { k: "blik", naam: "Foto van het cadeaublik", uitleg: "Vierkant. Staat bovenaan de cadeaupagina.", max: 1600 },
+];
+
+/** De beelden op de cadeaupagina van een makelaar. Een nieuw beeld staat er direct. */
+function Beelden({ p, herlaad }: { p: WpPartner; herlaad: () => void }) {
+  const [bezig, setBezig] = useState<string | null>(null);
+  const [bericht, setBericht] = useState<string | null>(null);
+  const kies = async (soort: (typeof BEELDEN)[number], bestand: File | undefined) => {
+    if (!bestand) return;
+    setBericht(null);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(bestand.type)) { setBericht("Kies een jpg-, png- of webp-afbeelding."); return; }
+    setBezig(soort.k);
+    try {
+      const data = await verklein(bestand, soort.max);
+      const { fout } = await roep("partners-beheer", { action: "partner_beeld", slug: p.slug, soort: soort.k, data });
+      setBericht(fout ?? `${soort.naam} is geplaatst.`);
+      if (!fout) herlaad();
+    } catch { setBericht("Dit bestand kon niet worden gelezen. Kies een andere afbeelding."); }
+    setBezig(null);
+  };
+  return (
+    <div className="rd-card-white" style={{ marginBottom: 10 }}>
+      {blokKop("Beelden op de cadeaupagina")}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {BEELDEN.map((b) => {
+          const url = p.config?.beelden?.[b.k] ?? "";
+          return (
+            <div key={b.k} style={{ flex: "1 1 200px", minWidth: 0 }}>
+              <div style={{ height: 120, borderRadius: 12, background: b.k === "logo" ? "var(--rd-aubergine)" : "var(--rd-grey-light)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                {url ? <img src={url} alt={b.naam} style={b.k === "logo" ? { maxWidth: "60%", maxHeight: 60 } : { width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 13, opacity: 0.6 }}>Nog geen beeld</span>}
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 14, marginTop: 8 }}>{b.naam}</div>
+              <div style={{ fontSize: 12, opacity: 0.65, margin: "2px 0 8px" }}>{b.uitleg}</div>
+              <label className="rd-plan-chip" style={{ display: "inline-flex", alignItems: "center", minHeight: 36, padding: "0 12px", fontSize: 13, cursor: "pointer", opacity: bezig ? 0.5 : 1 }}>
+                {bezig === b.k ? "Bezig..." : url ? "Vervang" : "Kies een bestand"}
+                <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} disabled={!!bezig} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; kies(b, f); }} />
+              </label>
+            </div>
+          );
+        })}
+      </div>
+      {bericht && <p style={{ margin: "10px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="status">{bericht}</p>}
+      {p.links.pagina && <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Bekijk het resultaat op <a href={p.links.pagina} target="_blank" rel="noreferrer" style={{ color: "inherit", fontWeight: 600 }}>{p.links.pagina.replace(/^https?:\/\//, "")}</a>.</p>}
+    </div>
+  );
+}
+
+/** Nieuwe cadeaukaartcodes voor een makelaar. De codes zijn alleen direct na het maken te zien en te bewaren. */
+function Kaartcodes({ p, herlaad }: { p: WpPartner; herlaad: () => void }) {
+  const [aantal, setAantal] = useState(25);
+  const [test, setTest] = useState(false);
+  const [bezig, setBezig] = useState(false);
+  const [codes, setCodes] = useState<{ code: string; link: string }[] | null>(null);
+  const [fout, setFout] = useState<string | null>(null);
+  const maak = async () => {
+    setBezig(true); setFout(null);
+    const { data, fout } = await roep<{ codes: { code: string; link: string }[] }>("partners-beheer", { action: "partner_codes", slug: p.slug, aantal, test });
+    setBezig(false);
+    if (fout || !data?.codes) { setFout(fout ?? "Codes maken lukte niet."); return; }
+    setCodes(data.codes); herlaad();
+  };
+  const bewaar = () => {
+    if (!codes) return;
+    const csv = "code;qr_link\n" + codes.map((c) => `${c.code};${c.link}`).join("\n") + "\n";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `roll-${p.slug}-cadeaucodes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const klein: React.CSSProperties = { width: "auto", minHeight: 44, padding: "0 18px", fontSize: 15 };
+  return (
+    <div className="rd-card-white" style={{ marginBottom: 10 }}>
+      {blokKop("Cadeaukaarten")}
+      <p style={{ fontSize: 14, margin: "0 0 10px" }}>
+        {getal(p.funnel?.kaarten ?? 0)} kaarten in omloop, {getal(p.funnel?.geactiveerd ?? 0)} geactiveerd. Elke kaart heeft een eigen code die begint met {p.config?.letters}.
+      </p>
+      {codes ? (
+        <>
+          <p style={{ fontSize: 14, fontWeight: 600, margin: "0 0 8px" }}>{getal(codes.length)} nieuwe codes. Bewaar ze nu: daarna zijn ze niet meer op te vragen.</p>
+          <textarea readOnly rows={Math.min(8, codes.length)} value={codes.map((c) => c.code).join("\n")} className="rd-input" style={{ height: "auto", padding: 12, fontFamily: "monospace", fontSize: 14, background: "#fff" }} aria-label="Nieuwe kaartcodes" />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            <button className="rd-btn rd-btn-primary" style={klein} onClick={bewaar}>Bewaar als bestand met QR-links</button>
+            <button className="rd-btn rd-btn-outline" style={klein} onClick={() => setCodes(null)}>Klaar</button>
+          </div>
+        </>
+      ) : (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <label style={{ fontSize: 14 }} htmlFor="kc-aantal">Aantal</label>
+          <select id="kc-aantal" className="rd-input" style={{ width: "auto", minWidth: 84, background: "#fff" }} value={aantal} onChange={(e) => setAantal(Number(e.target.value))}>
+            {[5, 10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <button className="rd-btn rd-btn-primary" style={klein} disabled={bezig} onClick={maak}>{bezig ? "Bezig..." : "Maak codes"}</button>
+          <label style={{ fontSize: 13, display: "inline-flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={test} onChange={(e) => setTest(e.target.checked)} /> Proefcodes (tellen niet mee)</label>
+        </div>
+      )}
+      {fout && <p style={{ margin: "10px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600, fontSize: 14 }} role="alert">{fout}</p>}
+      <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Het bestand bevat per kaart de code en de link voor de QR-code. Een code blokkeren doe je voorlopig via "Codes en uitbetalingen".</p>
     </div>
   );
 }
@@ -360,14 +486,22 @@ const alleenCode = (v: string) => v.replace(/[^A-Za-z0-9]/g, "").toLowerCase().s
 const veldKop: React.CSSProperties = { display: "block", fontSize: 14, fontWeight: 700, marginBottom: 4 };
 const veldUitleg: React.CSSProperties = { fontSize: 13, opacity: 0.65, margin: "4px 0 0" };
 
-/** Een creator of merk aanmaken of wijzigen. De webshop maakt de kortingscode en past hem aan. */
+const alleenAdres = (v: string) => v.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+
+/** Een makelaar, creator of merk aanmaken of wijzigen. De webshop maakt de codes en past ze aan. */
 export function PartnerForm() {
   const { slug } = useParams();
   const nieuw = !slug;
   const navigate = useNavigate();
   const [oud, setOud] = useState<WpPartner | null>(null);
   const [laadFout, setLaadFout] = useState<string | null>(null);
-  const [soort, setSoort] = useState<"creator" | "merk">("creator");
+  const [soort, setSoort] = useState<"makelaar" | "creator" | "merk">("creator");
+  const [plaats, setPlaats] = useState("");
+  const [adres, setAdres] = useState("");
+  const [adresZelf, setAdresZelf] = useState(false);
+  const [letters, setLetters] = useState("");
+  const [lettersZelf, setLettersZelf] = useState(false);
+  const [thuisPrijs, setThuisPrijs] = useState("100");
   const [naam, setNaam] = useState("");
   const [voornamen, setVoornamen] = useState("");
   const [code, setCode] = useState("");
@@ -387,7 +521,8 @@ export function PartnerForm() {
       const p = (data as { partner?: WpPartner } | null)?.partner;
       if (error || !p) { setLaadFout("Deze partner kon niet worden opgehaald."); return; }
       setOud(p);
-      setSoort(p.soort === "merk" ? "merk" : "creator");
+      setSoort(p.type === "makelaar" ? "makelaar" : p.soort === "merk" ? "merk" : "creator");
+      setPlaats(p.plaats ?? ""); setThuisPrijs(String(p.config?.thuisPrijs ?? 100));
       setNaam(p.naam); setVoornamen(p.config?.voornamen ?? ""); setCode(p.afspraken.kortingscode);
       setKorting(String(p.afspraken.kortingPct)); setCommissie(String(p.afspraken.commissiePct));
       setStatus(p.status ?? "actief"); setTag(p.config?.utmSource ?? "");
@@ -397,20 +532,24 @@ export function PartnerForm() {
   const terug = <Link to={nieuw ? "/dashboard/partners" : `/dashboard/partners/${slug}`} className="rd-textlink" style={{ textDecoration: "none" }}>← {nieuw ? "Partners" : "Terug"}</Link>;
   if (laadFout) return <div>{terug}<p className="rd-sub">{laadFout}</p></div>;
   if (!nieuw && !oud) return <div>{terug}<p className="rd-sub">Laden...</p></div>;
-  if (oud && !oud.beheerbaar) return <div>{terug}<p className="rd-sub">Een makelaar wijzig je nog niet in het dashboard. Dat volgt in een volgende stap.</p></div>;
+  if (oud && !oud.beheerbaar) return <div>{terug}<p className="rd-sub">Deze partner is hier niet te wijzigen.</p></div>;
 
   const k = Number(korting.replace(",", ".")) || 0;
   const c = Number(commissie.replace(",", ".")) || 0;
   const codeAnders = !!oud && alleenCode(code) !== oud.afspraken.kortingscode.toLowerCase();
   const commissieAnders = !!oud && Math.abs(c - oud.afspraken.commissiePct) > 0.001;
   const tagNu = tagZelf || !nieuw ? tag : alleenCode(naam);
+  const makelaar = soort === "makelaar";
+  const adresNu = adresZelf ? adres : alleenAdres(naam);
+  const lettersNu = lettersZelf ? letters : adresNu.replace(/[^a-z]/g, "").slice(0, 2).toUpperCase();
 
   const bewaar = async (e: React.FormEvent) => {
     e.preventDefault();
     setBezig(true); setFout(null);
     const { data, fout } = await roep<{ slug: string }>("partners-beheer", {
       action: "partner_opslaan", slug: slug ?? "", soort, naam: naam.trim(), voornamen: voornamen.trim(), kortingscode: alleenCode(code),
-      korting: k, commissie: c, commissieVanaf: commissieAnders ? vanaf : "", start: nieuw ? start : "", status, utmSource: nieuw ? tagNu : "",
+      korting: k, commissie: c, commissieVanaf: commissieAnders ? vanaf : "", start: nieuw ? start : "", status, utmSource: nieuw && !makelaar ? tagNu : "",
+      plaats: plaats.trim(), ...(makelaar ? { thuisPrijs: thuisPrijs.replace(",", "."), ...(nieuw ? { adres: adresNu, letters: lettersNu } : {}) } : {}),
     });
     setBezig(false);
     if (fout || !data?.slug) { setFout(fout ?? "Opslaan lukte niet."); return; }
@@ -422,14 +561,14 @@ export function PartnerForm() {
     <form onSubmit={bewaar} style={{ maxWidth: 620 }}>
       {terug}
       <h1 className="rd-h2" style={{ margin: "8px 0 2px" }}>{nieuw ? "Nieuwe partner" : `${oud?.naam} wijzigen`}</h1>
-      <p className="rd-sub" style={{ marginTop: 0 }}>{nieuw ? "Een creator of merk met een eigen kortingscode en commissie. Een makelaar toevoegen volgt in een volgende stap." : "Wijzigingen gelden direct in de webshop."}</p>
+      <p className="rd-sub" style={{ marginTop: 0 }}>{nieuw ? "Een makelaar met cadeaukaarten en een cadeaupagina, of een creator of merk met een eigen kortingscode. Allemaal met commissie." : "Wijzigingen gelden direct in de webshop."}</p>
 
       <div className="rd-card-white" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
           <span style={veldKop}>Soort</span>
-          <div style={{ display: "flex", gap: 8 }} role="radiogroup" aria-label="Soort partner">
-            {(["creator", "merk"] as const).map((x) => (
-              <button type="button" key={x} role="radio" aria-checked={soort === x} className={`rd-plan-chip${soort === x ? " is-on" : ""}`} onClick={() => setSoort(x)}>{x === "creator" ? "Creator" : "Merk"}</button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} role="radiogroup" aria-label="Soort partner">
+            {(nieuw ? (["makelaar", "creator", "merk"] as const) : makelaar ? (["makelaar"] as const) : (["creator", "merk"] as const)).map((x) => (
+              <button type="button" key={x} role="radio" aria-checked={soort === x} className={`rd-plan-chip${soort === x ? " is-on" : ""}`} onClick={() => { setSoort(x); if (nieuw && (x === "makelaar") !== (soort === "makelaar")) { setKorting(x === "makelaar" ? "5" : "10"); setCommissie(x === "makelaar" ? "5" : "10"); } }}>{x === "makelaar" ? "Makelaar" : x === "creator" ? "Creator" : "Merk"}</button>
             ))}
           </div>
         </div>
@@ -440,9 +579,37 @@ export function PartnerForm() {
         <div>
           <label style={veldKop} htmlFor="pf-aanhef">Aanhef in het dashboard</label>
           <input id="pf-aanhef" className="rd-input" style={veld} value={voornamen} onChange={(e) => setVoornamen(e.target.value)} maxLength={60} placeholder={naam || "Bijvoorbeeld de voornamen"} autoComplete="off" />
-          <p style={veldUitleg}>Het dashboard opent met "Hoi {voornamen.trim() || naam.trim() || "..."}".</p>
+          <p style={veldUitleg}>{makelaar ? `De voornamen. Het dashboard opent met "Hoi ${voornamen.trim() || naam.trim() || "..."}" en op de cadeaupagina staat "Cadeau van ${voornamen.trim() || naam.trim() || "..."}".` : `Het dashboard opent met "Hoi ${voornamen.trim() || naam.trim() || "..."}".`}</p>
+        </div>
+        <div>
+          <label style={veldKop} htmlFor="pf-plaats">Plaats{makelaar ? "" : " (mag leeg)"}</label>
+          <input id="pf-plaats" className="rd-input" style={veld} value={plaats} onChange={(e) => setPlaats(e.target.value)} maxLength={60} autoComplete="off" />
         </div>
       </div>
+
+      {makelaar && (
+        <div className="rd-card-white" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 16 }}>
+          {nieuw && (
+            <>
+              <div>
+                <label style={veldKop} htmlFor="pf-adres">Adres van de cadeaupagina</label>
+                <input id="pf-adres" className="rd-input" style={{ ...veld, fontFamily: "monospace" }} value={adresNu} onChange={(e) => { setAdresZelf(true); setAdres(alleenAdres(e.target.value)); }} maxLength={40} required autoComplete="off" spellCheck={false} />
+                <p style={veldUitleg}>De klant activeert het cadeau op roll.nl/makelaar/{adresNu || "naam"}/. Dit adres staat in de QR-codes op de kaarten en kan later niet meer worden gewijzigd.</p>
+              </div>
+              <div>
+                <label style={veldKop} htmlFor="pf-letters">Letters van de kaartcodes</label>
+                <input id="pf-letters" className="rd-input" style={{ ...veld, maxWidth: 120, textTransform: "uppercase", fontFamily: "monospace" }} value={lettersNu} onChange={(e) => { setLettersZelf(true); setLetters(e.target.value.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase()); }} minLength={2} maxLength={3} required autoComplete="off" />
+                <p style={veldUitleg}>Elke kaartcode begint hiermee, bijvoorbeeld {lettersNu || "AB"}-K7M4-XR2P. Ligt daarna vast.</p>
+              </div>
+            </>
+          )}
+          <div>
+            <label style={veldKop} htmlFor="pf-thuis">Kleuradvies aan huis: prijs voor de klant (€)</label>
+            <input id="pf-thuis" className="rd-input" style={{ ...veld, maxWidth: 160 }} inputMode="decimal" value={thuisPrijs} onChange={(e) => setThuisPrijs(e.target.value)} required />
+            <p style={veldUitleg}>Normaal € {oud?.config?.thuisVan ?? 175}. Het verschil is een cadeau van de makelaar, met een eigen code die de webshop aanmaakt. Het online kleuradvies op de cadeaukaart is altijd gratis voor de klant.</p>
+          </div>
+        </div>
+      )}
 
       <div className="rd-card-white" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
@@ -450,7 +617,9 @@ export function PartnerForm() {
           <input id="pf-code" className="rd-input" style={{ ...veld, textTransform: "uppercase", fontFamily: "monospace" }} value={code} onChange={(e) => setCode(alleenCode(e.target.value))} minLength={4} maxLength={30} required autoComplete="off" spellCheck={false} />
           <p style={veldUitleg}>{codeAnders
             ? `De oude code ${oud!.afspraken.kortingscode.toUpperCase()} gaat uit. Bestellingen die ermee zijn gedaan blijven meetellen voor de commissie.`
-            : "4 tot 30 letters en cijfers. De webshop maakt de code zelf aan: op alle producten, niet op kleuradvies en verzending, niet te combineren met andere codes."}</p>
+            : makelaar
+              ? "4 tot 30 letters en cijfers. Deze code staat op het kaartje in het cadeaublik en mag ook los worden gedeeld: korting op verf en materialen, niet op kleuradvies, niet te combineren met andere codes."
+              : "4 tot 30 letters en cijfers. De webshop maakt de code zelf aan: op alle producten, niet op kleuradvies en verzending, niet te combineren met andere codes."}</p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 180px" }}>
@@ -484,7 +653,9 @@ export function PartnerForm() {
       </div>
 
       <div className="rd-card-white" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 16 }}>
-        {nieuw ? (
+        {nieuw && makelaar ? (
+          <p style={{ ...veldUitleg, margin: 0 }}>Een cadeaukaart is 12 maanden geldig en een klant blijft 12 maanden aan de makelaar gekoppeld. Na het aanmaken plaats je op de pagina van de partner het logo en de foto's, maak je de kaartcodes en geef je mensen toegang.</p>
+        ) : nieuw ? (
           <div>
             <label style={veldKop} htmlFor="pf-tag">Naam in de links</label>
             <input id="pf-tag" className="rd-input" style={{ ...veld, fontFamily: "monospace" }} value={tagNu} onChange={(e) => { setTagZelf(true); setTag(alleenCode(e.target.value)); }} maxLength={40} autoComplete="off" spellCheck={false} />
@@ -498,7 +669,7 @@ export function PartnerForm() {
               <option value="gepauzeerd">Gepauzeerd: de code staat tijdelijk uit</option>
               <option value="gestopt">Gestopt: de code staat uit</option>
             </select>
-            <p style={veldUitleg}>Bij gepauzeerd en gestopt werkt de code niet voor klanten. De cijfers en de commissie blijven staan en de partner kan blijven inloggen om af te rekenen.</p>
+            <p style={veldUitleg}>Bij gepauzeerd en gestopt {makelaar ? "werken de kortingscode en de code voor aan huis niet voor klanten. Cadeaukaarten die al zijn uitgedeeld blijven geldig: dat cadeau is van de klant." : "werkt de code niet voor klanten."} De cijfers en de commissie blijven staan en de partner kan blijven inloggen om af te rekenen.</p>
           </div>
         )}
       </div>
@@ -508,7 +679,7 @@ export function PartnerForm() {
         <button type="submit" className="rd-btn rd-btn-primary" style={{ width: "auto", padding: "0 24px" }} disabled={bezig}>{bezig ? "Bezig..." : nieuw ? "Maak de partner aan" : "Sla op"}</button>
         <Link to={nieuw ? "/dashboard/partners" : `/dashboard/partners/${slug}`} className="rd-btn rd-btn-outline" style={{ width: "auto", padding: "0 24px", textDecoration: "none" }}>Annuleer</Link>
       </div>
-      {nieuw && <p className="rd-sub" style={{ fontSize: 13 }}>Na het aanmaken geef je op de pagina van de partner mensen toegang tot het dashboard.</p>}
+      {nieuw && !makelaar && <p className="rd-sub" style={{ fontSize: 13 }}>Na het aanmaken geef je op de pagina van de partner mensen toegang tot het dashboard.</p>}
     </form>
   );
 }

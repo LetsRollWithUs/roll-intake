@@ -21,7 +21,7 @@ const KEY = Deno.env.get("OFFERTE_API_KEY") ?? "";
 const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/dashboard").replace(/\/$/, "");
 const LEES = ["lijst", "detail"];
 const LEDEN = ["lid_toevoegen", "lid_uitnodigen", "lid_verwijderen"];
-const BEHEER = ["partner_opslaan", "partner_verwijderen"];
+const BEHEER = ["partner_opslaan", "partner_verwijderen", "partner_beeld", "partner_codes"];
 
 /** Vraag aan roll.nl; een nette melding van daar (naam bestaat al, code bezet) geven we door. */
 async function naarWinkel(pad: string, invoer: unknown): Promise<{ ok: boolean; status: number; uit: any; melding: string | null }> {
@@ -105,16 +105,34 @@ Deno.serve(async (req) => {
         await admin.from("partners").delete().eq("slug", slug);
         return json({ ok: true });
       }
-      const soort = "merk" === body?.soort ? "merk" : "creator";
+      // Een beeld voor de cadeaupagina van een makelaar (logo, foto van het team, foto van het cadeaublik).
+      if ("partner_beeld" === body.action) {
+        const data = String(body?.data ?? "");
+        if (!["logo", "foto", "blik"].includes(body?.soort) || !data || data.length > 4_400_000) return json({ error: "Kies een jpg-, png- of webp-afbeelding tot 3 MB." }, 400);
+        const w = await naarWinkel("partner-beeld", { slug, soort: body.soort, data });
+        if (!w.ok) return json({ error: w.melding ?? "Het beeld opslaan lukte niet. Probeer het opnieuw." }, w.melding ? w.status : 502);
+        return json({ ok: true });
+      }
+      // Nieuwe kaartcodes voor een makelaar. Alleen in dit antwoord leesbaar.
+      if ("partner_codes" === body.action) {
+        const w = await naarWinkel("partner-codes", { slug, aantal: Math.max(1, Math.min(200, Number(body?.aantal) || 25)), test: true === body?.test });
+        if (!w.ok || !Array.isArray(w.uit?.codes)) return json({ error: w.melding ?? "Codes maken lukte niet. Probeer het opnieuw." }, w.melding ? w.status : 502);
+        return json({ ok: true, codes: w.uit.codes });
+      }
+      const soort = ["makelaar", "merk"].includes(body?.soort) ? body.soort : "creator";
       const tekst = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
       const w = await naarWinkel("partner", {
-        slug, naam: tekst(body?.naam, 60), voornamen: tekst(body?.voornamen, 60), plaats: tekst(body?.plaats, 60),
+        slug, type: "makelaar" === soort ? "makelaar" : "creator", naam: tekst(body?.naam, 60), voornamen: tekst(body?.voornamen, 60), plaats: tekst(body?.plaats, 60),
         kortingscode: tekst(body?.kortingscode, 40), korting: Number(body?.korting) || 0, commissie: Number(body?.commissie) || 0,
         commissieVanaf: tekst(body?.commissieVanaf, 10), start: tekst(body?.start, 10), status: tekst(body?.status, 12), utmSource: tekst(body?.utmSource, 40),
+        // Alleen voor makelaars: het adres van de cadeaupagina, de letters voor de kaartcodes en kleuradvies aan huis.
+        adres: tekst(body?.adres, 40), prefix: tekst(body?.letters, 3), thuisCode: tekst(body?.thuisCode, 30), thuisPrijs: tekst(body?.thuisPrijs, 8),
+        geldigMnd: Number(body?.geldigMnd) || 0, koppelingMnd: Number(body?.koppelingMnd) || 0,
       });
       if (!w.ok || !w.uit?.partner) return json({ error: w.melding ?? "Opslaan lukte niet. Probeer het over een minuut opnieuw." }, w.melding ? w.status : 502);
       const p = w.uit.partner;
-      const { error: fout } = await admin.from("partners").upsert({ slug: p.slug, soort, naam: p.naam, actief: true }, { onConflict: "slug" });
+      // De soort volgt de webshop: een makelaar blijft een makelaar, een creator kan ook een merk heten.
+      const { error: fout } = await admin.from("partners").upsert({ slug: p.slug, soort: "makelaar" === p.type ? "makelaar" : "merk" === soort ? "merk" : "creator", naam: p.naam, actief: true }, { onConflict: "slug" });
       if (fout) console.error("partners-beheer: partner bijwerken in het dashboard", fout.message);
       return json({ ok: true, slug: p.slug });
     }
