@@ -256,7 +256,7 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
           {(p.bezoek.links ?? []).length === 0
             ? <p className="rd-sub" style={{ margin: 0 }}>Zodra iemand via een link met jullie tag binnenkomt, zie je dat hier per print.</p>
             : (p.bezoek.links ?? []).map((l) => (
-              <div key={l.naam} style={rij}><strong>{l.naam}</strong><span style={{ fontVariantNumeric: "tabular-nums" }}><strong>{getal(l.aantal)}</strong> <span style={{ opacity: 0.6, fontSize: 13 }}>bezoeken</span></span></div>
+              <div key={l.naam} style={rij}><strong>{l.naam}</strong><span style={{ fontVariantNumeric: "tabular-nums" }}><strong>{getal(l.aantal)}</strong> <span style={{ opacity: 0.6, fontSize: 13 }}>{l.aantal === 1 ? "bezoek" : "bezoeken"}</span></span></div>
             ))}
           <p className="rd-sub" style={{ margin: "10px 0 0", fontSize: 13 }}>Dit meet het bezoek. De commissie volgt de kortingscode: een bestelling via een link telt mee voor de commissie als jullie code is gebruikt. Bestellingen via een link zien we alleen als de bezoeker cookies toestaat, dus het echte aantal ligt hoger.</p>
         </div>
