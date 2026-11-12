@@ -30,14 +30,17 @@ import { loadNotifications } from "./notifications";
 import { PartnerHome, PartnerDashboard, PartnerAfrekening, type Partner } from "./PartnerHome";
 import { PartnersPage, PartnerDetail, StylisteDetail } from "./PartnersPage";
 
-// Menubalk in roll.nl-stijl: paarse afgeronde balk, wit menu, roze Roll-logo in het midden.
+// Menubalk in roll.nl-stijl: paarse afgeronde balk, roze Roll-logo links, het menu ernaast op één regel.
 const BAR_CSS = `
-.rd-topbar{max-width:1120px;margin:0 auto;background:var(--rd-aubergine);color:#fff;border-radius:16px;padding:0 18px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:62px;gap:12px}
-.rd-topbar nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.rd-topbar{max-width:1120px;margin:0 auto;background:var(--rd-aubergine);color:#fff;border-radius:16px;padding:0 14px 0 18px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"logo nav right";align-items:center;min-height:62px;gap:14px}
+.rd-topbar>nav{grid-area:nav;display:flex;align-items:center;gap:2px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.rd-topbar>nav::-webkit-scrollbar{display:none}
+.rd-topbar>.rd-logo{grid-area:logo}
+.rd-topbar>.rd-right{grid-area:right}
 .rd-topbar .rd-nl{color:rgba(255,255,255,.82);text-decoration:none;font-weight:600;font-size:15px;padding:8px 12px;border-radius:99px;line-height:1.4;white-space:nowrap;transition:background .12s ease,color .12s ease}
 .rd-topbar .rd-nl:hover{color:#fff;background:rgba(255,255,255,.08)}
 .rd-topbar .rd-nl.active{color:#fff;background:rgba(255,255,255,.14)}
-.rd-topbar .rd-logo{display:flex;align-items:center;text-decoration:none;padding:4px 6px}
+.rd-topbar .rd-logo{display:flex;align-items:center;text-decoration:none;padding:4px 6px 4px 0}
 .rd-topbar .rd-right{display:flex;align-items:center;justify-content:flex-end;gap:4px}
 .rd-topbar .rd-ico{position:relative;width:40px;height:40px;border-radius:99px;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none;transition:background .12s ease}
 .rd-topbar .rd-ico:hover,.rd-topbar .rd-ico.active{background:rgba(255,255,255,.12)}
@@ -48,10 +51,9 @@ const BAR_CSS = `
 .rd-menu a:hover,.rd-menu button:hover{background:var(--rd-grey-light)}
 .rd-menu .rd-sep{height:1px;background:var(--rd-line);margin:4px 6px}
 @media (max-width:860px){
-  .rd-topbar{grid-template-columns:1fr auto;grid-template-areas:"logo right" "nav nav";padding:8px 12px 6px}
-  .rd-topbar>nav{grid-area:nav;justify-content:center}
-  .rd-topbar>.rd-logo{grid-area:logo;justify-self:start}
-  .rd-topbar>.rd-right{grid-area:right}
+  .rd-topbar{grid-template-columns:1fr auto;grid-template-areas:"logo right" "nav nav";padding:8px 12px 6px;row-gap:2px}
+  .rd-topbar>nav{flex-wrap:wrap;overflow:visible;justify-content:flex-start;margin:0 -6px}
+  .rd-topbar>.rd-logo{justify-self:start}
   .rd-topbar .rd-nl{font-size:14px;padding:6px 10px}
 }
 `;
@@ -142,7 +144,7 @@ export function Dashboard() {
             : <NavLink to="/dashboard" end className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Overzicht</NavLink>}
         </nav>
         <Link to="/dashboard" className="rd-logo" aria-label="Roll dashboard">
-          <img src={`${import.meta.env.BASE_URL}roll-advies-logo.png`} alt="Roll" style={{ height: 40, width: "auto", display: "block" }} />
+          <img src={`${import.meta.env.BASE_URL}roll-logo.png`} alt="Roll" style={{ height: 30, width: "auto", display: "block" }} />
         </Link>
         <div className="rd-right">
           <div ref={menuRef} style={{ position: "relative" }}>
@@ -176,7 +178,7 @@ export function Dashboard() {
               {isAdmin && <NavLink to="/dashboard/partners" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Partners</NavLink>}
             </nav>
             <Link to="/dashboard" className="rd-logo" aria-label="Roll dashboard">
-              <img src={`${import.meta.env.BASE_URL}roll-advies-logo.png`} alt="Roll" style={{ height: 40, width: "auto", display: "block" }} />
+              <img src={`${import.meta.env.BASE_URL}roll-logo.png`} alt="Roll" style={{ height: 30, width: "auto", display: "block" }} />
             </Link>
             <div className="rd-right">
               <NavLink to="/dashboard/onboarding" className={({ isActive }) => `rd-nl${isActive ? " active" : ""}`}>Uitleg</NavLink>
