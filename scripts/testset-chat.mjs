@@ -189,6 +189,9 @@ function eindWaarde( sleutel, r ) {
 	if ( sleutel === 'samples' ) return ( p?.samples ?? [] ).map( ( s ) => s.naam );
 	if ( [ 'spullen', 'wanneer', 'doel', 'spuiten' ].includes( sleutel ) ) return w( p?.[ sleutel ] );
 	const ru = ruimteVan( p, d[ 0 ] ), vl = vlakVan( ru, d[ 1 ] );
+	// De maat van de ruimte zelf: woonkamer.maat.omtrek, woonkamer.maat.lengte, woonkamer.hoogte.
+	if ( d[ 1 ] === 'maat' && d.length === 3 ) return w( ru?.maat?.[ d[ 2 ] ] );
+	if ( d[ 1 ] === 'hoogte' && d.length === 2 ) return w( ru?.hoogte );
 	if ( d.length === 2 ) return vl ? 'bestaat' : 'bestaat niet';
 	if ( d[ 2 ] === 'kleur' ) return vl ? { status: vl.kleur.status, naam: kleurNaam( vl ) } : null;
 	if ( d[ 2 ] === 'ondergrond' ) return vl ? w( vl.ondergrond[ d[ 3 ] ] ) : null;

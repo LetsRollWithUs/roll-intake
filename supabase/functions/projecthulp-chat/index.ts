@@ -210,7 +210,7 @@ ruimte woonkamer            | ruimte- keuken   (types: woonkamer, slaapkamer, ke
 vlak woonkamer plafond      | vlak- woonkamer plafond   (lakwerk: vlak woonkamer deuren; ook kozijnen, plinten, lambrisering, radiatoren)
 woonkamer.deuren aantal 3   | woonkamer.deuren glans zijdeglans (mat/zijdeglans/hoogglans; buiten nooit mat)
 lakwerk buiten: ruimte anders "Lakwerk buiten" | anders buiten ja | vlak- anders muren | vlak anders deuren
-woonkamer maat 5x4          | woonkamer grootte middel (klein/middel/groot) | woonkamer hoogte 2.8 | woonkamer glas 3x2.2
+woonkamer maat 5x4          | woonkamer grootte middel (klein/middel/groot) | woonkamer hoogte 2.8 | woonkamer glas 3x2.2 | woonkamer muurlengte 19.6 (alle muren samen, in meters)
 woonkamer.muren renovlies ja (of nee) | woonkamer.muren lagen 1 (of 2, of standaard) | woonkamer.muren afwerking muurverf   (velden: materiaal stucwerk/gipsplaat/beton/onbekend, afwerking geen/muurverf/renovlies/behang/onbekend, kleurNu licht/midden/donker/onbekend, structuur glad/structuur/onbekend, conditie goed/scheurtjes/scheuren/bladdert/vocht/onbekend)
 woonkamer.accent breedte 4
 woonkamer.muren kies Sage Blink      (ook: kandidaat, favoriet, afwijzen; richting licht beige; open)
@@ -236,7 +236,7 @@ DE MUREN NU: vraag "ondergrond" (de server zet de chips erbij) en vraag alleen n
 
 DUBBELZINNIG, ALTIJD KORT BEVESTIGEN: "plafond wit laten" (niet schilderen of opnieuw wit?), "nieuwbouw" (kaal of al geschilderd?), "alles wit" (welke onderdelen, welk wit?), "20 vierkante meter" (vloer of muren?).
 
-MAAT: gewone ramen en deuren trekken we niet af (dat is onze marge: liever iets te veel verf dan te weinig); beloof dus niet dat je er rekening mee houdt. Een grote raampartij of schuifpui mag de klant er wel af laten halen. Noemt hij er een, bied dat aan en vraag breedte en hoogte (stel 2,20 m hoogte voor en laat dat bevestigen); leg vast met "woonkamer glas 3x2.2" (meer stuks: "woonkamer glas 3x2.2 2x2"; weer meetellen: "woonkamer glas geen"). Zonder maat trek je niets af: leg glas pas vast als de klant breedte en hoogte noemde of jouw voorstel van 2,20 m bevestigde; stel je zelf 2,20 m voor, vraag het dan eerst. Lengte x breedte van de vloer is genoeg; anders vraag "maat". Chip "Ongeveer ... (klein)" = ruimte grootte klein, "(gemiddeld)" = grootte middel, "(groot)" = grootte groot. Noem de hoogte als aanname: "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust" en zet ruimte.hoogte in aannames.
+MAAT: gewone ramen en deuren trekken we niet af (dat is onze marge: liever iets te veel verf dan te weinig); beloof dus niet dat je er rekening mee houdt. Een grote raampartij of schuifpui mag de klant er wel af laten halen. Noemt hij er een, bied dat aan en vraag breedte en hoogte (stel 2,20 m hoogte voor en laat dat bevestigen); leg vast met "woonkamer glas 3x2.2" (meer stuks: "woonkamer glas 3x2.2 2x2"; weer meetellen: "woonkamer glas geen"). Zonder maat trek je niets af: leg glas pas vast als de klant breedte en hoogte noemde of jouw voorstel van 2,20 m bevestigde; stel je zelf 2,20 m voor, vraag het dan eerst. Lengte x breedte van de vloer is genoeg; anders vraag "maat". MUURLENGTE: noemt de klant de totale lengte van zijn muren ("de muren zijn samen 19,60 m", "de omtrek is 20 meter"), leg die dan meteen vast met "woonkamer muurlengte 19.6"; daarmee kloppen de muren precies en hoef je de grootte niet meer te schatten. Vraag alleen door als echt onduidelijk is of het getal de muren of de vloer in m² is. Doet het plafond mee, dan vraagt de server daarna zelf de vloer. Zeg nooit dat een maat "genoteerd" is als je hem niet met een opdracht vastlegde, en reken na een opgegeven muurlengte niet met een geschatte kamer. Chip "Ongeveer ... (klein)" = ruimte grootte klein, "(gemiddeld)" = grootte middel, "(groot)" = grootte groot. Noem de hoogte als aanname: "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust" en zet ruimte.hoogte in aannames.
 
 KLEUR (per vlak):
 - JE GEEFT ZELF GEEN KLEURADVIES. Zeg nooit dat een kleur mooi is, goed past, rustig maakt of een goede keuze is, en kies geen kleur voor de klant. Onderbouwd advies komt uit de kleurenscan op advies.roll.nl of van een stylist (online kleuradvies). Jij helpt met een richting, sample packs, en de weg naar die hulp.
@@ -253,7 +253,7 @@ KLEUR (per vlak):
 - Richting: "<ruimte>.muren richting <omschrijving>", dan stel_kleuren_voor en toon de kleuren als kaarten, neutraal ("Dit zijn onze lichte beiges"). Raad aan ze eerst als sample te bekijken, en bied de kleurenscan of een stylist aan als de klant hulp wil.
 - Duidelijke keuze = kies: "ik wil X", "doe die maar", "die eerste", "die wil ik", "X van merk Y wil ik" (dan de Roll-naam die zoek_kleur gaf). Twijfel tussen kleuren = kandidaat, nooit kies. Alleen "lijkt op", "zoiets als" of "in de richting van" een kleur is geen keuze: leg de gevonden kleur dan vast als kandidaat en vraag of de klant hem wil.
 - DE KLEURVRAAG in twee stappen. Vraag eerst alleen of de klant zijn kleur al weet: vraag "kleurroute" (de server zet "Ik weet mijn kleur" en "Ik weet het nog niet" erbij), bijvoorbeeld "Weet je al welke kleur de muren krijgen?". Noem in die vraag nog geen richting, scan of stylist.
-  - "Ik weet mijn kleur": vraag welke kleur het is ("Welke kleur wordt het? Typ de naam of de code; een kleur van een ander merk kan ook."), vraag "geen", zonder chips.
+  - "Ik weet mijn kleur": vraag welke kleur het is en laat de kleurfamilies zien ("Welke kleur wordt het? Kies hieronder een kleurrichting om de kleuren te zien, of typ de naam of de code. Een kleur van een ander merk kan ook."), vraag "richting", zonder chips.
 - Kleur nog onbekend ("Ik weet het nog niet", "geen idee", "weet ik nog niet") en geen richting genoemd: vraag "geen-idee". De server zet vier keuzes erbij; noem ze in je tekst niet allemaal op, zeg alleen kort dat dat helemaal goed is en dat de klant kan kiezen hoe hij verder wil. Gebruik "geen-idee" nooit als eerste kleurvraag.
   - "Ik heb wel een richting" (of "Ik weet de richting"): de server toont alle kleurfamilies als tegels met voorbeeldkleuren. Wil je zelf naar een richting vragen, gebruik dan vraag "richting" en noem geen losse voorbeelden of eigen chips met kleuren. Noemt de klant een richting: richting vastleggen, stel_kleuren_voor en de kleuren als kaarten met het sample pack.
   - "Doe de kleurenscan": de server start de korte kleurenscan hier in het gesprek (een paar vragen over licht, vloer en gevoel) en toont daarna drie kleuren als kaarten met het sample pack. Jij hoeft dan niets te doen. Vraagt de klant wat de scan is, zeg dat kort. De uitgebreide scan op advies.roll.nl noem je alleen als de klant erom vraagt.
@@ -265,6 +265,7 @@ KLEUR (per vlak):
 
 SAMPLEKLEUREN: staan er in de stand samplekleuren van de klant (kleuren die hij al als sample heeft, via de link in een mail), toon die bij een vraag naar de muurkleur eerst als kaarten (antwoord.kaarten, antwoord.voor op dat onderdeel) en vraag welke het wordt. Zet ze niet opnieuw als sample in het pakket: die heeft de klant al.
 
+LAKWERK NIET DUBBEL VRAGEN: de meters plint of lambrisering volgen uit de maat van de ruimte, vraag er nooit naar. Staan de staat en de glans van het lakwerk al in het plan, vraag ze niet opnieuw, ook niet nadat de klant de kleur koos.
 LAKWERK: zegt de klant hoe het lakwerk nu is, leg dat vast ("de deuren zijn wit gelakt" = <ruimte>.deuren afwerking lak en <ruimte>.deuren kleurNu licht; "kaal hout" = afwerking geen en materiaal hout). De kleur die het nu heeft is geen keuze voor de nieuwe kleur. Vraag wat de klant wil schilderen (vraag "onderdelen") en daarna aantallen, staat en glans (vraag "lak"). De kleur van lakwerk kiest de klant zelf: wit, zelfde als de muren, een bijpassende wittint of een andere kleur; nooit automatisch wit. "Wit zoals nu" = toon de witte tinten (zie WIT). Houtrot, eerder gelakte muren of vermoeden van loodhoudende verf: actie "overdracht".
 
 KLEUR VAN PLAFOND EN LAKWERK: is de muurkleur gekozen (of kiest de klant die later) en staan plafond of lakwerk nog zonder kleur, vraag het dan een keer kort met vraag "kleur": de server toont snelle keuzes (wit, zelfde als de muren, bijpassende wittint, lichtere tint, andere kleur, later). Kiest de klant "andere kleur", toon dan kaarten met antwoord.voor op dat onderdeel.
@@ -473,7 +474,7 @@ function stand(p: any) {
   for (const r of p.ruimtes) {
     const l = w(r.maat.lengte), b = w(r.maat.breedte);
     const glas = (r.glas ?? []).map((x: any) => `${w(x.breedte)}x${w(x.hoogte)}`).join(" ");
-    regels.push(`${r.id} (${r.naam}${r.buiten ? ", buiten" : ""}): maat ${l && b ? `${g(r.maat.lengte)}x${g(r.maat.breedte)}` : `grootte ${g(r.maat.grootte)}`}, hoogte ${g(r.hoogte)}${glas ? `, glas eraf ${glas}` : ""}`);
+    regels.push(`${r.id} (${r.naam}${r.buiten ? ", buiten" : ""}): maat ${l && b ? `${g(r.maat.lengte)}x${g(r.maat.breedte)}` : w(r.maat.omtrek) ? `muurlengte ${g(r.maat.omtrek)} m (alle muren samen)` : `grootte ${g(r.maat.grootte)}`}, hoogte ${g(r.hoogte)}${glas ? `, glas eraf ${glas}` : ""}`);
     for (const v of r.vlakken) {
       const o = Object.entries(v.ondergrond).filter(([, x]) => x).map(([k, x]) => `${k}=${g(x)}`).join(" ");
       const k = v.kleur;
@@ -545,6 +546,8 @@ function parseRegels(regels: string[]) {
         if (m) { uit.push({ actie: "zet", ruimte, veld: "maat.lengte", waarde: m[1], zekerheid }, { actie: "zet", ruimte, veld: "maat.breedte", waarde: m[2], zekerheid }); continue; }
       }
       if ("grootte" === veld) { uit.push({ actie: "zet", ruimte, veld: "maat.grootte", waarde: tekst, zekerheid }); continue; }
+      // De totale lengte van alle muren samen (de omtrek), als de klant die noemt in plaats van lengte x breedte.
+      if ("muurlengte" === veld) { uit.push({ actie: "zet", ruimte, veld: "maat.omtrek", waarde: tekst.replace(/\s*m(eter)?$/i, ""), zekerheid }); continue; }
       if ("buiten" === veld) { uit.push({ actie: "zet", ruimte, veld: "buiten", waarde: !/^(nee|uit|false)$/i.test(tekst), zekerheid }); continue; }
       if ("glas" === veld) {
         // "3x2.2 2x2" = twee raampartijen; "geen" = niets aftrekken.
@@ -589,7 +592,7 @@ function chipsVoor(vraag: string, project: any, eigen: string[] = []) {
     case "plafond": return ["Nee", "Ja, wit", "Ja, in de muurkleur", "Weet ik nog niet"];
     case "spullen": return ["Nog niets, zet alles klaar", "Ik heb al spullen", "Er komt een schilder"];
     case "maat": {
-      const r = project.ruimtes.find((x: any) => !(telt(x.maat.lengte) && telt(x.maat.breedte)) && !telt(x.maat.grootte)) ?? project.ruimtes[0];
+      const r = project.ruimtes.find((x: any) => !maatBekend(x)) ?? project.ruimtes[0];
       return r ? [...maatChips(r.type), "Weet ik niet"] : [];
     }
     case "kleurroute": return [WEET_KLEUR, WEET_NIET];
@@ -625,7 +628,15 @@ const SCAN_CHIP = /^doe de kleurenscan\.?$/i;
 const MAIL_CHIPS = /^(doe de kleurenscan|boek online kleuradvies|later kiezen)\.?$/i;
 const START_TYPES = ["woonkamer", "slaapkamer", "keuken", "eetkamer", "badkamer", "toilet", "hal", "werkkamer", "kinderkamer", "anders"];
 
-const maatNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) || VOLGT_UIT_MAAT.includes(v.soort)) && !(telt(r.maat.lengte) && telt(r.maat.breedte)) && !telt(r.maat.grootte);
+/**
+ * Is de maat van de ruimte bekend? Lengte x breedte of een gekozen grootte altijd. De totale muurlengte is genoeg
+ * voor de muren en het lakwerk; doet het plafond mee, dan is ook de vloer nodig (feedback 12 nov 2026).
+ */
+const metPlafond = (r: any) => r.vlakken.some((v: any) => "plafond" === v.soort);
+const maatBekend = (r: any) => (telt(r.maat.lengte) && telt(r.maat.breedte)) || telt(r.maat.grootte) || (telt(r.maat.omtrek) && !metPlafond(r));
+/** De muren zijn bekend via de muurlengte, alleen de vloer voor het plafond ontbreekt nog. */
+const vloerVoorPlafond = (r: any) => telt(r.maat.omtrek) && metPlafond(r) && !(telt(r.maat.lengte) && telt(r.maat.breedte)) && !telt(r.maat.grootte);
+const maatNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) || VOLGT_UIT_MAAT.includes(v.soort)) && !maatBekend(r);
 const murenNodig = (r: any) => r.vlakken.some((v: any) => !isLak(v.soort) && (null == w(v.ondergrond.afwerking) || null == w(v.ondergrond.conditie)));
 const lakNodig = (r: any) => r.vlakken.some((v: any) => isLak(v.soort) && (null == w(v.ondergrond.afwerking) || !telt(v.glans) || (TELBAAR.includes(v.soort) && null == w(v.aantal))));
 /** Een ruimte die alleen lakwerk heeft (de tegel "Alleen deuren, kozijnen of plinten"). */
@@ -661,6 +672,7 @@ function maakFormulier(soort: string, project: any, alleenRuimtes?: string[], op
       ruimtes: rr.map((r: any) => ({ id: r.id, naam: alleenLak(r) ? "De ruimte met de plinten" : r.naam, lengte: w(r.maat.lengte), breedte: w(r.maat.breedte), grootte: !w(r.maat.lengte) && telt(r.maat.grootte) ? w(r.maat.grootte) : "", schattingen: maatSchatting(alleenLak(r) ? "standaard" : r.type) })),
       hoogte: w(rr[0].hoogte) ?? 2.6,
       muren: rr.some((r: any) => r.vlakken.some((v: any) => "muren" === v.soort || "accent" === v.soort)),
+      ...(!opnieuw && rr.every(vloerVoorPlafond) ? { voorPlafond: true } : {}),
     };
   }
   if ("muren" === soort) {
@@ -692,7 +704,11 @@ const volgendeFormulier = (project: any) => maakFormulier("maat", project) ?? ma
 const klein = (n: string) => n.charAt(0).toLowerCase() + n.slice(1);
 function formVraag(f: any) {
   const een = 1 === f.ruimtes?.length ? f.ruimtes[0].naam : "";
-  if ("maat" === f.soort) return een ? `Hoe groot is de ${klein(een)}?` : "Hoe groot zijn de ruimtes?";
+  if ("maat" === f.soort) {
+    // De muren staan er al via de muurlengte: zeg waarom we de vloer toch vragen.
+    if (f.voorPlafond) return een ? `Voor het plafond heb ik ook de vloer nodig. Hoe lang en breed is de ${klein(een)}?` : "Voor de plafonds heb ik ook de vloer nodig. Hoe lang en breed zijn de ruimtes?";
+    return een ? `Hoe groot is de ${klein(een)}?` : "Hoe groot zijn de ruimtes?";
+  }
   if ("muren" === f.soort) return een ? `Hoe zien de muren van de ${klein(een)} er nu uit?` : "Hoe zien de muren er nu uit?";
   if ("lak" === f.soort) {
     if (!f.ruimtes.every((r: any) => r.vlakken.every((v: any) => "meubel" === v.soort))) return "En het lakwerk?";
@@ -815,7 +831,7 @@ function formulierWijzigingen(f: any, project: any): { wijzigingen: any[]; tekst
       const m = v.ruimtes[r.id];
       const l = inMeters(getal(m.lengte), 20), b = inMeters(getal(m.breedte), 20);
       if (l && b) { zet(r, null, "maat.lengte", l); zet(r, null, "maat.breedte", b); delen.push(`${r.naam}: ${nl(l)} × ${nl(b)} m`); }
-      else if (["klein", "middel", "groot"].includes(m.grootte)) { if (w(r.maat.lengte) || w(r.maat.breedte)) zet(r, null, "maat.wis", true); zet(r, null, "maat.grootte", m.grootte); delen.push(`${r.naam}: ${maatSchatting(alleenLak(r) ? "standaard" : r.type).find((x) => x.grootte === m.grootte)?.label.toLowerCase()}`); }
+      else if (["klein", "middel", "groot"].includes(m.grootte)) { if (w(r.maat.lengte) || w(r.maat.breedte) || w(r.maat.omtrek)) zet(r, null, "maat.wis", true); zet(r, null, "maat.grootte", m.grootte); delen.push(`${r.naam}: ${maatSchatting(alleenLak(r) ? "standaard" : r.type).find((x) => x.grootte === m.grootte)?.label.toLowerCase()}`); }
       if (hg && r.vlakken.some((x: any) => !isLak(x.soort))) zet(r, null, "hoogte", hg);
       // Een grote raampartij of schuifpui die de klant eraf wil laten halen (optie in het formulier).
       const glas = (Array.isArray(m.glas) ? m.glas : []).map((x: any) => ({ breedte: inMeters(getal(x?.breedte), 12), hoogte: inMeters(getal(x?.hoogte), 4) })).filter((x: any) => x.breedte && x.hoogte);
@@ -1030,7 +1046,8 @@ function meePlan(plan: any, project: any) {
     const maat = (telt(r.maat.lengte) && telt(r.maat.breedte)) || telt(r.maat.grootte);
     for (const v of r.vlakken) {
       const lak = isLak(v.soort);
-      const maatOk = maat || (lak && !VOLGT_UIT_MAAT.includes(v.soort));
+      // Met alleen de muurlengte kloppen de muren en het lakwerk; het plafond wacht op de vloer.
+      const maatOk = maat || (telt(r.maat.omtrek) && "plafond" !== v.soort) || (lak && !VOLGT_UIT_MAAT.includes(v.soort));
       const aantalOk = !TELBAAR.includes(v.soort) || null != w(v.aantal);
       if (maatOk && aantalOk && null != w(v.ondergrond.afwerking)) mee.add(`${r.id}.${v.id}`);
     }
@@ -1530,7 +1547,9 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   if (familiesTonen) antwoord = { tekst: "Top. Welke kleurfamilie spreekt je aan?", vraag: "geen", actie: "geen" };
   // De twee knoppen van de kleurvraag: vaste antwoorden, zonder model.
   if (!antwoord && bericht.trim().replace(/\.$/, "").toLowerCase() === WEET_KLEUR.toLowerCase()) {
-    antwoord = { tekst: "Top. Welke kleur wordt het? Typ de naam of de code; een kleur van een ander merk kan ook.", vraag: "geen", actie: "geen" };
+    // Met de kleurfamilies eronder: wie zijn kleur weet tikt hem zo aan, typen kan ook (feedback 12 nov 2026).
+    antwoord = { tekst: "Top. Welke kleur wordt het? Kies hieronder een kleurrichting om de kleuren te zien, of typ de naam of de code. Een kleur van een ander merk kan ook.", vraag: "geen", actie: "geen" };
+    familiesTonen = true;
   }
   // Renovlies bij grotere scheuren: de drie keuzes uit renovliesVraag, zonder model.
   const renoKeuze = !antwoord ? [RENO_JA, RENO_NEE, RENO_FOTO].find((c) => c.toLowerCase() === bericht.trim().replace(/\.$/, "").toLowerCase()) : undefined;
@@ -2028,7 +2047,7 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // De standaardhoogte is een aanname die de klant moet zien. Staat de maat er en noemde het model de hoogte nog niet,
   // dan zet de server de zin erbij, één keer per gesprek. Anders blijft de hoogte "nog checken" en komt de bestelkaart
   // een beurt later (g01 hing hierdoor van het model af, volledige poort 10 nov 2026).
-  const hoogteOpen = project.ruimtes.some((r: any) => !telt(r.hoogte) && r.vlakken.some((v: any) => ["muren", "accent"].includes(v.soort)) && ((telt(r.maat.lengte) && telt(r.maat.breedte)) || telt(r.maat.grootte)));
+  const hoogteOpen = project.ruimtes.some((r: any) => !telt(r.hoogte) && r.vlakken.some((v: any) => ["muren", "accent"].includes(v.soort)) && ((telt(r.maat.lengte) && telt(r.maat.breedte)) || telt(r.maat.grootte) || telt(r.maat.omtrek)));
   const hoogteGetoond = (rij.gesprek as any[]).some((b) => (b.uit?.antwoord?.aannames ?? []).some((a: string) => /\.hoogte$/.test(String(a))));
   if (hoogteOpen && !hoogteGetoond && !zonderModel && !antwoord.formulier && "maat" !== FORM_VRAGEN[antwoord.vraag] && "overdracht" !== antwoord.actie && !/2,60\s?m/.test(String(antwoord.tekst ?? ""))) {
     const zin = "We rekenen met muren van 2,60 m; klopt dat niet, zeg het gerust.";
@@ -2046,6 +2065,16 @@ async function beurt(sessie: string, aanvraagId: string, bericht: string, tik: a
   // Een vaste vraag van het model (maat, muren, onderdelen, lakwerk) wordt een formulier, als er nog iets te vragen is.
   const vraagForm = FORM_VRAGEN[antwoord.vraag];
   const formulierUit = antwoord.formulier ?? ("kleur" === vraagForm ? kleurFormulier(project, await ixP) : vraagForm && ("meubel" !== vraagForm || kanMeubel) ? maakFormulier(vraagForm, project) : null);
+  // Vangnet: het model stelt een vaste vraag (maat, muren, lakwerk) terwijl daar niets meer te vragen is,
+  // bijvoorbeeld opnieuw de staat en glans van de plinten. Die vraag gaat eruit; wat er al staat blijft staan
+  // (feedback 12 nov 2026).
+  if (["maat", "muren", "lak"].includes(vraagForm) && !formulierUit && !zonderModel) {
+    const zonderVraag = zinnenVan(String(antwoord.tekst ?? "")).filter((z) => !/\?\s*$/.test(z)).join("").trim();
+    controleLog.push({ poging: "vangnet", fouten: [{ id: "vraag-zonder-formulier", stuk: `${antwoord.vraag}: niets meer te vragen, vraag weggelaten` }] });
+    antwoord.tekst = zonderVraag || "Genoteerd.";
+    antwoord.vraag = "geen";
+    antwoord.chips = [];
+  }
   if ("ruimte" === antwoord.vraag) { antwoord.ruimteKeuze = true; antwoord.vraag = "geen"; }
   if ("richting" === antwoord.vraag) { familiesTonen = true; antwoord.vraag = "geen"; }
   const families = familiesTonen ? familiesVoorKeuze(await ixP) : null;

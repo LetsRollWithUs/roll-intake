@@ -55,6 +55,8 @@ export const VOLGORDE = [ 'samples-eerst', 'verf-erbij' ];
 export const GRENZEN = {
 	lengte: [ 1, 20 ],
 	breedte: [ 1, 20 ],
+	// De totale lengte van alle muren samen (de omtrek van de kamer), als de klant die opgeeft in plaats van lengte x breedte.
+	omtrek: [ 4, 80 ],
 	hoogte: [ 2, 5 ],
 	extra: [ 0, 200 ],
 	aantal: [ 0, 20 ],
@@ -121,7 +123,7 @@ export function nieuweRuimte( id, type, naam ) {
 		id,
 		type,
 		naam: naam || RUIMTE_NAMEN[ type ] || type,
-		maat: { grootte: gegeven( STANDAARD.grootte, 'aangenomen', 'roll' ), lengte: null, breedte: null },
+		maat: { grootte: gegeven( STANDAARD.grootte, 'aangenomen', 'roll' ), lengte: null, breedte: null, omtrek: null },
 		hoogte: gegeven( STANDAARD.hoogte, 'aangenomen', 'roll' ),
 		extra: null,
 		glas: [],

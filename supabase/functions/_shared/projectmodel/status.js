@@ -27,6 +27,9 @@ export function belangrijk( ruimte, vlak ) {
 	if ( ! isLak( vlak.soort ) ) {
 		if ( heeftMaat ) {
 			lijst.push( [ 'maat.lengte', maat.lengte ], [ 'maat.breedte', maat.breedte ] );
+		} else if ( w( maat.omtrek ) && 'plafond' !== vlak.soort ) {
+			// De klant gaf de totale muurlengte: genoeg voor de muren, niet voor het plafond (dat vraagt de vloer).
+			lijst.push( [ 'maat.omtrek', maat.omtrek ] );
 		} else {
 			lijst.push( [ 'maat.grootte', maat.grootte ] );
 		}

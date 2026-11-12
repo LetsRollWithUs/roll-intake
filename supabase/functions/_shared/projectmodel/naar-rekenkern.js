@@ -97,6 +97,9 @@ export function naarRekenkern( project ) {
 	const ruimtes = project.ruimtes.map( ( r ) => {
 		const l = w( r.maat.lengte );
 		const b = w( r.maat.breedte );
+		// Gaf de klant de totale muurlengte, dan rekenen we met een vierkante vloer met die omtrek: de muren kloppen dan
+		// precies (omtrek x hoogte). Voor een plafond vraagt de chat de vloer apart; tot die er is, is dit de bovengrens.
+		const o = w( r.maat.omtrek );
 		const muren = r.vlakken.find( ( v ) => 'muren' === v.soort );
 		// Een schuifpui of raampartij gaat alleen af met een bruikbare maat; de rekenkern rekent 4 m² per stuk,
 		// dus we ronden naar beneden af (liever iets te veel verf).
@@ -124,7 +127,7 @@ export function naarRekenkern( project ) {
 			type: r.type,
 			naam: r.naam,
 			grootte: w( r.maat.grootte, 'middel' ),
-			vloer: l && b ? { l, b } : null,
+			vloer: l && b ? { l, b } : ( o ? { l: Math.round( o / 4 * 100 ) / 100, b: Math.round( o / 4 * 100 ) / 100 } : null ),
 			hoogte: w( r.hoogte, '' ),
 			extra: w( r.extra, '' ),
 			glas: Math.floor( glasM2 / 4 ),

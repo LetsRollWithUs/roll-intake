@@ -224,7 +224,7 @@ export function toepassen( project, aanvraag, opties = {} ) {
 }
 
 /** Getallen die als tekst binnenkomen ("5", "2,6") worden getallen. */
-const GETAL_VELDEN = [ 'maat.lengte', 'maat.breedte', 'hoogte', 'extra', 'aantal', 'breedte', 'm2' ];
+const GETAL_VELDEN = [ 'maat.lengte', 'maat.breedte', 'maat.omtrek', 'hoogte', 'extra', 'aantal', 'breedte', 'm2' ];
 
 /**
  * Maakt een voorstel robuust: een ontbrekende ruimte-ID wordt het type (met een cijfer bij een tweede),
@@ -254,7 +254,7 @@ export function normaliseer( p, ruw ) {
 		wz.waarde = Math.round( wz.waarde );
 	}
 	// Maten in centimeters ("270 bij 280", "hoogte 260") worden meters.
-	const MAX = { 'maat.lengte': GRENZEN.lengte[ 1 ], 'maat.breedte': GRENZEN.breedte[ 1 ], hoogte: wz.vlak ? GRENZEN.accentHoogte[ 1 ] : GRENZEN.hoogte[ 1 ], breedte: GRENZEN.accentBreedte[ 1 ] };
+	const MAX = { 'maat.lengte': GRENZEN.lengte[ 1 ], 'maat.breedte': GRENZEN.breedte[ 1 ], 'maat.omtrek': GRENZEN.omtrek[ 1 ], hoogte: wz.vlak ? GRENZEN.accentHoogte[ 1 ] : GRENZEN.hoogte[ 1 ], breedte: GRENZEN.accentBreedte[ 1 ] };
 	if ( MAX[ wz.veld ] ) {
 		wz.waarde = inMeters( wz.waarde, MAX[ wz.veld ] );
 	}
@@ -321,6 +321,13 @@ function zet( p, r, v, wz, ctx ) {
 			// De klant past zijn maat aan naar een schatting: de oude lengte en breedte gaan weg, anders tellen die nog.
 			r.maat.lengte = null;
 			r.maat.breedte = null;
+			r.maat.omtrek = null;
+		} else if ( 'maat' === a && 'omtrek' === b ) {
+			// De totale lengte van alle muren samen. Daarmee kloppen de muren precies; de vloer (voor een plafond) volgt er niet uit.
+			if ( ! binnen( waarde, GRENZEN.omtrek ) ) {
+				return vraag( wz, 'Klopt die lengte? We rekenen met muren van samen 4 tot 80 meter.' );
+			}
+			r.maat.omtrek = g( waarde, r.maat.omtrek );
 		} else if ( 'maat' === a && ( 'lengte' === b || 'breedte' === b ) ) {
 			if ( ! binnen( waarde, GRENZEN[ b ] ) ) {
 				return vraag( wz, 'Klopt die maat? We rekenen met lengtes tussen 1 en 20 meter.' );
@@ -331,6 +338,10 @@ function zet( p, r, v, wz, ctx ) {
 				return vraag( wz, `Is je ${ r.naam.toLowerCase() } echt ${ waarde } bij ${ ander } meter?`, { veld: wz.veld, waarde } );
 			}
 			r.maat[ b ] = g( waarde, r.maat[ b ] );
+			// Met lengte en breedte rekenen we vanaf de vloer; een eerder opgegeven muurlengte vervalt, zodat er één maat geldt.
+			if ( w( r.maat.lengte ) && w( r.maat.breedte ) ) {
+				r.maat.omtrek = null;
+			}
 		} else if ( 'maat' === a && 'grootte' === b && [ 'klein', 'middel', 'groot' ].includes( waarde ) ) {
 			r.maat.grootte = g( waarde, r.maat.grootte );
 		} else if ( 'hoogte' === a && binnen( waarde, GRENZEN.hoogte ) ) {
