@@ -22,6 +22,26 @@ const DASHBOARD_BASE = (Deno.env.get("DASHBOARD_BASE_URL") ?? "https://roll.nl/d
 const LEES = ["lijst", "detail"];
 const LEDEN = ["lid_toevoegen", "lid_uitnodigen", "lid_verwijderen"];
 
+/**
+ * Geeft de webshop de lijst van wie er bij een partner hoort. Die is daar nodig omdat bestellingen van de partner
+ * zelf geen commissie opleveren.
+ */
+async function zetLedenDoor(admin: any, slug: string, partnerId: string): Promise<boolean> {
+  const { data } = await admin.from("partner_members").select("email").eq("partner_id", partnerId);
+  const emails = ((data as any[]) ?? []).map((m) => String(m.email).toLowerCase());
+  try {
+    const r = await fetch(`${WP}/wp-json/roll-partners/v1/partner-leden`, {
+      method: "POST", headers: { "content-type": "application/json", "X-Roll-Advies-Key": KEY }, body: JSON.stringify({ slug, emails }), signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) console.error("partners-beheer: leden doorzetten mislukt", slug, r.status);
+    else console.log("partners-beheer: leden doorgezet", slug, emails.length);
+    return r.ok;
+  } catch (e) {
+    console.error("partners-beheer: leden doorzetten", (e as Error).message);
+    return false;
+  }
+}
+
 /** Stuurt de uitnodiging: een eenmalige link om een wachtwoord te kiezen. Maakt het account aan als het er nog niet is. */
 async function nodigUit(admin: any, mail: string, naam: string, partner: string): Promise<boolean> {
   let link = await admin.auth.admin.generateLink({ type: "recovery", email: mail });
@@ -75,6 +95,7 @@ Deno.serve(async (req) => {
 
       if ("lid_verwijderen" === body.action) {
         if (lid) await admin.from("partner_members").delete().eq("id", lid.id);
+        await zetLedenDoor(admin, slug, (partner as any).id);
         return json({ ok: true });
       }
       if ("lid_toevoegen" === body.action) {
@@ -82,6 +103,7 @@ Deno.serve(async (req) => {
         else {
           const { error: fout } = await admin.from("partner_members").insert({ partner_id: (partner as any).id, email: mail, naam: naam || null });
           if (fout) { console.error("partners-beheer: lid toevoegen", fout.message); return json({ error: "Toegang geven lukte niet." }, 500); }
+          await zetLedenDoor(admin, slug, (partner as any).id);
         }
       } else if (!lid) return json({ error: "Dit adres heeft nog geen toegang." }, 404);
       // Net al een mail naar dit adres? Een nieuwe link maakt de vorige ongeldig, dus dan sturen we er geen tweede achteraan.
@@ -106,7 +128,16 @@ Deno.serve(async (req) => {
       const e: any = per.get(p.slug);
       return { ...p, id: e?.id ?? null, soort: e?.soort ?? p.type ?? "overig", actief: e ? !!e.actief : true, leden: e?.partner_members ?? [] };
     };
-    if ("detail" === body.action) return json({ partner: verrijk(uit.partner) });
+    if ("detail" === body.action) {
+      const p = verrijk(uit.partner);
+      // Loopt de lijst bij de webshop achter (bijvoorbeeld na een storing), dan zetten we hem hier alsnog door.
+      if (p.id && Array.isArray(uit.partner.ledenMails)) {
+        const hier = (p.leden as any[]).map((m) => String(m.email).toLowerCase()).sort().join(",");
+        const daar = (uit.partner.ledenMails as string[]).map((m) => String(m).toLowerCase()).sort().join(",");
+        if (hier !== daar) await zetLedenDoor(admin, slug, p.id);
+      }
+      return json({ partner: p });
+    }
     return json({ partners: (uit.partners ?? []).map(verrijk) });
   } catch (e) {
     console.error("partners-beheer:", (e as Error).message);
