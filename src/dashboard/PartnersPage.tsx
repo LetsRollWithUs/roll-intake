@@ -620,6 +620,8 @@ export function PartnerForm() {
       setPlaats(p.plaats ?? ""); setThuisPrijs(String(p.config?.thuisPrijs ?? 100));
       setNaam(p.naam); setVoornamen(p.config?.voornamen ?? ""); setCode(p.afspraken.kortingscode);
       setKorting(String(p.afspraken.kortingPct)); setCommissie(String(p.afspraken.commissiePct));
+      // Schilder zonder code voor klanten: begin bij 10% korting en 10% commissie als hij er een krijgt.
+      if (p.type === "schilder" && !p.afspraken.kortingscode) { setKorting("10"); setCommissie("10"); }
       setStatus(p.status ?? "actief"); setTag(p.config?.utmSource ?? "");
     });
   }, [nieuw, slug]);
@@ -637,6 +639,8 @@ export function PartnerForm() {
   const makelaar = soort === "makelaar";
   const schilder = soort === "schilder";
   const inkoopAnders = !!oud && alleenCode(inkoopcode) !== (oud.config?.inkoopcode ?? "").toLowerCase();
+  // Schilder met al een code voor klanten: een andere commissie gaat in op een datum.
+  const schilderCommissieAnders = schilder && !!oud?.afspraken.kortingscode && !!alleenCode(code) && Math.abs(c - oud.afspraken.commissiePct) > 0.001;
   const adresNu = adresZelf ? adres : alleenAdres(naam);
   const lettersNu = lettersZelf ? letters : adresNu.replace(/[^a-z]/g, "").slice(0, 2).toUpperCase();
 
@@ -644,10 +648,12 @@ export function PartnerForm() {
     e.preventDefault();
     setBezig(true); setFout(null);
     if (schilder) {
+      if (alleenCode(code) && k + c > 20) { setBezig(false); setFout("Korting en commissie zijn samen hooguit 20%."); return; }
       const { data, fout } = await roep<{ slug: string }>("partners-beheer", {
         action: "partner_opslaan", slug: slug ?? "", soort, naam: naam.trim(), voornamen: voornamen.trim(), plaats: plaats.trim(),
         inkoopcode: alleenCode(inkoopcode), inkoopKorting: Number(inkoopKorting.replace(",", ".")) || 0, bestelEmails: bestelEmails.trim(),
         start: nieuw ? start : "", status,
+        kortingscode: alleenCode(code), korting: k, commissie: c, commissieVanaf: schilderCommissieAnders ? vanaf : "",
       });
       setBezig(false);
       if (fout || !data?.slug) { setFout(fout ?? "Opslaan lukte niet."); return; }
@@ -753,7 +759,42 @@ export function PartnerForm() {
               </select>
             </div>
           )}
-          <p style={{ ...veldUitleg, margin: 0 }}>Een code voor zijn klanten, met commissie voor de schilder, volgt in een volgende stap.</p>
+        </div>
+      )}
+
+      {schilder && (
+        <div className="rd-card-white" style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={veldKop} htmlFor="pf-klantcode">Code voor zijn klanten (mag leeg)</label>
+            <input id="pf-klantcode" className="rd-input" style={{ ...veld, textTransform: "uppercase", fontFamily: "monospace" }} value={code} onChange={(e) => setCode(alleenCode(e.target.value))} maxLength={30} autoComplete="off" spellCheck={false} />
+            <p style={veldUitleg}>{oud?.afspraken.kortingscode && alleenCode(code) !== oud.afspraken.kortingscode.toLowerCase()
+              ? `De oude code ${oud.afspraken.kortingscode.toUpperCase()} gaat uit. Bestellingen die ermee zijn gedaan blijven meetellen voor de commissie.`
+              : "Zijn klant vult deze code in bij het afrekenen en krijgt korting op verf; de schilder krijgt commissie. Deelbaar, niet te combineren met andere codes. Anders dan zijn inkoopcode."}</p>
+          </div>
+          {!!alleenCode(code) && (
+            <>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 180px" }}>
+                  <label style={veldKop} htmlFor="pf-korting">Korting voor de klant (%)</label>
+                  <input id="pf-korting" className="rd-input" style={veld} inputMode="decimal" value={korting} onChange={(e) => setKorting(e.target.value)} required />
+                </div>
+                <div style={{ flex: "1 1 180px" }}>
+                  <label style={veldKop} htmlFor="pf-commissie">Commissie voor de schilder (%)</label>
+                  <input id="pf-commissie" className="rd-input" style={veld} inputMode="decimal" value={commissie} onChange={(e) => setCommissie(e.target.value)} required />
+                </div>
+              </div>
+              <p style={{ ...veldUitleg, margin: 0, ...(k + c > 20 ? { opacity: 1, color: "var(--rd-pink-dark)", fontWeight: 600 } : {}) }}>
+                {k + c > 20 ? "Korting en commissie zijn samen hooguit 20%." : "Samen hooguit 20%, net als bij stylistes: bijvoorbeeld 10% korting en 10% commissie, of 5% korting en 15% commissie."}
+              </p>
+              {schilderCommissieAnders && (
+                <div>
+                  <label style={veldKop} htmlFor="pf-vanaf">Nieuwe commissie geldt vanaf</label>
+                  <input id="pf-vanaf" className="rd-input" style={{ ...veld, maxWidth: 220 }} type="date" value={vanaf} min={vandaag()} onChange={(e) => setVanaf(e.target.value)} required />
+                  <p style={veldUitleg}>Bestellingen van voor die datum houden {oud!.afspraken.commissiePct}%.</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

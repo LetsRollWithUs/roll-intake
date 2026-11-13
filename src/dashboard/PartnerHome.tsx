@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import { vraagWachtwoordMail } from "./Login";
 import { Tegel, blokKop, euro, formatDate, getal, rij, roep, type Kwartaal, type WpPartner } from "./PartnersPage";
 
@@ -45,6 +45,8 @@ const melding: React.CSSProperties = { background: "var(--rd-lavender)", borderR
 /** Het dashboard van één partner: cijfers, commissie per kwartaal met de keuze, bestellingen en de eigen code. */
 export function PartnerDashboard({ slug: vast }: { slug?: string }) {
   const params = useParams();
+  // Een schilder met een code voor zijn klanten ziet zijn commissie in een tweede weergave (?weergave=commissie).
+  const [zoek] = useSearchParams();
   const slug = vast ?? params.slug;
   const { p, setP, meekijken, fout } = usePartner(slug);
   const [bezig, setBezig] = useState(false);
@@ -68,9 +70,11 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
   if (!p) return <p className="rd-sub">Je cijfers laden...</p>;
 
   // Een schilder koopt zelf in met zijn persoonlijke inkoopcode: zijn bestellingen, wat hij bespaarde en opnieuw bestellen.
-  if (p.type === "schilder") return <SchilderDashboard p={p} meekijken={meekijken} />;
+  const schilder = p.type === "schilder";
+  if (schilder && (zoek.get("weergave") !== "commissie" || !p.afspraken.kortingscode)) return <SchilderDashboard p={p} meekijken={meekijken} />;
 
-  const creator = p.type === "creator";
+  // De code van een schilder voor zijn klanten werkt zoals die van een creator.
+  const creator = p.type === "creator" || schilder;
   const code = (p.afspraken.kortingscode || "").toUpperCase();
   const orders = p.orders ?? [];
   const factuurmail = p.roll?.factuurmail ?? "admin@roll.nl";
@@ -151,9 +155,10 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
           <Link to={`/dashboard/partners/${p.slug}`} style={{ color: "inherit" }}>Terug naar het beheer</Link>
         </div>
       )}
-      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4 }}>Partnerdashboard · {p.naam}</div>
-      <h1 className="rd-h2" style={{ margin: "0 0 2px" }}>Hoi {p.voornamen || p.naam}</h1>
-      <p className="rd-sub" style={{ marginTop: 0 }}>{creator ? "Zo doet jullie code het." : "Zo doen jullie kleurcadeaus het."}</p>
+      {schilder && <Link to={`/dashboard/partner/${p.slug}`} className="rd-textlink" style={{ textDecoration: "none", minHeight: 0 }}>← Terug naar je inkoop</Link>}
+      <div className="rd-kicker rd-kicker-pink" style={{ marginBottom: 4, marginTop: schilder ? 8 : 0 }}>{schilder ? "Schildersdashboard" : "Partnerdashboard"} · {p.naam}</div>
+      <h1 className="rd-h2" style={{ margin: "0 0 2px" }}>{schilder ? "Je klanten en je commissie" : `Hoi ${p.voornamen || p.naam}`}</h1>
+      <p className="rd-sub" style={{ marginTop: 0 }}>{schilder ? `Bestellingen van je klanten met je code ${code}.` : creator ? "Zo doet jullie code het." : "Zo doen jullie kleurcadeaus het."}</p>
 
       {bericht && <div style={melding} role="status">{bericht}</div>}
       {actieFout && <div style={{ ...melding, background: "#fff", color: "var(--rd-pink-dark)" }} role="alert">{actieFout}</div>}
@@ -255,10 +260,12 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
 
       {creator ? (
         <div className="rd-card-white" style={{ marginBottom: 10 }}>
-          {blokKop("Jullie code")}
-          <div style={{ ...rij, borderTop: 0, paddingTop: 0 }}><span>Code voor jullie volgers</span><span><strong style={{ fontFamily: "monospace" }}>{code}</strong> · {p.afspraken.korting}</span></div>
+          {blokKop(schilder ? "Je code voor klanten" : "Jullie code")}
+          <div style={{ ...rij, borderTop: 0, paddingTop: 0 }}><span>{schilder ? "Code voor je klanten" : "Code voor jullie volgers"}</span><span><strong style={{ fontFamily: "monospace" }}>{code}</strong> · {p.afspraken.korting}</span></div>
           <p className="rd-sub" style={{ margin: "6px 0 0", fontSize: 14 }}>
-            {p.kortingMin
+            {schilder
+              ? "Je klant vult de code in bij het afrekenen op roll.nl. De korting geldt op verf, niet op samples, gereedschap, voorstrijk en kleuradvies, en is niet te combineren met andere codes. Voor je eigen inkoop gebruik je je inkoopcode."
+              : p.kortingMin
               ? `De code geldt op roll.nl bij een bestelling met verf. Samples tellen niet mee voor de € ${getal(p.kortingMin)}, en de code is niet te combineren met andere kortingscodes.`
               : "De code geldt op alle producten van Roll, zonder minimum. Niet op kleuradvies en verzending, en niet te combineren met andere kortingscodes."}
           </p>
@@ -337,6 +344,19 @@ function SchilderDashboard({ p, meekijken }: { p: WpPartner; meekijken: boolean 
         {p.status && p.status !== "actief" && <p style={{ margin: "8px 0 0", color: "var(--rd-pink-dark)", fontWeight: 600 }}>De code staat op dit moment uit. Vragen? Mail naar hello@roll.nl.</p>}
         <a className="rd-btn rd-btn-outline" style={{ ...knop, marginTop: 12 }} href="https://roll.nl/product-category/verf/" target="_blank" rel="noreferrer">Naar de webshop</a>
       </div>
+
+      {p.afspraken.kortingscode && (
+        <div className="rd-card-white" style={{ marginBottom: 10 }}>
+          {blokKop("Je code voor klanten")}
+          <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 800, letterSpacing: ".04em" }}>{p.afspraken.kortingscode.toUpperCase()}</div>
+          <p style={{ fontSize: 15, margin: "8px 0 0" }}>Je klant krijgt {p.afspraken.kortingPct}% korting op verf; jij krijgt {p.afspraken.commissiePct}% commissie over wat je klant bestelt.</p>
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap", margin: "10px 0 0", fontVariantNumeric: "tabular-nums" }}>
+            <span><span style={{ opacity: 0.6, fontSize: 13 }}>Bestellingen van klanten</span> <strong>{getal((p.orders ?? []).length)}</strong></span>
+            <span><span style={{ opacity: 0.6, fontSize: 13 }}>Commissie nog open</span> <strong>{euro(p.kort.commissieOpen)}</strong></span>
+          </div>
+          <Link className="rd-btn rd-btn-primary" style={{ ...knop, marginTop: 12 }} to={`/dashboard/partner/${p.slug}?weergave=commissie`}>Bekijk je klanten en commissie</Link>
+        </div>
+      )}
 
       <div className="rd-card-white">
         {blokKop("Je bestellingen")}
