@@ -75,6 +75,9 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
 
   // De code van een schilder voor zijn klanten werkt zoals die van een creator.
   const creator = p.type === "creator" || schilder;
+  // Een schilder is een persoon: "je" in plaats van "jullie".
+  const jl = schilder ? "je" : "jullie";
+  const Jl = schilder ? "Je" : "Jullie";
   const code = (p.afspraken.kortingscode || "").toUpperCase();
   const orders = p.orders ?? [];
   const factuurmail = p.roll?.factuurmail ?? "admin@roll.nl";
@@ -94,14 +97,14 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
       voet = (
         <>
           <span className="rd-chip">Factuur ontvangen{k.factuurNr ? ` · ${k.factuurNr}` : ""}</span>
-          <span style={{ fontSize: 14, opacity: 0.7 }}>{k.keuze === "verf" ? "We maken jullie verftegoed aan." : "We betalen binnen 14 dagen."}</span>
+          <span style={{ fontSize: 14, opacity: 0.7 }}>{k.keuze === "verf" ? `We maken ${jl} verftegoed aan.` : "We betalen binnen 14 dagen."}</span>
         </>
       );
     } else if (k.uitbetaling === "aangevraagd") {
       voet = (
         <div style={{ width: "100%" }}>
           <p style={{ fontSize: 14, margin: "0 0 10px" }}>
-            <strong>Gekozen: {k.keuze === "verf" ? "omzetten in verf" : "uitbetalen"}.</strong> Mail nu jullie factuur van {euro(k.bedragIncl)} inclusief btw naar <strong>{factuurmail}</strong>, met kenmerk {k.kenmerk}. {k.keuze === "verf" ? "Daarna maken wij jullie verftegoed aan." : "Wij betalen binnen 14 dagen."}
+            <strong>Gekozen: {k.keuze === "verf" ? "omzetten in verf" : "uitbetalen"}.</strong> Mail nu {jl} factuur van {euro(k.bedragIncl)} inclusief btw naar <strong>{factuurmail}</strong>, met kenmerk {k.kenmerk}. {k.keuze === "verf" ? `Daarna maken wij ${jl} verftegoed aan.` : "Wij betalen binnen 14 dagen."}
           </p>
           <div style={knopRij}>
             <a className="rd-btn rd-btn-primary" style={knop} href={k.factuurMailto}>Mail de factuur</a>
@@ -114,12 +117,12 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
         <div style={{ width: "100%" }}>
           <p style={{ fontSize: 14, margin: "0 0 10px" }}>
             {vraag.keuze === "verf"
-              ? <>Jullie zetten de commissie over {k.label} om in verftegoed: <strong>{euro(k.bedragIncl)}</strong> inclusief btw.</>
-              : <>Jullie laten de commissie over {k.label} uitbetalen: <strong>{euro(k.commissie)}</strong> exclusief btw.</>}{" "}
+              ? <>{schilder ? "Je zet" : "Jullie zetten"} de commissie over {k.label} om in verftegoed: <strong>{euro(k.bedragIncl)}</strong> inclusief btw.</>
+              : <>{schilder ? "Je laat" : "Jullie laten"} de commissie over {k.label} uitbetalen: <strong>{euro(k.commissie)}</strong> exclusief btw.</>}{" "}
             De keuze geldt voor het hele kwartaal.
           </p>
           <div style={knopRij}>
-            <button className="rd-btn rd-btn-primary" style={knop} disabled={bezig} onClick={() => doe({ action: "keuze", kwartaal: k.kwartaal, keuze: vraag.keuze }, `Dank je, jullie keuze is doorgegeven. Mail nu jullie factuur naar ${factuurmail}.`)}>{bezig ? "Bezig..." : "Bevestig"}</button>
+            <button className="rd-btn rd-btn-primary" style={knop} disabled={bezig} onClick={() => doe({ action: "keuze", kwartaal: k.kwartaal, keuze: vraag.keuze }, `Dank je, ${jl} keuze is doorgegeven. Mail nu ${jl} factuur naar ${factuurmail}.`)}>{bezig ? "Bezig..." : "Bevestig"}</button>
             <button className="rd-btn rd-btn-outline" style={knop} disabled={bezig} onClick={() => setVraag(null)}>Terug</button>
           </div>
         </div>
@@ -164,11 +167,11 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
       {actieFout && <div style={{ ...melding, background: "#fff", color: "var(--rd-pink-dark)" }} role="alert">{actieFout}</div>}
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "12px 0 10px" }}>
-        <Tegel label="Jullie commissie" waarde={euro(p.totaal?.commissie ?? 0)} sub={`waarvan ${euro(p.totaal?.definitief ?? 0)} definitief`} />
+        <Tegel label={`${Jl} commissie`} waarde={euro(p.totaal?.commissie ?? 0)} sub={`waarvan ${euro(p.totaal?.definitief ?? 0)} definitief`} />
         {creator ? (
           <>
-            <Tegel label="Bestellingen" waarde={getal(orders.length)} sub={`met jullie code ${code}`} />
-            <Tegel label="Omzet via jullie code" waarde={euro(p.totaal?.omzet ?? 0)} sub="exclusief btw, na korting" />
+            <Tegel label="Bestellingen" waarde={getal(orders.length)} sub={`met ${jl} code ${code}`} />
+            <Tegel label={`Omzet via ${jl} code`} waarde={euro(p.totaal?.omzet ?? 0)} sub="exclusief btw, na korting" />
           </>
         ) : (
           <>
@@ -204,9 +207,9 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
       </div>
 
       <div className="rd-card-white" style={{ marginBottom: 10 }}>
-        {blokKop(creator ? "Bestellingen met jullie code" : "Bestellingen via jullie cadeau")}
+        {blokKop(creator ? `Bestellingen met ${jl} code` : "Bestellingen via jullie cadeau")}
         {orders.length === 0
-          ? <p className="rd-sub" style={{ margin: 0 }}>Zodra een klant met jullie {creator ? "" : "cadeau of "}code bestelt, verschijnt die hier.</p>
+          ? <p className="rd-sub" style={{ margin: 0 }}>Zodra een klant met {jl} {creator ? "" : "cadeau of "}code bestelt, verschijnt die hier.</p>
           : orders.slice(0, 50).map((o, i) => (
             <div key={o.nr + i} style={i ? rij : { ...rij, borderTop: 0, paddingTop: 0 }}>
               <span><strong>#{o.nr}</strong> <span style={{ opacity: 0.6, fontSize: 13 }}>· {formatDate(o.datum)} · {o.bron === "Aan huis" ? "Kleuradvies aan huis" : `${o.bron}${o.advies === "online" ? " · online advies" : ""}`}</span></span>
@@ -238,7 +241,7 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
               </div>
             ))}
           </div>
-          <p className="rd-sub" style={{ margin: 0, fontSize: 13, flexBasis: "100%" }}>Over de bestellingen met jullie code, na retouren. Bedragen exclusief btw.</p>
+          <p className="rd-sub" style={{ margin: 0, fontSize: 13, flexBasis: "100%" }}>Over de bestellingen met {jl} code, na retouren. Bedragen exclusief btw.</p>
         </div>
       )}
 
@@ -295,13 +298,13 @@ export function PartnerDashboard({ slug: vast }: { slug?: string }) {
       )}
 
       <details className="rd-card-white">
-        <summary style={{ cursor: "pointer", fontWeight: 700 }}>Zo werkt jullie commissie</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 700 }}>Zo werkt {jl} commissie</summary>
         <div style={{ fontSize: 14, lineHeight: 1.55 }}>
-          <p>Jullie ontvangen <strong>{p.afspraken.commissiePct}%</strong> van de verf en materialen die klanten via jullie {creator ? "" : "cadeau of "}code bestellen, exclusief btw, na korting en retouren. Adviesgesprekken en verzendkosten tellen niet mee.</p>
+          <p>{schilder ? "Je ontvangt" : "Jullie ontvangen"} <strong>{p.afspraken.commissiePct}%</strong> van de verf en materialen die klanten via {jl} {creator ? "" : "cadeau of "}code bestellen, exclusief btw, na korting en retouren. Adviesgesprekken en verzendkosten tellen niet mee.</p>
           {creator
-            ? <p>Een bestelling telt mee als jullie code {code} is gebruikt. Een bestelling is definitief 30 dagen na levering, als de retourtermijn voorbij is. Daarna verandert de commissie niet meer.</p>
+            ? <p>Een bestelling telt mee als {jl} code {code} is gebruikt. Een bestelling is definitief 30 dagen na levering, als de retourtermijn voorbij is. Daarna verandert de commissie niet meer.</p>
             : <p>Een klant blijft {p.koppelingMnd ?? 12} maanden aan jullie gekoppeld, ook bij latere bestellingen. Een bestelling is definitief 30 dagen na levering, als de retourtermijn voorbij is. Daarna verandert de commissie niet meer.</p>}
-          <p style={{ marginBottom: 0 }}>Per afgesloten kwartaal kiezen jullie: <strong>uitbetalen</strong>, of <strong>omzetten in verf</strong> als tegoed bij Roll. Daarna mailen jullie een factuur op basis van de afrekening, met {p.roll?.btwPct ?? 21}% btw, naar {factuurmail}. Bij uitbetalen betalen wij binnen 14 dagen; bij verf krijgen jullie een tegoedcode ter waarde van het bedrag inclusief btw.</p>
+          <p style={{ marginBottom: 0 }}>Per afgesloten kwartaal {schilder ? "kies je" : "kiezen jullie"}: <strong>uitbetalen</strong>, of <strong>omzetten in verf</strong> als tegoed bij Roll. Daarna {schilder ? "mail je" : "mailen jullie"} een factuur op basis van de afrekening, met {p.roll?.btwPct ?? 21}% btw, naar {factuurmail}. Bij uitbetalen betalen wij binnen 14 dagen; bij verf {schilder ? "krijg je" : "krijgen jullie"} een tegoedcode ter waarde van het bedrag inclusief btw.</p>
         </div>
       </details>
     </div>
@@ -460,7 +463,7 @@ export function PartnerAfrekening() {
           <div style={{ background: "var(--rd-lavender)", borderRadius: 12, padding: "12px 14px", marginTop: 20 }}>
             <div className="rd-kicker rd-kicker-pink">Factureer aan</div>
             <p style={{ margin: "6px 0 0" }}><strong>{r.naam}</strong><br />{r.adres}<br />KVK {r.kvk} · btw {r.btw}<br />Mail de factuur naar <strong>{r.factuurmail}</strong></p>
-            <p style={{ margin: "6px 0 0" }}>Vermeld kenmerk <strong>{k.kenmerk}</strong>. {k.keuze === "verf" ? `Jullie kozen voor verftegoed: na ontvangst van de factuur maken wij een tegoedcode van ${euro(incl)} aan, te gebruiken op roll.nl.` : "Wij betalen binnen 14 dagen na ontvangst van de factuur."}</p>
+            <p style={{ margin: "6px 0 0" }}>Vermeld kenmerk <strong>{k.kenmerk}</strong>. {k.keuze === "verf" ? `${p.type === "schilder" ? "Je koos" : "Jullie kozen"} voor verftegoed: na ontvangst van de factuur maken wij een tegoedcode van ${euro(incl)} aan, te gebruiken op roll.nl.` : "Wij betalen binnen 14 dagen na ontvangst van de factuur."}</p>
           </div>
         )}
 
