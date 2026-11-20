@@ -210,6 +210,7 @@ export async function submitIntake(
       questionScope: state.questionScope ?? null,
       nogNietInWoning: !!state.nogNietInWoning,
       woontErAl: state.woontErAl ?? null,
+      adres: state.adres && Object.values(state.adres).some((v) => v.trim()) ? state.adres : null,
     },
   };
 

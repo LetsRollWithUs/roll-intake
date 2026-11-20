@@ -123,9 +123,13 @@ export interface IntakeState {
   painter?: PainterKey;
   contactName: string;
   contactEmail: string;
+  /** Adres van de woning, alleen gevraagd als de boeking er nog geen heeft (styliste bekijkt huis en buurt op Google Maps). */
+  adres?: IntakeAdres;
 
   updatedAt: number;
 }
+
+export interface IntakeAdres { straat: string; huisnummer: string; postcode: string; plaats: string }
 
 export function emptyState(): IntakeState {
   return {

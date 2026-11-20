@@ -50,12 +50,36 @@ export function nogBespreken(intake: IntakeRow | null, advice: AdviceV2 | null):
   return out;
 }
 
+type Adres = { straat?: string; huisnummer?: string; postcode?: string; plaats?: string } | null | undefined;
+const adresTekst = (a: Adres) => {
+  if (!a) return "";
+  const regel1 = [a.straat, a.huisnummer].filter((x) => x?.trim()).join(" ");
+  const regel2 = [a.postcode, a.plaats].filter((x) => x?.trim()).join(" ");
+  return [regel1, regel2].filter(Boolean).join(", ");
+};
+
+// Adres van de woning met een link naar Google Maps (huis en buurt bekijken). Boekingsadres gaat voor, anders wat de klant in de intake invulde.
+function AdresBlok({ boekingAdres, intake }: { boekingAdres: Adres; intake: IntakeRow | null }) {
+  const tekst = adresTekst(boekingAdres) || adresTekst((intake?.payload as { adres?: Adres } | null)?.adres);
+  return (
+    <div>
+      <span className="kk-label">Adres</span>
+      {tekst ? (
+        <div style={{ fontSize: 15, marginTop: 4 }}>
+          {tekst}{" "}
+          <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tekst)}`} target="_blank" rel="noreferrer" style={{ fontWeight: 700 }}>Bekijk op Google Maps</a>
+        </div>
+      ) : <div style={{ fontSize: 14, marginTop: 4, opacity: 0.7 }}>Nog niet bekend, even vragen in het gesprek.</div>}
+    </div>
+  );
+}
+
 const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
   <div className="kk-row"><span className="kk-label">{k}</span><div>{children}</div></div>
 );
 
-export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfter, onIntake, onOrders }: {
-  intake: IntakeRow | null; advice: AdviceV2 | null; email: string | null; samplesBefore: boolean; samplesAfter: boolean;
+export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfter, onIntake, onOrders, adres }: {
+  intake: IntakeRow | null; advice: AdviceV2 | null; email: string | null; samplesBefore: boolean; samplesAfter: boolean; adres?: Adres;
   onIntake: (i: IntakeRow) => void; onOrders: (d: OrdersResp | null) => void;
 }) {
   const open = nogBespreken(intake, advice);
@@ -63,6 +87,7 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
     return (
       <div className="kk-main">
         <p className="rd-sub" style={{ margin: 0 }}>De klant heeft de intake nog niet ingevuld. Zodra die binnen is, zie je hier de hulpvraag, ruimtes, foto's en voorkeuren.</p>
+        <AdresBlok boekingAdres={adres} intake={null} />
         <CustomerPurchases email={email} title="Eerdere samples en aankopen" onData={onOrders} />
       </div>
     );
@@ -76,6 +101,8 @@ export function Voorbereiden({ intake, advice, email, samplesBefore, samplesAfte
           {(intake.payload as { questionScope?: string } | null)?.questionScope && <div style={{ fontSize: 14, marginTop: 6, opacity: 0.8 }}>Gaat over: {(intake.payload as { questionScope?: string }).questionScope === "een" ? "één ruimte" : "meerdere ruimtes of het hele huis"}</div>}
           {(intake.help_needs?.length ?? 0) > 0 && <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{intake.help_needs!.map((h) => <span key={h} className="rd-chip">{h}</span>)}</div>}
         </div>
+
+        <AdresBlok boekingAdres={adres} intake={intake} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {(intake.rooms ?? []).map((r) => (

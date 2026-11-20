@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const { data: b } = await admin
         .from("bookings")
-        .select("id,status,format,woo_order_id,start_at,customer_email,kleurplan_token, services(key)")
+        .select("id,status,format,woo_order_id,start_at,customer_email,kleurplan_token,address, services(key)")
         .eq("id", body.booking_id)
         .maybeSingle();
       if (!b) return j({ error: "Niet gevonden" }, 404);
@@ -290,7 +290,10 @@ Deno.serve(async (req) => {
       const email = (b as any).customer_email ?? null;
       // Plan van roll.nl/kleurplan meegeven (alleen voor de intake), zodat ruimtes, maten en kleuren al zijn ingevuld.
       const kleurplan = body.met_kleurplan ? await kleurplanVan((b as any).kleurplan_token ?? null) : null;
-      const jk = (o: Record<string, unknown>) => j(kleurplan ? { ...o, kleurplan } : o);
+      // Alleen een ja/nee, nooit het adres zelf: de intake vraagt het adres als het nog ontbreekt.
+      const ad = (b as any).address ?? {};
+      const heeft_adres = !!(ad.straat && ad.huisnummer && ad.postcode && ad.plaats);
+      const jk = (o: Record<string, unknown>) => j(kleurplan ? { ...o, heeft_adres, kleurplan } : { ...o, heeft_adres });
       if ((b as any).format === "thuis" && ["requested", "confirmed"].includes(b.status as string)) return jk({ status: "requested", format: "thuis", mode: "pre_sample", customer_email: email });
       if (b.status === "confirmed") return jk({ status: "confirmed", start_at: b.start_at, mode, customer_email: email });
       if (b.status === "paid_unplaced") return jk({ status: "paid_unplaced", start_at: b.start_at, mode, customer_email: email });

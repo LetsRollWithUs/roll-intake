@@ -124,6 +124,8 @@ export function App() {
   const prefilled = useRef(false);
   // Geboekt vanuit roll.nl/kleurplan: ruimtes, maten en kleuren zijn al ingevuld.
   const [vanKleurplan, setVanKleurplan] = useState(false);
+  // Adres al bekend bij de boeking? Dan vragen we er niet opnieuw naar.
+  const [adresBekend, setAdresBekend] = useState(false);
   const lastChecked = useRef<string>("");
 
   useEffect(() => lockDocument(), []);
@@ -147,8 +149,9 @@ export function App() {
     if (!bookingId || prefilled.current) return;
     prefilled.current = true;
     supabase.functions.invoke("booking", { body: { action: "status", booking_id: bookingId, met_kleurplan: true } }).then(({ data }) => {
-      const d = data as { start_at?: string; customer_email?: string; kleurplan?: Kleurplan } | null;
+      const d = data as { start_at?: string; customer_email?: string; kleurplan?: Kleurplan; heeft_adres?: boolean } | null;
       if (!d) return;
+      if (d.heeft_adres) setAdresBekend(true);
       if (d.start_at) setApptStart(d.start_at);
       if (d.customer_email && !state.contactEmail.trim()) update({ contactEmail: d.customer_email });
       // Alleen een lege intake voorinvullen; wat de klant zelf al invulde blijft staan.
@@ -306,6 +309,8 @@ export function App() {
           contactEmail={state.contactEmail}
           onName={(contactName) => update({ contactName })}
           onEmail={(contactEmail) => update({ contactEmail })}
+          adres={state.adres}
+          onAdres={adresBekend ? undefined : (adres) => update({ adres })}
         />
         {emailStatus && !emailStatus.checking && emailStatus.hasBooking && apptLabel && (
           <div className="rd-card-white" style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "flex-start" }}>

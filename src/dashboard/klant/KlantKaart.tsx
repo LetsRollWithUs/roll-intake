@@ -391,7 +391,7 @@ export function KlantKaart() {
       <main style={{ marginTop: 22 }}>
         {fase === "voorbereiden" && (
           <Voorbereiden intake={intake} advice={advice} email={email} samplesBefore={samplesBefore} samplesAfter={b.samples_besteld}
-            onIntake={(i) => setIntake(i)} onOrders={setOrders} />
+            onIntake={(i) => setIntake(i)} onOrders={setOrders} adres={b.address} />
         )}
         {fase === "advies" && (intake && advice ? (
           <OfferteEditor intake={intake} bookingId={b.id} modus="advies" onIntake={(p) => setIntake((cur) => (cur ? { ...cur, ...p } : cur))} />
