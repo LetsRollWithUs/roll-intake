@@ -1,11 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { emptyState, type IntakeState } from "./types";
+import { emptyState, type IntakeState, type UploadedImage } from "./types";
 
 const KEY = "roll-intake-v1";
 const SFEER_V2: Record<string, string> = {
   "licht-1": "licht-luchtig", "warm-1": "rustig-koel", "kleur-1": "zacht-warm",
   "warm-2": "aards-geborgen", "warm-3": "diep-sfeervol", "kleur-3": "speels-kleurig",
 };
+
+// Foto's (File) en hun preview-links (blob:) overleven het herladen niet: JSON maakt van een File een leeg
+// object. Zonder deze opschoning liep het insturen daarop vast ("Versturen lukte niet") bij klanten die
+// later terugkwamen. De foto blijft in de lijst staan, maar zonder bestand; bij insturen telt hij als ontbrekend.
+function schoon(img: UploadedImage): UploadedImage {
+  const file = img.file instanceof Blob ? img.file : undefined;
+  const url = !file && typeof img.url === "string" && img.url.startsWith("blob:") ? "" : img.url;
+  return { ...img, file, url };
+}
+
+function zonderVerlorenFotos(st: IntakeState): IntakeState {
+  return {
+    ...st,
+    rooms: (st.rooms ?? []).map((r) => ({ ...r, photos: (r.photos ?? []).map(schoon) })),
+    samples: (st.samples ?? []).map((x) => (x.photo ? { ...x, photo: schoon(x.photo) } : x)),
+    inspirationImages: (st.inspirationImages ?? []).map(schoon),
+  };
+}
 
 export function loadState(): IntakeState {
   try {
@@ -14,7 +32,7 @@ export function loadState(): IntakeState {
     const parsed = JSON.parse(raw) as Partial<IntakeState>;
     // Sfeerbeelden v2: een eerder gekozen beeld wordt het nieuwe beeld met hetzelfde label.
     if (parsed.inspirationLikes) parsed.inspirationLikes = [...new Set(parsed.inspirationLikes.map((id) => SFEER_V2[id] ?? id))];
-    return { ...emptyState(), ...parsed };
+    return zonderVerlorenFotos({ ...emptyState(), ...parsed });
   } catch {
     return emptyState();
   }

@@ -49,7 +49,7 @@ function Thumbs({ photos }: { photos: UploadedImage[] }) {
     const made: string[] = [];
     const list = photos.slice(0, 6).map((p) => {
       if (p.url) return p.url;
-      if (p.file) {
+      if (p.file instanceof Blob) {
         const u = URL.createObjectURL(p.file);
         made.push(u);
         return u;

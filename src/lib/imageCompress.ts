@@ -7,7 +7,7 @@ const QUALITY = 0.85;
 const SKIP_BELOW = 1.5 * 1024 * 1024;
 
 export async function compressImage(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  if (!(file instanceof Blob) || !file.type?.startsWith("image/") || file.type === "image/gif") return file;
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));

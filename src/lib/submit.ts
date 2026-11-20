@@ -37,14 +37,25 @@ async function uploadImage(
   path: string,
   signed: Record<string, string> | null,
 ): Promise<PhotoRecord> {
-  if (!img.file) return { id: img.id, name: img.name, url: null, path: null };
+  // Geen echt bestand meer (klant kwam terug na herladen): foto ontbreekt, maar de intake gaat gewoon door.
+  if (!(img.file instanceof Blob)) {
+    failedUploads++;
+    return { id: img.id, name: img.name, url: null, path: null, failed: true };
+  }
   const file = await compressImage(img.file);
   const bucket = supabase.storage.from(INTAKE_PHOTOS_BUCKET);
   const token = signed?.[path];
-  const attempt = () =>
-    token
-      ? bucket.uploadToSignedUrl(path, token, file, { contentType: file.type, upsert: true })
-      : bucket.upload(path, file, { upsert: false, contentType: file.type });
+  // Een netwerkfout gooit soms een exception in plaats van een error terug te geven; vang die af,
+  // zodat een enkele foto nooit de hele intake tegenhoudt.
+  const attempt = async () => {
+    try {
+      return await (token
+        ? bucket.uploadToSignedUrl(path, token, file, { contentType: file.type, upsert: true })
+        : bucket.upload(path, file, { upsert: false, contentType: file.type }));
+    } catch (e) {
+      return { error: e as Error };
+    }
+  };
   let { error } = await attempt();
   if (error) ({ error } = await attempt());
   if (error) {
@@ -91,9 +102,9 @@ export async function submitIntake(
 
   // Eerst Turnstile + upload-links ophalen voor alle foto's in één keer.
   const paths = [
-    ...state.rooms.flatMap((r) => r.photos.filter((p) => p.file).map((p) => roomPhotoPath(intakeId, r.id, p))),
-    ...state.samples.filter((s) => s.photo?.file).map((s) => samplePhotoPath(intakeId, s.id, s.photo!)),
-    ...state.inspirationImages.filter((i) => i.file).map((i) => inspirationPath(intakeId, i)),
+    ...state.rooms.flatMap((r) => r.photos.filter((p) => p.file instanceof Blob).map((p) => roomPhotoPath(intakeId, r.id, p))),
+    ...state.samples.filter((s) => s.photo?.file instanceof Blob).map((s) => samplePhotoPath(intakeId, s.id, s.photo!)),
+    ...state.inspirationImages.filter((i) => i.file instanceof Blob).map((i) => inspirationPath(intakeId, i)),
   ];
   const token = await getTurnstileToken("intake_submit");
   const prep = await callIntakeFn<{ uploads: Record<string, string>; ticket: string }>({ action: "prepare", id: intakeId, paths, turnstile_token: token });
