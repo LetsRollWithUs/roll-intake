@@ -18,7 +18,7 @@ interface Regel {
   stand: Stand; standTekst: string; datum: string; door: string; intern?: string; extern?: string; zoek: string;
 }
 interface WpOfferte { id: number; nummer: string; titel: string; naam: string; email: string; totaal: number; status: string; statusLabel: string; herkomst: string; styliste: string; orderId: number; bijgewerkt: string; url: string }
-interface WpPrijsopgave { id: number; bron: string; status: string; email: string; naam: string; ruimtes: number; m2: number; totaal: number; kleuren: string; orderId: number; bijgewerkt: string }
+interface WpPrijsopgave { id: number; bron: string; status: string; email: string; naam: string; ruimtes: number; m2: number; totaal: number; kleuren: string; orderId: number; bijgewerkt: string; url?: string }
 interface StylisteOfferte { id: string; offerte_id: number | null; nummer: string | null; customer_name: string; customer_email: string; status: string; totaal: number | null; commissie_pct: number; korting_pct: number; updated_at: string; stylists: { name: string } | null }
 interface Chat { sessie: string; email: string; bron: string | null; updated_at: string; mand_op: string | null; mand_soort: string | null }
 interface ChatOrder { sessie: string; totaal: number | null; status: string | null; besteld_op: string | null }
@@ -43,7 +43,7 @@ const klaar = (r: Regel) => r.stand === "besteld" || r.stand === "vervallen";
 const meervoud = (n: number, een: string, meer: string) => `${getal(n)} ${n === 1 ? een : meer}`;
 
 function uitWp(o: WpOfferte, eigen: Map<number, StylisteOfferte>): Regel {
-  const s = (["roll", "kleuradvies", "styliste", "verfplan"].includes(o.herkomst) ? o.herkomst : "roll") as Soort;
+  const s = (["roll", "kleuradvies", "styliste", "verfplan", "prijsopgave"].includes(o.herkomst) ? o.herkomst : "roll") as Soort;
   const so = eigen.get(o.id);
   const stand: Stand = so?.status === "vervallen" ? "vervallen" : o.status === "besteld" || o.status === "betaald" ? "besteld" : o.status === "geannuleerd" ? "vervallen" : o.status === "verstuurd" ? "verstuurd" : "bezig";
   const door = so?.stylists?.name ?? o.styliste;
@@ -119,7 +119,8 @@ export function AlleOffertes() {
         sleutel: `prijsopgave:${g.id}`, soort: "prijsopgave", id: String(g.id), naam: g.naam, email: g.email,
         wat: [g.ruimtes ? meervoud(g.ruimtes, "ruimte", "ruimtes") : "", g.m2 ? `${getal(Math.round(g.m2))} m²` : "", g.kleuren].filter(Boolean).join(" · "),
         bedrag: g.totaal > 0 ? g.totaal : null, stand, standTekst: stand === "verstuurd" ? "Prijsopgave gemaild" : STAND[stand].naam,
-        datum: g.bijgewerkt, door: "", zoek: `${g.naam} ${g.email} ${g.kleuren}`.toLowerCase(),
+        // Open: roll.nl maakt er eenmalig een concept-offerte van in de offerte-tool en opent die.
+        datum: g.bijgewerkt, door: "", extern: g.url, zoek: `${g.naam} ${g.email} ${g.kleuren}`.toLowerCase(),
       });
     }
     return uit.sort((a, b) => (a.datum < b.datum ? 1 : -1));
